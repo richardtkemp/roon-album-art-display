@@ -1,0 +1,616 @@
+#!/usr/bin/env python3
+
+
+import shutil
+import os
+import time
+import sys
+import threading
+import requests
+import configparser
+import logging
+
+from PIL import Image, ImageTk # aka pillow
+import tkinter as tk           # aka tk
+
+from pathlib import Path
+from roonapi import RoonApi, RoonDiscovery
+
+
+# Configure logging
+logging.basicConfig(
+    level=logging.DEBUG,
+    format='%(asctime)s [%(levelname)s] %(message)s',
+    handlers=[
+        logging.StreamHandler(sys.stdout)
+    ]
+)
+logger = logging.getLogger("RoonDisplay")
+
+def getCurrentImagePath():
+    return getSavedImagePath() / "current.jpg"
+def getSavedImagePath():
+    return Path.home() / "album_art"
+
+import tkinter as tk
+from PIL import Image, ImageTk
+
+class ImageViewer:
+    def __init__(self, root, screen_width, screen_height):
+        self.root = root
+        self.root.title("Image Viewer")
+        
+        # Save screen size
+        self.screen_width = screen_width
+        self.screen_height = screen_height
+ 
+        # Force light theme
+        self.root.tk_setPalette(
+            background='#f0f0f0',  # Light gray background
+            foreground='black',    # Black text
+            activeBackground='#e0e0e0',  # Slightly darker gray for active elements
+            activeForeground='black'     # Black text for active elements
+        )
+        
+        # For windowed mode
+        #self.root.geometry("800x600")
+        # For fullscreen
+        self.root.attributes('-fullscreen', True)
+        
+        # Create label to display the image
+        self.label = tk.Label(root)
+        self.label.pack(fill=tk.BOTH, expand=True)
+        
+        # Bind Escape key to close the window
+        self.root.bind('<Escape>', lambda e: self.root.destroy())
+        
+        # Handle window close button (X)
+        self.root.protocol("WM_DELETE_WINDOW", self.root.destroy)
+        
+        # Variable to store the latest requested image path
+        self.pending_image_path = None
+        
+        # Load initial image
+        img = getCurrentImagePath()
+        if os.path.exists(img):
+            self.display_image(img)
+    
+    def check_pending_updates(self):
+        # Schedule next check (every 100ms)
+        self.root.after(100, self.check_pending_updates) # TODO
+
+        """Check if there's a pending image update"""
+        if self.pending_image_path is not None:
+            self.display_image(self.pending_image_path)
+            logger.info("Updated displayed image")
+            self.pending_image_path = None
+#        else:
+#            logger.debug("No new image found")
+    
+    def display_image(self, image_path):
+        """Display an image (should only be called from the main thread)"""
+        # Open the image
+        img = Image.open(image_path)
+        
+        # Calculate scaling to fit the screen while maintaining aspect ratio
+        img_width, img_height = img.size
+        scale = min(self.screen_width/img_width, self.screen_height/img_height)
+        
+        new_width = int(img_width * scale)
+        new_height = int(img_height * scale)
+        
+        img = img.resize((new_width, new_height), Image.LANCZOS)
+
+        # Convert to PhotoImage
+        self.photo = ImageTk.PhotoImage(img)
+        
+        # Update the label
+        self.label.configure(image=self.photo)
+        
+        # Keep a reference to prevent garbage collection
+        self.label.image = self.photo
+        
+    def update(self, image_path):
+        """Thread-safe method to request an image update from anywhere"""
+        # Store the latest image path instead of directly updating
+        self.pending_image_path = image_path
+
+class RoonAlbumArtDisplay:
+    def __init__(self, viewer, image_size):
+        # Set up logging first
+        logger.info("Starting Roon Album Art Display")
+        
+        # Save params
+        self.viewer = viewer;
+        self.image_size = image_size;
+
+        # Load configuration
+        self.config = self.load_config()
+        
+        # Get app info from config
+        self.app_info = {
+            "extension_id": self.config.get('APP', 'extension_id'),
+            "display_name": self.config.get('APP', 'display_name'),
+            "display_version": self.config.get('APP', 'display_version'),
+            "publisher": self.config.get('APP', 'publisher'),
+            "email": self.config.get('APP', 'email'),
+        }
+        
+        # Path for token storage
+        self.token_file = Path.home() / ".roon_album_display_token.txt"
+        logger.info(f"Token file path: {self.token_file}")
+        
+        # Path for persistent image storage
+        logger.info(f"Persistent image path: {getCurrentImagePath()}")
+        
+        # Current album art tracking
+        self.current_image_path = None
+        self.last_image_id = None
+        
+        # Connect to Roon - do this BEFORE starting to display an image
+        logger.info("Connecting to Roon before starting display...")
+        self.roon = self.connect_to_roon()
+        if not self.roon:
+            logger.error("Failed to connect to Roon. Exiting.")
+            sys.exit(1)
+        
+        # Event handling
+        self.running = True
+    
+    def save_server_to_config(self, server_ip, server_port):
+        """Save the server IP and port to config file for future use"""
+        try:
+            # Make sure SERVER section exists
+            if 'SERVER' not in self.config:
+                self.config['SERVER'] = {}
+            
+            # Update config
+            self.config['SERVER']['ip'] = server_ip
+            self.config['SERVER']['port'] = str(server_port)
+            
+            # Write to file
+            with open('roon.cfg', 'w') as configfile:
+                self.config.write(configfile)
+                
+            logger.info(f"Saved server details ({server_ip}:{server_port}) to config for future use")
+        except Exception as e:
+            logger.error(f"Error saving server details to config: {e}")
+            
+    def connect_to_roon(self):
+        """Connect to Roon server using saved details or discovery"""
+        # Get token from file if it exists
+        token = None
+        if self.token_file.exists():
+            token = self.token_file.read_text().strip()
+            logger.info("Found existing auth token")
+        else:
+            logger.info("No existing auth token found, will need to authorize in Roon")
+        
+        # First try direct connection with saved settings
+        try:
+            if 'SERVER' in self.config and self.config.get('SERVER', 'ip') and self.config.get('SERVER', 'port'):
+                server_ip = self.config.get('SERVER', 'ip')
+                server_port = self.config.getint('SERVER', 'port')
+                
+                if server_ip and server_port:
+                    logger.info(f"Trying direct connection to saved server at {server_ip}:{server_port}")
+                    try:
+                        api = RoonApi(self.app_info, token, server_ip, server_port, False)
+                        logger.info("Successfully connected to saved server!")
+                        return api
+                    except Exception as e:
+                        logger.warning(f"Failed to connect to saved server: {e}")
+                        logger.info("Falling back to discovery...")
+                else:
+                    logger.info("Saved server details incomplete, using discovery")
+        except Exception as e:
+            logger.warning(f"Error reading saved server details: {e}")
+            logger.info("Falling back to discovery...")
+        
+        # If direct connection failed or no saved details, use discovery
+        return self.discover_and_connect()
+
+    def discover_and_connect(self):
+        """Discover Roon servers on the network and connect to the first one found"""
+        # Get token from file if it exists
+        token = None
+        if self.token_file.exists():
+            token = self.token_file.read_text().strip()
+            logger.info("Found existing auth token")
+        else:
+            logger.info("No existing auth token found, will need to authorize in Roon")
+        
+        # Get discovery timeout from config (default 30 seconds)
+        try:
+            discovery_timeout = self.config.getint('DISCOVERY', 'discovery_timeout')
+        except (configparser.NoSectionError, configparser.NoOptionError):
+            discovery_timeout = 30
+            logger.info(f"Using default discovery timeout of {discovery_timeout} seconds")
+        
+        # Start discovery process
+        logger.info("Starting Roon server discovery...")
+        discover = RoonDiscovery(None)
+        
+        # Wait for the discovery to find servers
+        start_time = time.time()
+        servers = []
+        
+        while time.time() - start_time < discovery_timeout:
+            servers = discover.all()
+            if servers:
+                logger.info(f"Found {len(servers)} Roon server(s)")
+                break
+            
+            logger.info("Waiting for Roon servers to be discovered...")
+            time.sleep(1)
+        
+        # Stop discovery
+        logger.info("Shutting down discovery")
+        discover.stop()
+        
+        # Check if we found any servers
+        if not servers:
+            logger.error(f"No Roon servers found within {discovery_timeout} seconds")
+            logger.error("Please ensure that Roon server is running on your network")
+            return None
+        
+        # Only connect to the first server found
+        server = servers[0]
+        server_ip, server_port = server
+        logger.info(f"Connecting to first Roon server found at {server_ip}:{server_port}")
+        
+        # Try to connect to the server
+        try:
+            api = RoonApi(self.app_info, token, server_ip, server_port, False)
+            
+            # Wait for authorization if needed
+            if token is None and api is not None:
+                logger.info("Waiting for authorization in Roon...")
+                auth_timeout = 60  # Wait up to 60 seconds for authorization
+                start_time = time.time()
+                
+                while api.token is None and time.time() - start_time < auth_timeout:
+                    logger.info("Please approve this extension in the Roon app...")
+                    time.sleep(2)
+                
+                if api.token is None:
+                    logger.error("Authorization timeout. Please restart and approve the extension in Roon.")
+                    try:
+                        api.stop()
+                    except:
+                        pass
+                    return None
+                
+                # Save the token for future use
+                logger.info("Authorization successful!")
+                self.token_file.write_text(api.token)
+                logger.info("Token saved for future connections")
+                
+                # Save server details for future connections
+                self.save_server_to_config(server_ip, server_port)
+            elif api is not None:
+                logger.info(f"Successfully connected using existing token")
+                # Save server details for future connections
+                self.save_server_to_config(server_ip, server_port)
+            
+            logger.info("Connected to Roon server!")
+            return api
+            
+        except Exception as e:
+            logger.error(f"Error connecting to Roon server at {server_ip}:{server_port}: {e}")
+            logger.exception("Detailed connection error:")
+            return None
+    
+    def load_config(self):
+        """Load configuration from roon.cfg file"""
+        config_file = Path("roon.cfg")
+        
+        if not config_file.exists():
+            logger.info(f"Configuration file {config_file} not found. Creating default config.")
+            self.create_default_config(config_file)
+        
+        config = configparser.ConfigParser()
+        config.read(config_file)
+        
+        # Log the configuration (without sensitive info)
+        logger.info("Configuration loaded:")
+        
+        # Log saved server settings if available
+        try:
+            server_ip = config.get('SERVER', 'ip')
+            server_port = config.get('SERVER', 'port')
+            if server_ip and server_port:
+                logger.info(f"Saved server: {server_ip}:{server_port}")
+            else:
+                logger.info("No saved server found, will use discovery")
+        except (configparser.NoSectionError, configparser.NoOptionError):
+            logger.info("No saved server found, will use discovery")
+        
+        # Log discovery settings
+        try:
+            logger.info(f"Discovery Timeout: {config.get('DISCOVERY', 'discovery_timeout')} seconds")
+        except (configparser.NoSectionError, configparser.NoOptionError):
+            logger.warning("Discovery settings not found in config")
+        
+        return config
+    
+    def create_default_config(self, config_path):
+        """Create a default configuration file"""
+        config = configparser.ConfigParser()
+        
+        config['APP'] = {
+            'extension_id': 'python_roon_album_display',
+            'display_name': 'Album Art Display',
+            'display_version': '1.0.0',
+            'publisher': 'Richard Kemp',
+            'email': 'richardtkemp@gmail.com'
+        }
+        
+        config['DISCOVERY'] = {
+            'discovery_timeout': '30'
+        }
+        
+        with open(config_path, 'w') as f:
+            config.write(f)
+        
+        logger.info(f"Default configuration created at {config_path}")
+    
+    def subscribe_to_events(self):
+        """Subscribe to zone and queue updates"""
+        logger.info("Registering for state callbacks...")
+        try:
+            # First, log all available zones to understand the structure
+            zones = self.roon.zones
+            zone_count = len(zones) if zones else 0
+            logger.info(f"Found {zone_count} zones")
+            
+            if zones and zone_count > 0:
+                # Print first zone for debugging
+                first_zone = next(iter(zones.values())) if isinstance(zones, dict) else zones[0]
+                logger.info(f"First zone structure example: {str(first_zone)[:200]}...")
+            
+            # Register for state callbacks with verbose logging
+            logger.info("Registering state callback...")
+            self.roon.register_state_callback(self.zone_event_callback, 'zones_changed')
+            logger.info("Successfully registered for state callbacks")
+            
+        except Exception as e:
+            logger.error(f"Error subscribing to Roon events: {e}")
+            logger.exception("Detailed traceback:")
+    
+    def zone_event_callback(self, event_type, data):
+        """Handle state update events from Roon"""
+        try:
+            # Always log the event type for debugging
+            logger.debug(f"Data type: {type(data)}, Data preview: {str(data)[:100]}...")
+            
+            logger.info(f"Processing {event_type} event")
+            
+            # Handle list data structure
+            if isinstance(data, list):
+                for i, zone_item in enumerate(data):
+                    logger.debug(f"Processing zone item {i}")
+                    # Fetch the complete zone data using the ID
+                    if isinstance(zone_item, str):
+                        zone_data = self.roon.zones.get(zone_item)
+                        if zone_data:
+                            self._process_zone_data(zone_item, zone_data)
+                        else:
+                            logger.warning(f"No zone data found for zone ID: {zone_item}")
+            
+            else:
+                logger.warning(f"Unexpected data format in {event_type} event: {type(data)}")
+            
+        except Exception as e:
+            logger.error(f"Error in zone event callback: {e}")
+            logger.exception("Detailed traceback:")
+    
+    def _process_zone_data(self, zone_id, zone_data):
+        """Process zone data and update display if needed"""
+        try:
+            # Log zone data structure for debugging
+            logger.debug(f"Processing zone {zone_id}, data keys: {zone_data.keys() if isinstance(zone_data, dict) else 'not a dict'}")
+            
+            # Check if the zone has now_playing information
+            if isinstance(zone_data, dict):
+                # Direct now_playing object
+                if "now_playing" in zone_data and zone_data["now_playing"]:
+                    now_playing = zone_data["now_playing"]
+                    self._process_now_playing(zone_id, now_playing)
+                
+                # Check if it might be in a nested structure
+                elif "state" in zone_data and isinstance(zone_data["state"], dict):
+                    if "now_playing" in zone_data["state"] and zone_data["state"]["now_playing"]:
+                        now_playing = zone_data["state"]["now_playing"]
+                        self._process_now_playing(zone_id, now_playing)
+                
+                # Check if this is a different API structure
+                elif "display_name" in zone_data and "queue" in zone_data and "now_playing" in zone_data.get("queue", {}):
+                    now_playing = zone_data["queue"]["now_playing"]
+                    self._process_now_playing(zone_id, now_playing)
+            
+        except Exception as e:
+            logger.error(f"Error processing zone data: {e}")
+            logger.debug(f"Zone data that caused error: {str(zone_data)[:200]}...")
+            
+    def _process_now_playing(self, zone_id, now_playing):
+        """Process the now_playing object to extract image and track info"""
+        try:
+            logger.debug(f"Now playing keys: {now_playing.keys() if isinstance(now_playing, dict) else 'not a dict'}")
+            
+            # First, try to get the image_key
+            image_key = None
+            
+            if isinstance(now_playing, dict):
+                # Try different possible locations for image_key
+                if "image_key" in now_playing and now_playing["image_key"]:
+                    image_key = now_playing["image_key"]
+                elif "image_id" in now_playing and now_playing["image_id"]:
+                    image_key = now_playing["image_id"]
+                elif "artwork_id" in now_playing and now_playing["artwork_id"]:
+                    image_key = now_playing["artwork_id"]
+            
+            if not image_key:
+                logger.warning("No image key found in now_playing data")
+                return
+                
+            # Only update if the image has changed
+            if image_key != self.last_image_id:
+                logger.info(f"New track detected with image key: {image_key}")
+                self.last_image_id = image_key
+                
+                # Now try to get track information
+                track_info = "Unknown Track"
+                artist_info = "Unknown Artist"
+                album_info = "Unknown Album"
+                
+                # Try to extract track info from different possible structures
+                if isinstance(now_playing, dict):
+                    # Try one_line/two_line structure
+                    if "one_line" in now_playing and isinstance(now_playing["one_line"], dict):
+                        track_info = now_playing["one_line"].get("line1", track_info)
+                    
+                    if "two_line" in now_playing and isinstance(now_playing["two_line"], dict):
+                        artist_info = now_playing["two_line"].get("line1", artist_info)
+                        album_info = now_playing["two_line"].get("line2", album_info)
+                    
+                    # Try direct track/artist/album structure
+                    if "title" in now_playing:
+                        track_info = now_playing.get("title", track_info)
+                    if "artist" in now_playing:
+                        artist_info = now_playing.get("artist", artist_info)
+                    if "album" in now_playing:
+                        album_info = now_playing.get("album", album_info)
+                
+                # Log track information
+                logger.info(f"Now Playing: {track_info} - {artist_info} - {album_info}")
+                
+                # Fetch and display the album art
+                self.fetch_and_display_album_art(image_key)
+                
+        except Exception as e:
+            logger.error(f"Error processing now_playing data: {e}")
+            logger.debug(f"Now playing data that caused error: {str(now_playing)[:200]}...")
+    
+    def fetch_and_display_album_art(self, image_key):
+        """Fetch album art from Roon and save it"""
+        try:
+            # Create a file path for the image
+            image_path = getSavedImagePath() / f"album_art_{image_key}.jpg"
+            
+            if os.path.exists(image_path):
+                logger.info(f"File already exists at {image_path}")
+            else:
+                # Fetch the image from Roon
+                logger.info(f"Fetching album art with key: {image_key}")
+                image_url = self.roon.get_image(image_key, "fit", self.image_size, self.image_size)
+                self.download_image(image_url, image_path)
+                logger.info(f"Successfully fetched album art to {image_path}")
+            
+            # Update the current image path
+            self.current_image_path = image_path
+            
+            # Save a copy to the persistent path
+            try:
+                shutil.copy2(image_path, getCurrentImagePath())
+                logger.info(f"Saved persistent copy of album art to {getCurrentImagePath()}")
+            except Exception as e:
+                logger.warning(f"Failed to save persistent image: {e}")
+            
+            # Update image display
+            self.viewer.update(image_path)
+                
+        except Exception as e:
+            logger.error(f"Error fetching album art: {e}")
+        except Exception as e:
+            logger.exception(f"Error in zone event callback: {e}")
+
+    def download_image(self, image_url, image_path):
+        try:
+            # Send GET request to the image URL
+            response = requests.get(image_url, stream=True)
+            
+            # Check if the request was successful
+            response.raise_for_status()
+            
+            # Open the file in binary write mode and save the image
+            with open(image_path, 'wb') as file:
+                for chunk in response.iter_content(chunk_size=8192):
+                    file.write(chunk)
+                    
+            logger.info(f"Image successfully downloaded to {image_path}")
+            return True
+            
+        except requests.exceptions.RequestException as e:
+            logger.exception(f"Error downloading image: {e}")
+            return False
+
+    
+    
+    def cleanup(self):
+        """Clean up resources"""
+        print("Cleaning up...")
+        if self.current_image_path and self.current_image_path.exists():
+            try:
+                os.remove(self.current_image_path)
+            except:
+                pass
+        
+        # Unsubscribe from notifications
+        if self.roon:
+            print("Disconnecting from Roon...")
+            self.roon.stop()
+    
+    def run(self):
+        """Run the application"""
+        # Subscribe to events first
+        self.subscribe_to_events()
+        
+        # Start API listener in a separate thread
+        api_thread = threading.Thread(
+            target=self.event_loop,  # Call the event_loop method directly
+            daemon=True  # This makes the thread exit when the main program exits
+        )
+        api_thread.start()
+
+    def event_loop(self):
+        try:
+            logger.info("Event loop started")
+            while self.running:
+                # Don't use 100% CPU
+                time.sleep(0.1)
+        except Exception as e:
+            logger.exception(f"Error in event loop: {e}")
+        finally:
+            # Clean up
+            self.cleanup()
+
+
+if __name__ == "__main__":
+    dir = getSavedImagePath()
+    if not os.path.exists(dir):
+       os.mkdir(dir)
+
+    # Intial setup for image display
+    root = tk.Tk()
+
+    screen_width = root.winfo_screenwidth()
+    screen_height = root.winfo_screenheight()
+    image_size = min(screen_width, screen_height)
+
+    viewer = ImageViewer(root, screen_width, screen_height)
+    
+    # Create and start API connection on separate thread
+    display = RoonAlbumArtDisplay(viewer, image_size)
+    display.run()
+    
+    # Now start the UI loop on the main thread
+    try:
+        # Start periodic check for image updates
+        viewer.check_pending_updates()
+        viewer.root.mainloop()
+    except KeyboardInterrupt:
+        print("Shutting down...")
+        ui.running = False
+        api.stop()
+
