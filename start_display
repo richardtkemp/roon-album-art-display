@@ -3,6 +3,7 @@
 
 import shutil
 import os
+import json
 import time
 import sys
 import threading
@@ -10,7 +11,7 @@ import requests
 import configparser
 import logging
 
-from PIL import Image, ImageTk # aka pillow
+from PIL import Image, ImageTk, ImageEnhance # aka pillow
 import tkinter as tk           # aka tk
 
 from pathlib import Path
@@ -127,6 +128,15 @@ class RoonAlbumArtDisplay:
         # Load configuration
         self.config = self.load_config()
         
+        # Get zone info from config
+        self.allowed_zone_names = [zone for zone in self.config.get('ZONES', 'allowed_zone_names').split(',') if zone]
+        self.forbidden_zone_names = [zone for zone in self.config.get('ZONES', 'forbidden_zone_names').split(',') if zone]
+        logger.info(f"Allowed zone names: {json.dumps(self.allowed_zone_names)}")
+        logger.info(f"Forbidden zone names: {json.dumps(self.forbidden_zone_names)}")
+        
+        # Get image controls from config
+        self.contrast_adjustment = self.config.get('IMAGE', 'contrast_adjustment')
+
         # Get app info from config
         self.app_info = {
             "extension_id": self.config.get('APP', 'extension_id'),
@@ -143,16 +153,14 @@ class RoonAlbumArtDisplay:
         # Path for persistent image storage
         logger.info(f"Persistent image path: {getCurrentImagePath()}")
         
-        # Current album art tracking
+        # Initiate some variables
         self.current_image_path = None
         self.last_image_id = None
+        self.last_event = None
         
         # Connect to Roon - do this BEFORE starting to display an image
         logger.info("Connecting to Roon before starting display...")
         self.roon = self.connect_to_roon()
-        if not self.roon:
-            logger.error("Failed to connect to Roon. Exiting.")
-            sys.exit(1)
         
         # Event handling
         self.running = True
@@ -220,22 +228,11 @@ class RoonAlbumArtDisplay:
         else:
             logger.info("No existing auth token found, will need to authorize in Roon")
         
-        # Get discovery timeout from config (default 30 seconds)
-        try:
-            discovery_timeout = self.config.getint('DISCOVERY', 'discovery_timeout')
-        except (configparser.NoSectionError, configparser.NoOptionError):
-            discovery_timeout = 30
-            logger.info(f"Using default discovery timeout of {discovery_timeout} seconds")
-        
         # Start discovery process
         logger.info("Starting Roon server discovery...")
         discover = RoonDiscovery(None)
         
-        # Wait for the discovery to find servers
-        start_time = time.time()
-        servers = []
-        
-        while time.time() - start_time < discovery_timeout:
+        while true:
             servers = discover.all()
             if servers:
                 logger.info(f"Found {len(servers)} Roon server(s)")
@@ -245,14 +242,8 @@ class RoonAlbumArtDisplay:
             time.sleep(1)
         
         # Stop discovery
-        logger.info("Shutting down discovery")
+        logger.debug("Shutting down discovery")
         discover.stop()
-        
-        # Check if we found any servers
-        if not servers:
-            logger.error(f"No Roon servers found within {discovery_timeout} seconds")
-            logger.error("Please ensure that Roon server is running on your network")
-            return None
         
         # Only connect to the first server found
         server = servers[0]
@@ -266,39 +257,26 @@ class RoonAlbumArtDisplay:
             # Wait for authorization if needed
             if token is None and api is not None:
                 logger.info("Waiting for authorization in Roon...")
-                auth_timeout = 60  # Wait up to 60 seconds for authorization
-                start_time = time.time()
                 
-                while api.token is None and time.time() - start_time < auth_timeout:
+                while api.token is None:
                     logger.info("Please approve this extension in the Roon app...")
                     time.sleep(2)
-                
-                if api.token is None:
-                    logger.error("Authorization timeout. Please restart and approve the extension in Roon.")
-                    try:
-                        api.stop()
-                    except:
-                        pass
-                    return None
-                
+
                 # Save the token for future use
-                logger.info("Authorization successful!")
                 self.token_file.write_text(api.token)
-                logger.info("Token saved for future connections")
+                logger.info("Authorization successful, token saved for future connections")
                 
-                # Save server details for future connections
-                self.save_server_to_config(server_ip, server_port)
             elif api is not None:
                 logger.info(f"Successfully connected using existing token")
-                # Save server details for future connections
-                self.save_server_to_config(server_ip, server_port)
+
+            # Save server details for future connections
+            self.save_server_to_config(server_ip, server_port)
             
             logger.info("Connected to Roon server!")
             return api
             
         except Exception as e:
-            logger.error(f"Error connecting to Roon server at {server_ip}:{server_port}: {e}")
-            logger.exception("Detailed connection error:")
+            logger.exception(f"Error connecting to Roon server at {server_ip}:{server_port}: {e}")
             return None
     
     def load_config(self):
@@ -326,12 +304,6 @@ class RoonAlbumArtDisplay:
         except (configparser.NoSectionError, configparser.NoOptionError):
             logger.info("No saved server found, will use discovery")
         
-        # Log discovery settings
-        try:
-            logger.info(f"Discovery Timeout: {config.get('DISCOVERY', 'discovery_timeout')} seconds")
-        except (configparser.NoSectionError, configparser.NoOptionError):
-            logger.warning("Discovery settings not found in config")
-        
         return config
     
     def create_default_config(self, config_path):
@@ -346,8 +318,13 @@ class RoonAlbumArtDisplay:
             'email': 'richardtkemp@gmail.com'
         }
         
-        config['DISCOVERY'] = {
-            'discovery_timeout': '30'
+        config['IMAGE'] = {
+            'contrast_adjustment': '1'
+        }
+        
+        config['ZONES'] = {
+            'allowed_zone_names': 'comma,separated,list of zone names',
+            'forbidden_zone_names': 'comma,separated,list of zone names'
         }
         
         with open(config_path, 'w') as f:
@@ -381,16 +358,20 @@ class RoonAlbumArtDisplay:
     def zone_event_callback(self, event_type, data):
         """Handle state update events from Roon"""
         try:
-            # Always log the event type for debugging
-            logger.debug(f"Data type: {type(data)}, Data preview: {str(data)[:100]}...")
-            
+            # Don't process duplicate events
+            if data == self.last_event:
+                # Always log the event type for debugging
+                logger.debug(f"Ignoring duplicate event {str(data)}")
+                return
+            self.last_event = data
+
             logger.info(f"Processing {event_type} event")
             
             # Handle list data structure
             if isinstance(data, list):
                 for i, zone_item in enumerate(data):
                     logger.debug(f"Processing zone item {i}")
-                    # Fetch the complete zone data using the ID
+                    # Fetch the complete zone data (including now playing) using the ID
                     if isinstance(zone_item, str):
                         zone_data = self.roon.zones.get(zone_item)
                         if zone_data:
@@ -411,6 +392,14 @@ class RoonAlbumArtDisplay:
             # Log zone data structure for debugging
             logger.debug(f"Processing zone {zone_id}, data keys: {zone_data.keys() if isinstance(zone_data, dict) else 'not a dict'}")
             
+            name = zone_data['display_name']
+            if self.forbidden_zone_names and name in self.forbidden_zone_names:
+                logger.debug(f"Received event from zone {name} but it is in the forbidden list")
+                return
+            if self.allowed_zone_names and not name in self.allowed_zone_names:
+                logger.debug(f"Received event from zone {name} but it is not in the allowed list")
+                return
+
             # Check if the zone has now_playing information
             if isinstance(zone_data, dict):
                 # Direct now_playing object
@@ -505,8 +494,9 @@ class RoonAlbumArtDisplay:
                 logger.info(f"Fetching album art with key: {image_key}")
                 image_url = self.roon.get_image(image_key, "fit", self.image_size, self.image_size)
                 self.download_image(image_url, image_path)
+                self.increase_contrast(image_path)
                 logger.info(f"Successfully fetched album art to {image_path}")
-            
+
             # Update the current image path
             self.current_image_path = image_path
             
@@ -545,6 +535,18 @@ class RoonAlbumArtDisplay:
             logger.exception(f"Error downloading image: {e}")
             return False
 
+    def increase_contrast(self, image_path):
+        # Open the image
+        image = Image.open(image_path)
+        
+        # Create an enhancement object
+        enhancer = ImageEnhance.Color(image)
+        
+        # Increase saturation by a configured factor
+        saturated_image = enhancer.enhance(4)
+        
+        # Save the enhanced image
+        saturated_image.save(image_path)
     
     
     def cleanup(self):
@@ -614,3 +616,16 @@ if __name__ == "__main__":
         ui.running = False
         api.stop()
 
+
+
+
+
+#!/usr/bin/python
+# -*- coding:utf-8 -*-
+
+import sys
+import os
+picdir = os.path.join(os.path.dirname(os.path.dirname(os.path.realpath(__file__))), 'pic')
+libdir = os.path.join(os.path.dirname(os.path.dirname(os.path.realpath(__file__))), 'lib')
+if os.path.exists(libdir):
+    sys.path.append(libdir)
