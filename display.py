@@ -16,7 +16,7 @@ import tkinter as tk           # aka tk
 from pathlib import Path
 from roonapi import RoonApi, RoonDiscovery #, RoonApiWebSocket
 
-libdir = os.path.join(os.path.dirname(os.path.dirname(os.path.realpath(__file__))), 'lib')
+libdir = os.path.join(os.path.dirname(os.path.dirname(os.path.realpath(__file__))), 'libs')
 if os.path.exists(libdir):
     sys.path.append(libdir)
 
@@ -305,8 +305,7 @@ class RoonAlbumArt:
                 if server_ip and server_port:
                     logger.info(f"Trying direct connection to saved server at {server_ip}:{server_port}")
                     try:
-                        api = RoonApi(self.app_info, token, server_ip, server_port, False)
-#                        time.sleep(30)
+                        api = RoonApi(self.app_info, token, server_ip, server_port)
                         # Add validation to confirm the connection is actually working
                         if api and api.host:
                             # Test the connection by trying to fetch zones
@@ -314,7 +313,7 @@ class RoonAlbumArt:
                                 zones = api.zones
                                 if zones is not None and zones:
                                     logger.info("Successfully connected to saved server!")
-                                    logger.info(f"{zones}")
+                                    logger.info(f"Zones data: {zones}")
                                     return api
                                 else:
                                     api.stop()
