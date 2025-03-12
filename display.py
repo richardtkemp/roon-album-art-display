@@ -11,7 +11,7 @@ import json
 import requests
 import configparser
 from io import BytesIO
-from PIL import Image, ImageTk, ImageEnhance, ImageDraw, ImageFont, ImageColor # aka pillow
+from PIL import Image, ImageEnhance, ImageDraw, ImageFont, ImageColor # aka pillow
 from pathlib import Path
 from roonapi import RoonApi, RoonDiscovery #, RoonApiWebSocket
 
@@ -833,6 +833,7 @@ if __name__ == "__main__":
     display_type = config.get('DISPLAY', 'type')
     if display_type == 'system_display':
         import tkinter as tk           # aka tk
+        from PIL import ImageTk
         # Set up the Tkinter display
         root = tk.Tk()
         viewer = TkViewer(config, root)
