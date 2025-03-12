@@ -15,9 +15,6 @@ from PIL import Image, ImageEnhance, ImageDraw, ImageFont, ImageColor # aka pill
 from pathlib import Path
 from roonapi import RoonApi, RoonDiscovery #, RoonApiWebSocket
 
-libdir = os.path.join(os.path.dirname(os.path.dirname(os.path.realpath(__file__))), 'libs')
-if os.path.exists(libdir):
-    sys.path.append(libdir)
 
 
 log_format = '%(asctime)s [%(levelname)-7s] %(name)-12s: %(message)s [[%(funcName)s]]'
@@ -35,6 +32,14 @@ api_logger = logging.getLogger('roonapi')
 # Apply your formatter to all existing handlers in both loggers
 for handler in api_logger.handlers:
     handler.setFormatter(logging.Formatter(log_format))
+
+libdir = os.path.join(os.path.dirname(os.path.realpath(__file__)), 'libs')
+if os.path.exists(libdir):
+    sys.path.append(libdir)
+    logger.debug(f"Adding libdir to path: {libdir}")
+else:
+    raise FileNotFoundError
+
 
 def getCurrentImagePath():
     return getSavedImageDir() / "current.jpg"
@@ -148,11 +153,11 @@ class Viewer(ABC):
 class EinkViewer(Viewer):
     def __init__(self, config, eink):
         self.config = config
+        self.eink = eink
         self.set_screen_size(self.eink.EPD_WIDTH, self.eink.EPD_HEIGHT)
 
-        self.eink = eink
         self.epd = eink.EPD()
-        epd.Init()
+        self.epd.Init()
         self.startup()
     
     def display_image(self, img):
@@ -841,8 +846,11 @@ if __name__ == "__main__":
         viewer = TkViewer(config, root)
     elif display_type == 'epd13in3E':
         # Import the appropriate module
-        eink = importlib.import_module(display_type)
+        logger.debug(f"Importing {display_type}")
+        eink = importlib.import_module('libs.' + display_type)
+        logger.debug(f"Finished importing {display_type}")
         viewer = EinkViewer(config, eink)
+        logger.debug('Created viewer')
         
     
     # Create and start API connection on separate thread
