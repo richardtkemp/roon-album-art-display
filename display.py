@@ -12,7 +12,6 @@ import requests
 import configparser
 from io import BytesIO
 from PIL import Image, ImageTk, ImageEnhance, ImageDraw, ImageFont, ImageColor # aka pillow
-import tkinter as tk           # aka tk
 from pathlib import Path
 from roonapi import RoonApi, RoonDiscovery #, RoonApiWebSocket
 
@@ -52,11 +51,16 @@ def getSavedImageDir():
 ###########################################################################
 class Viewer(ABC):
     def set_screen_size(self, w, h):
-        scale_x = self.config.get('IMAGE_POSITION', 'scale_x')
-        scale_y = self.config.get('IMAGE_POSITION', 'scale_y')
-        self.screen_width  = int(w * float(scale_x))
-        self.screen_height = int(h * float(scale_y))
-        self.image_size = min(self.screen_width, self.screen_height)
+        self.scale_x = float(self.config.get('IMAGE_POSITION', 'scale_x'))
+        self.scale_y = float(self.config.get('IMAGE_POSITION', 'scale_y'))
+        if self.scale_x == 0 or self.scale_y == 0:
+            logger.error('Scale must not be set to zero! Check config file')
+            raise ValueError
+        self.screen_width  = int(w)
+        self.screen_height = int(h)
+        self.image_width   = int(w * float(self.scale_x))
+        self.image_height  = int(h * float(self.scale_y))
+        self.image_size = min(self.image_width, self.image_height)
         
     def startup(self):
         self.load_config()
@@ -102,18 +106,38 @@ class Viewer(ABC):
 #        self.scale_y         = float(self.config.get('IMAGE_POSITION', 'scale_y'))
 
 
-    def process_image(self, img):
+    def process_image_position(self, img):
         # Calculate scaling to fit the screen while maintaining aspect ratio
         img_width, img_height = img.size
 
-        # If we somehow downloaded an image of the wrong size, e.g. if screen size has changed
-        if (not img_width == self.screen_width) and (not img_height == self.screen_height):
-            scale = min(self.screen_width/img_width, self.screen_height/img_height)
-            new_width  = int(img_width * scale)
-            new_height = int(img_height * scale)
+        # If we somehow downloaded an image of the wrong size, e.g. if screen size or scaling has changed
+        if (not img_width == self.image_width) or (not img_height == self.screen_height) or not scale_x == scale_y:
+            scale_ratio = max(self.scale_x,self.scale_y)
+            new_width   = int(img_width  * self.scale_x * scale_ratio)
+            new_height  = int(img_height * self.scale_y * scale_ratio)
             img = img.resize((new_width, new_height), Image.LANCZOS)
 
+
+        if not (self.position_offset_x == 0 and self.position_offset_y == 0):
+            img = self.pad_image_to_size(img)
+
         return img
+
+    def pad_image_to_size(self, img):
+        # Get the original dimensions
+        original_width, original_height = img.size
+        
+        # Create a new white image with the target dimensions
+        new_image = Image.new('RGB', (self.screen_width, self.screen_height), color='white')
+        
+        # Calculate position to paste the original image
+        paste_x = self.position_offset_x + (self.screen_width  - original_width ) // 2
+        paste_y = self.position_offset_y + (self.screen_height - original_height) // 2
+        
+        # Paste the original image onto the new white canvas
+        new_image.paste(img, (paste_x, paste_y))
+        
+        return new_image
 
 
 ###########################################################################
@@ -135,6 +159,10 @@ class EinkViewer(Viewer):
         """Display an image"""
         # Clear the display
         self.epd.Clear()
+
+        # Process the image position, including scale and offset
+        img = self.process_image_position(img)
+
         # Render on the eink display
         self.epd.display(self.epd.getbuffer(img))
         logger.info("Updated displayed image")
@@ -204,6 +232,9 @@ class TkViewer(Viewer):
         """Display an image (should only be called from the main thread)"""
         img = self.fetch_image(image_path)
 
+        # Process the image position, including scale and offset
+        img = self.process_image_position(img)
+
         # Convert to PhotoImage
         self.photo = ImageTk.PhotoImage(img)
         
@@ -264,6 +295,12 @@ class RoonAlbumArt:
         logger.info("Connecting to Roon before starting display...")
         self.roon = self.connect_to_roon()
         
+        # Get current album
+        for key, dictionary in self.roon.zones.items():
+            result = self.process_zone_data(key, dictionary)
+            if result is not False:  # This checks for exactly False, not falsy values
+                break
+
         # Event handling
         self.running = True
     
@@ -313,7 +350,7 @@ class RoonAlbumArt:
                                 zones = api.zones
                                 if zones is not None and zones:
                                     logger.info("Successfully connected to saved server!")
-                                    logger.info(f"Zones data: {zones}")
+                                    logger.debug(f"Zones data: {zones}")
                                     return api
                                 else:
                                     api.stop()
@@ -422,7 +459,7 @@ class RoonAlbumArt:
                     if isinstance(zone_item, str):
                         zone_data = self.roon.zones.get(zone_item)
                         if zone_data:
-                            self._process_zone_data(zone_item, zone_data)
+                            self.process_zone_data(zone_item, zone_data)
                         else:
                             logger.warning(f"No zone data found for zone ID: {zone_item}")
             
@@ -433,7 +470,7 @@ class RoonAlbumArt:
             logger.error(f"Error in zone event callback: {e}")
             logger.exception("Detailed traceback:")
     
-    def _process_zone_data(self, zone_id, zone_data):
+    def process_zone_data(self, zone_id, zone_data):
         """Process zone data and update display if needed"""
         try:
             # Log zone data structure for debugging
@@ -442,34 +479,34 @@ class RoonAlbumArt:
             name = zone_data['display_name']
             if self.forbidden_zone_names and name in self.forbidden_zone_names:
                 logger.debug(f"Received event from zone {name} but it is in the forbidden list")
-                return
+                return False
             if self.allowed_zone_names and not name in self.allowed_zone_names:
                 logger.debug(f"Received event from zone {name} but it is not in the allowed list")
-                return
+                return False
 
             # Check if the zone has now_playing information
             if isinstance(zone_data, dict):
                 # Direct now_playing object
                 if "now_playing" in zone_data and zone_data["now_playing"]:
                     now_playing = zone_data["now_playing"]
-                    self._process_now_playing(zone_id, now_playing)
+                    self.process_now_playing(now_playing)
                 
                 # Check if it might be in a nested structure
                 elif "state" in zone_data and isinstance(zone_data["state"], dict):
                     if "now_playing" in zone_data["state"] and zone_data["state"]["now_playing"]:
                         now_playing = zone_data["state"]["now_playing"]
-                        self._process_now_playing(zone_id, now_playing)
+                        self.process_now_playing(now_playing)
                 
                 # Check if this is a different API structure
                 elif "display_name" in zone_data and "queue" in zone_data and "now_playing" in zone_data.get("queue", {}):
                     now_playing = zone_data["queue"]["now_playing"]
-                    self._process_now_playing(zone_id, now_playing)
+                    self.process_now_playing(now_playing)
             
         except Exception as e:
             logger.error(f"Error processing zone data: {e}")
             logger.debug(f"Zone data that caused error: {str(zone_data)[:200]}...")
             
-    def _process_now_playing(self, zone_id, now_playing):
+    def process_now_playing(self, now_playing):
         """Process the now_playing object to extract image and track info"""
         try:
             logger.debug(f"Now playing keys: {now_playing.keys() if isinstance(now_playing, dict) else 'not a dict'}")
@@ -795,6 +832,7 @@ if __name__ == "__main__":
 
     display_type = config.get('DISPLAY', 'type')
     if display_type == 'system_display':
+        import tkinter as tk           # aka tk
         # Set up the Tkinter display
         root = tk.Tk()
         viewer = TkViewer(config, root)
