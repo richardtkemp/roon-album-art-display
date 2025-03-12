@@ -789,6 +789,8 @@ class RoonFrameConfig:
             config.write(f)
         
         logger.info(f"Default configuration created at {config_path}")
+        logger.info(f"Please check it and re-run")
+        sys.exit(0)
 
 
 
