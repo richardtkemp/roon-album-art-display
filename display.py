@@ -16,7 +16,7 @@ from pathlib import Path
 from roonapi import RoonApi, RoonDiscovery #, RoonApiWebSocket
 
 
-
+this_script = __file__
 log_format = '%(asctime)s [%(levelname)-7s] %(name)-12s: %(message)s [[%(funcName)s]]'
 # Configure logging
 logging.basicConfig(
@@ -33,7 +33,7 @@ api_logger = logging.getLogger('roonapi')
 for handler in api_logger.handlers:
     handler.setFormatter(logging.Formatter(log_format))
 
-libdir = os.path.join(os.path.dirname(os.path.realpath(__file__)), 'libs')
+libdir = os.path.join(os.path.dirname(os.path.realpath(this_script)), 'libs')
 if os.path.exists(libdir):
     sys.path.append(libdir)
     logger.debug(f"Adding libdir to path: {libdir}")
@@ -41,11 +41,22 @@ else:
     raise FileNotFoundError
 
 
-def getCurrentImagePath():
-    return getSavedImageDir() / "current.jpg"
-def getSavedImageDir():
-    return Path.home() / "album_art"
+def setCurrentImageKey(key):
+    path = getSavedImageDir() / "current_key"
+    path.write_text(key)
+    return None
 
+def getCurrentImageKey():
+    path = getSavedImageDir() / "current_key"
+    if path.exists():
+        return path.read_text().strip()
+    return None
+
+def getSavedImageDir():
+    return getRootDir() / "album_art"
+
+def getRootDir():
+    return Path(os.path.dirname(os.path.dirname(os.path.realpath(this_script))))
 
 
 
@@ -58,6 +69,7 @@ class Viewer(ABC):
     def set_screen_size(self, w, h):
         self.scale_x = float(self.config.get('IMAGE_POSITION', 'scale_x'))
         self.scale_y = float(self.config.get('IMAGE_POSITION', 'scale_y'))
+        self.rotation = float(self.config.get('IMAGE_POSITION', 'rotation'))
         if self.scale_x == 0 or self.scale_y == 0:
             logger.error('Scale must not be set to zero! Check config file')
             raise ValueError
@@ -70,7 +82,10 @@ class Viewer(ABC):
     def startup(self):
         self.load_config()
         # Load initial image
-        self.update(getCurrentImagePath(), None)
+        image_key = getCurrentImageKey()
+        image_path = getSavedImageDir / "album_art_" + image_key + ".jpg"
+        if Path(image_path).exists():
+            self.update(image_path, None)
     
     def check_pending_updates(self):
         pass
@@ -107,40 +122,53 @@ class Viewer(ABC):
         # Get image size and position controls from config
         self.position_offset_x = int(self.config.get('IMAGE_POSITION', 'position_offset_x'))
         self.position_offset_y = int(self.config.get('IMAGE_POSITION', 'position_offset_y'))
-#        self.scale_x         = float(self.config.get('IMAGE_POSITION', 'scale_x'))
-#        self.scale_y         = float(self.config.get('IMAGE_POSITION', 'scale_y'))
 
 
     def process_image_position(self, img):
+        logger.debug("Starting to process image position")
+
+        if self.rotation == 90:
+            img = img.transpose(Image.ROTATE_90)
+        elif self.rotation == 180:
+            img = img.transpose(Image.ROTATE_180)
+        elif self.rotation == 270:
+            img = img.transpose(Image.ROTATE_270)
+
         # Calculate scaling to fit the screen while maintaining aspect ratio
         img_width, img_height = img.size
 
         # If we somehow downloaded an image of the wrong size, e.g. if screen size or scaling has changed
-        if (not img_width == self.image_width) or (not img_height == self.screen_height) or not scale_x == scale_y:
+        if (not img_width == self.image_width) or (not img_height == self.screen_height) or not self.scale_x == self.scale_y:
+            logger.debug("Resizing")
             scale_ratio = max(self.scale_x,self.scale_y)
             new_width   = int(img_width  * self.scale_x * scale_ratio)
             new_height  = int(img_height * self.scale_y * scale_ratio)
             img = img.resize((new_width, new_height), Image.LANCZOS)
 
-
-        if not (self.position_offset_x == 0 and self.position_offset_y == 0):
+        if not (self.screen_width, self.screen_height) == img.size:
             img = self.pad_image_to_size(img)
 
         return img
 
     def pad_image_to_size(self, img):
+        logger.debug("Padding")
+
         # Get the original dimensions
         original_width, original_height = img.size
         
         # Create a new white image with the target dimensions
+        logger.debug("Starting creating new image")
         new_image = Image.new('RGB', (self.screen_width, self.screen_height), color='white')
+        logger.debug("Finished creating new image")
         
         # Calculate position to paste the original image
         paste_x = self.position_offset_x + (self.screen_width  - original_width ) // 2
         paste_y = self.position_offset_y + (self.screen_height - original_height) // 2
         
         # Paste the original image onto the new white canvas
+        logger.debug("Starting pasting images together")
         new_image.paste(img, (paste_x, paste_y))
+        logger.debug("Finished pasting images together")
         
         return new_image
 
@@ -160,23 +188,30 @@ class EinkViewer(Viewer):
         self.epd.Init()
         self.startup()
     
+    def startup(self):
+        self.load_config()
+        # No need to reload an image, it's still there
+
     def display_image(self, img):
         """Display an image"""
         # Clear the display
-        self.epd.Clear()
+        # TODO not needed/wanted? self.epd.Clear()
 
         # Process the image position, including scale and offset
         img = self.process_image_position(img)
 
         # Render on the eink display
+        logger.debug("Starting image to display")
         self.epd.display(self.epd.getbuffer(img))
-        logger.info("Updated displayed image")
+        logger.info("Finished sending image to display")
 
     def update(self, image_path, img):
-        if img == None:
-            img = fetch_image(image_path)
+        if img is None:
+            img = self.fetch_image(image_path)
+        if img is None:
+            return
 
-        display_image(img)
+        self.display_image(img)
 
 
 ###########################################################################
@@ -236,6 +271,8 @@ class TkViewer(Viewer):
     def display_image(self, image_path):
         """Display an image (should only be called from the main thread)"""
         img = self.fetch_image(image_path)
+        if img is None:
+            return
 
         # Process the image position, including scale and offset
         img = self.process_image_position(img)
@@ -288,13 +325,14 @@ class RoonAlbumArt:
         self.token_file = Path.home() / ".roon_album_display_token.txt"
         logger.info(f"Token file path: {self.token_file}")
         
-        # Path for persistent image storage
-        logger.info(f"Persistent image path: {getCurrentImagePath()}")
-        
         # Initiate some variables
         self.current_image_path = None
-        self.last_image_id = None
         self.last_event = None
+        display_type = self.config.get('DISPLAY', 'type')
+        if display_type == 'system_display':
+            self.last_image_key = None
+        else:
+            self.last_image_key = getCurrentImageKey()
         
         # Connect to Roon - do this BEFORE starting to display an image
         logger.info("Connecting to Roon before starting display...")
@@ -540,9 +578,9 @@ class RoonAlbumArt:
                 return
                 
             # Only update if the image has changed
-            if image_key != self.last_image_id:
+            if image_key != self.last_image_key:
                 logger.info(f"New track detected with image key: {image_key}")
-                self.last_image_id = image_key
+                self.last_image_key = image_key
                 
                 # Now try to get track information
                 track_info = "Unknown Track"
@@ -572,7 +610,9 @@ class RoonAlbumArt:
                 
                 # Fetch and display the album art
                 self.fetch_and_display_album_art(image_key)
-                
+            else:
+                logger.debug(f"Update contains the same image as is currently displayed")
+
         except Exception as e:
             logger.error(f"Error processing now_playing data: {e}")
             logger.debug(f"Now playing data that caused error: {str(now_playing)[:200]}...")
@@ -603,22 +643,15 @@ class RoonAlbumArt:
                 if not (self.viewer.contrast_adjustment       == 1 and
                         self.viewer.colour_balance_adjustment == 1 and
                         self.viewer.brightness_adjustment     == 1 and
-                        self.viewer.sharpness_adjustments     == 1):
+                        self.viewer.sharpness_adjustment     == 1):
                     img = self.tweak_image(img)
 
                 # Cache image for later
                 img.save(image_path)
                 logger.info(f"Successfully saved album art to {image_path}")
 
-                # Save a copy to the persistent path to enable loading on restart
-                try:
-                    shutil.copy2(image_path, getCurrentImagePath())
-                    logger.info(f"Saved persistent copy of album art to {getCurrentImagePath()}")
-                except Exception as e:
-                    logger.warning(f"Failed to save persistent image: {e}")
-
-            # Update the current image path
-            self.current_image_path = image_path
+            # Update the current image id 
+            setCurrentImageKey(image_key)
             
             logger.debug("Updating viewer")
             # Update image display
@@ -709,8 +742,7 @@ class RoonAlbumArt:
         
         # Start API listener in a separate thread
         api_thread = threading.Thread(
-            target=self.event_loop,  # Call the event_loop method directly
-            daemon=True  # This makes the thread exit when the main program exits
+            target=self.event_loop  # Call the event_loop method directly
         )
         api_thread.start()
 
@@ -782,7 +814,8 @@ class RoonFrameConfig:
             'position_offset_x': '0',
             'position_offset_y': '0',
             'scale_x'          : '1',
-            'scale_y'          : '1'
+            'scale_y'          : '1',
+            'rotation'         : '270'
         }
         
         config['ZONES'] = {
