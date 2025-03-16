@@ -1,0 +1,8 @@
+pyvenv.cfg
+bin
+.pre-commit-config.yaml
+roon.cfg
+todo.txt
+.python-version
+__pycache__/
+*.pyc
