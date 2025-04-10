@@ -77,7 +77,9 @@ class EPD():
         self.EPD_PWR_PIN  = epdconfig.EPD_PWR_PIN
 
         self.should_stop = True
-        self.powered_on = False
+        # In case the script somehow restarts while the display is powered on,
+        # shut it down here
+        self.writePower(False, title)
 
     
     def Reset(self):

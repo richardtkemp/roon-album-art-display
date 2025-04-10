@@ -1,0 +1,9 @@
+[Unit]
+Description=Space Cleaner for Roon Album Art Display
+
+[Service]
+Type=oneshot
+ExecStart=/mnt/dietpi_userdata/roon-album-art-display/space-cleaner.sh
+
+[Install]
+WantedBy=multi-user.target
