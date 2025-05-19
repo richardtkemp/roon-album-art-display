@@ -18,7 +18,8 @@ mkdir -p $FRAME/logs
 
 cd $DATA
 #GIT_SSH="dbclient" GIT_SSH_COMMAND="dbclient -i ~/.ssh/id_dropbear" git clone git@github.com:richardtkemp/roon-album-art-display.git
-GIT_SSH=dbclient git clone https://github.com/richardtkemp/roon-album-art-display.git
+GIT_SSH=dbclient git clone git@github.com:richardtkemp/roon-album-art-display.git
+#GIT_SSH=dbclient git clone https://github.com/richardtkemp/roon-album-art-display.git
 
 cp $FRAME/space-cleaner.{service,timer}  /etc/systemd/system/
 cp $FRAME/roon-album-art-display.service /etc/systemd/system/
@@ -28,7 +29,7 @@ systemctl enable roon-album-art-display.service
 systemctl start  space-cleaner.timer
 systemctl start  roon-album-art-display.service
 
-
+echo 'export GIT_SSH=dbclient' >> /root/.bashrc
 ## TODO
 # display err when not connected, not auth'd
 # tailscale login
