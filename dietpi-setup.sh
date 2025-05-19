@@ -5,7 +5,7 @@
 #70 wiringpi
 #17 git
 #58 tailscale
-#130 pythgon3
+#130 python3
 
 apt install neovim python3-pil python3-requests python3-numpy
 pip install roonapi
@@ -14,16 +14,19 @@ pip install roonapi
 #dropbearkey -t rsa -f ~/.ssh/id_dropbear
 DATA=/mnt/dietpi_userdata
 FRAME=$DATA/roon-album-art-display
-mkdir -p $DATA
+mkdir -p $FRAME/logs
 
 cd $DATA
 #GIT_SSH="dbclient" GIT_SSH_COMMAND="dbclient -i ~/.ssh/id_dropbear" git clone git@github.com:richardtkemp/roon-album-art-display.git
 GIT_SSH=dbclient git clone https://github.com/richardtkemp/roon-album-art-display.git
 
-cp $FRAME/space-cleaner.{service,timer} /etc/systemd/system/
+cp $FRAME/space-cleaner.{service,timer}  /etc/systemd/system/
+cp $FRAME/roon-album-art-display.service /etc/systemd/system/
 systemctl daemon-reload
 systemctl enable space-cleaner.timer
+systemctl enable roon-album-art-display.service
 systemctl start  space-cleaner.timer
+systemctl start  roon-album-art-display.service
 
 
 ## TODO
