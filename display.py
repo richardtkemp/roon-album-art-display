@@ -20,7 +20,8 @@ this_script = __file__
 log_format = '%(asctime)s [%(levelname)-7s] %(name)-12s: %(message)s [[%(funcName)s]]'
 # Configure logging
 logging.basicConfig(
-    level = logging.INFO,
+    level = logging.DEBUG,
+    #level = logging.INFO,
     format = log_format,
     handlers = [logging.StreamHandler(sys.stdout)]
 )
@@ -198,7 +199,9 @@ class EinkViewer(Viewer):
         """Display an image"""
 
         # Render on the eink display
-        logger.info(f"Starting sending image to display for {title}")
+        logger.debug(f"Starting sending image to display for {title}")
+        # TODO this break stuff, but seems like it should be needed?
+        # self.epd.should_stop = False
         self.epd.display(self.epd.getbuffer(img), title)
         self.epd.should_stop = False
         logger.info(f"Finished sending image to display for {title}")
@@ -357,7 +360,7 @@ class RoonAlbumArt:
         # Get current album
         for key, dictionary in self.roon.zones.items():
             result = self.process_zone_data(key, dictionary)
-            if result is not False:  # This checks for exactly False, not falsy values
+            if result is not False:
                 break
 
         # Event handling
@@ -531,6 +534,7 @@ class RoonAlbumArt:
     
     def process_zone_data(self, zone_id, zone_data):
         """Process zone data and update display if needed"""
+        result = False
         try:
             # Log zone data structure for debugging
             logger.debug(f"Processing zone {zone_id}, data keys: {zone_data.keys() if isinstance(zone_data, dict) else 'not a dict'}")
@@ -548,25 +552,28 @@ class RoonAlbumArt:
                 # Direct now_playing object
                 if "now_playing" in zone_data and zone_data["now_playing"]:
                     now_playing = zone_data["now_playing"]
-                    self.process_now_playing(now_playing)
+                    result = self.process_now_playing(now_playing)
                 
                 # Check if it might be in a nested structure
                 elif "state" in zone_data and isinstance(zone_data["state"], dict):
                     if "now_playing" in zone_data["state"] and zone_data["state"]["now_playing"]:
                         now_playing = zone_data["state"]["now_playing"]
-                        self.process_now_playing(now_playing)
+                        result = self.process_now_playing(now_playing)
                 
                 # Check if this is a different API structure
                 elif "display_name" in zone_data and "queue" in zone_data and "now_playing" in zone_data.get("queue", {}):
                     now_playing = zone_data["queue"]["now_playing"]
-                    self.process_now_playing(now_playing)
-            
+                    result = self.process_now_playing(now_playing)
+
+            return result
+
         except Exception as e:
             logger.error(f"Error processing zone data: {e}")
             logger.debug(f"Zone data that caused error: {str(zone_data)[:200]}...")
             
     def process_now_playing(self, now_playing):
         """Process the now_playing object to extract image and track info"""
+        result = False
         try:
             logger.debug(f"Now playing keys: {now_playing.keys() if isinstance(now_playing, dict) else 'not a dict'}")
 
@@ -574,7 +581,7 @@ class RoonAlbumArt:
             if now_playing == self.last_event:
                 # Always log the event type for debugging
                 logger.debug(f"Ignoring duplicate event {str(now_playing)}")
-                return
+                return False
             self.last_event = now_playing
             
             # First, try to get the image_key
@@ -586,7 +593,7 @@ class RoonAlbumArt:
             
             if not image_key:
                 logger.warning(f"No image key found in now_playing data {now_playing}")
-                return
+                return False
                 
             # Only update if the image has changed
             if image_key != self.last_image_key:
@@ -616,8 +623,11 @@ class RoonAlbumArt:
                 
                 # Fetch and display the album art
                 self.fetch_and_display_album_art(image_key, track_info)
+                result = image_key
             else:
                 logger.debug(f"Update contains the same image as is currently displayed")
+
+            return result
 
         except Exception as e:
             logger.error(f"Error processing now_playing data: {e}")
