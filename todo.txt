@@ -1,0 +1,3 @@
+Write time to the display on boot? Won't really help if it can't write...
+Send network ping somewhere on boot (to alert to cyclical system restarts)
+.. if image refresh succeeds in less than x seconds (indicates display is not connected)
