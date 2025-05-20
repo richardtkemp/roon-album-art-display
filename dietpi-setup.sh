@@ -34,3 +34,9 @@ echo 'export GIT_SSH=dbclient' >> /root/.bashrc
 # display err when not connected, not auth'd
 # tailscale login
 # change hostname#
+
+# wifi goes to /var/lib/dietpi/dietpi-wifi.db
+# Seems that is used as source for /etc/wpa_supplicant/wpa_supplicant.conf when dietpi-config saves network settings
+
+
+# Probably want to restart after..?
