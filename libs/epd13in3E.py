@@ -54,6 +54,7 @@ def getParent():
     return frame.f_code.co_name
 
 class EarlyExit(Exception):
+    logger.debug("Exiting early")
     pass
 
 class EPD():
@@ -79,7 +80,9 @@ class EPD():
         self.should_stop = True
         # In case the script somehow restarts while the display is powered on,
         # shut it down here
-        self.writePower(False, title)
+        # segfaults: self.writePower(False, "Startup")
+        # Dangerous? TODO
+        self.powered_on = False
 
     
     def Reset(self):
@@ -155,7 +158,8 @@ class EPD():
 
     def updateDisplay(self, title):
         try:
-            if True or self.powered_on == False:
+            # TODO what?? if True or self.powered_on == False:
+            if self.powered_on == False:
                 logger.warning(f"POWER ON = {self.powered_on}")
                 self.writePower(True, title, not self.powered_on)
 
@@ -327,12 +331,13 @@ class EPD():
             self.SendData2([color]* int(self.width/2), int(self.width/2))
         self.CS_ALL(1)
 
-        self.TurnOnDisplay()
+        self.writePower(True, "Clear")
 
     def returnFunc(self, title):
         if self.should_stop:
             logger.info(f"Returning early from [[{getParent()}]] due to should_stop for {title}")
             epdconfig.digital_write(self.EPD_BUSY_PIN, 1) 
+            self.should_stop = False
             raise EarlyExit()
 
     def display(self, image, title):
