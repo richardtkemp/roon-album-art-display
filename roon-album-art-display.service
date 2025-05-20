@@ -1,0 +1,12 @@
+[Unit]
+Description=Run Roon Album Art Display
+After=network.target
+
+[Service]
+Type=simple
+ExecStart=/mnt/dietpi_userdata/roon-album-art-display/start_display.sh
+Restart=on-failure
+RestartSec=15s
+
+[Install]
+WantedBy=multi-user.target
