@@ -87,17 +87,17 @@ class Viewer(ABC):
         image_key = getCurrentImageKey()
         image_path = getSavedImageDir / "album_art_" + image_key + ".jpg"
         if Path(image_path).exists():
-            self.update(image_path, None)
+            self.update(image_key, image_path, None, "onstartup")
     
     def check_pending_updates(self):
         pass
     
     @abstractmethod
-    def update(self, image_path, img, title):
+    def update(self, image_key, image_path, img, title):
         pass
 
     @abstractmethod
-    def display_image(self, image_path):
+    def display_image(self, image_key, image_path, title):
         pass
 
     def fetch_image(self, image_path):
@@ -195,7 +195,7 @@ class EinkViewer(Viewer):
         self.load_config()
         # No need to reload an image, it's still there
 
-    def display_image(self, img, title):
+    def display_image(self, image_key, img, title):
         """Display an image"""
 
         # Render on the eink display
@@ -205,8 +205,10 @@ class EinkViewer(Viewer):
         self.epd.display(self.epd.getbuffer(img), title)
         self.epd.should_stop = False
         logger.info(f"Finished sending image to display for {title}")
+        # Update the current image id 
+        setCurrentImageKey(image_key)
 
-    def update(self, image_path, img, title):
+    def update(self, image_key, image_path, img, title):
         if img is None:
             img = self.fetch_image(image_path)
         if img is None:
@@ -228,7 +230,7 @@ class EinkViewer(Viewer):
 
         self.update_thread = threading.Thread(
             target=self.display_image,
-            args  =(img,title)
+            args  =(image_key, img, title)
         )
         self.update_thread.start()
 
@@ -287,7 +289,7 @@ class TkViewer(Viewer):
 #        else:
 #            logger.debug("No new image found")
     
-    def display_image(self, image_path):
+    def display_image(self, image_key, image_path, title):
         """Display an image (should only be called from the main thread)"""
         img = self.fetch_image(image_path)
         if img is None:
@@ -304,8 +306,11 @@ class TkViewer(Viewer):
         
         # Keep a reference to prevent garbage collection
         self.label.image = self.photo
+
+        # Update the current image id 
+        setCurrentImageKey(image_key)
         
-    def update(self, image_path, img):
+    def update(self, image_key, image_path, img, title):
         """Thread-safe method to request an image update from anywhere"""
         # Store the latest image path instead of directly updating
         self.pending_image_path = image_path
@@ -356,6 +361,12 @@ class RoonAlbumArt:
         # Connect to Roon - do this BEFORE starting to display an image
         logger.info("Connecting to Roon before starting display...")
         self.roon = self.connect_to_roon()
+        if not hasattr(self.roon, '_roonsocket'):
+            raise Error
+        if not hasattr(self.roon._roonsocket, 'failed_state'):
+            raise Error
+        if self.roon._roonsocket.failed_state:
+            raise Error
         
         # Get current album
         for key, dictionary in self.roon.zones.items():
@@ -440,9 +451,9 @@ class RoonAlbumArt:
         token = None
         if self.token_file.exists():
             token = self.token_file.read_text().strip()
-            logger.info("Found existing auth token")
+            logger.info("Discovery: found existing auth token")
         else:
-            logger.info("No existing auth token found, will need to authorize in Roon")
+            logger.info("Discovery: no existing auth token found, will need to authorize in Roon")
         
         # Start discovery process
         logger.info("Starting Roon server discovery...")
@@ -667,11 +678,11 @@ class RoonAlbumArt:
                 logger.info(f"Successfully saved album art to {image_path}")
 
             # Update the current image id 
-            setCurrentImageKey(image_key)
+            #setCurrentImageKey(image_key)
             
             logger.debug("Updating viewer")
             # Update image display
-            self.viewer.update(image_path, img, track_info)
+            self.viewer.update(image_key, image_path, img, track_info)
                 
         except Exception as e:
             logger.error(f"Error fetching album art: {e}")
