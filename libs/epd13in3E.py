@@ -77,7 +77,7 @@ class EPD():
         self.EPD_BUSY_PIN  = epdconfig.EPD_BUSY_PIN
         self.EPD_PWR_PIN  = epdconfig.EPD_PWR_PIN
 
-        self.should_stop = True
+        self.should_stop = False
         # In case the script somehow restarts while the display is powered on,
         # shut it down here
         # segfaults: self.writePower(False, "Startup")
@@ -158,9 +158,8 @@ class EPD():
 
     def updateDisplay(self, title):
         try:
-            # TODO what?? if True or self.powered_on == False:
             if self.powered_on == False:
-                logger.warning(f"POWER ON = {self.powered_on}")
+                logger.debug(f"POWER ON = {self.powered_on}")
                 self.writePower(True, title, not self.powered_on)
 
             epdconfig.delay_ms(50)
@@ -345,7 +344,7 @@ class EPD():
             Width  = int(self.width / 4)
             Width1 = int(self.width / 2)
 
-#            self.ReadBusyH(f"Starting [[{getParent()}]] {title}")
+            self.ReadBusyH(f"Starting [[{getParent()}]] {title}")
             logger.debug(f"Sending data 1 for {title}")
             self.CS_ALL(1)
             self.returnFunc("1 "+title)
