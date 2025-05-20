@@ -20,7 +20,7 @@ this_script = __file__
 log_format = '%(asctime)s [%(levelname)-7s] %(name)-12s: %(message)s [[%(funcName)s]]'
 # Configure logging
 logging.basicConfig(
-    level = logging.DEBUG,
+    level = logging.INFO,
     format = log_format,
     handlers = [logging.StreamHandler(sys.stdout)]
 )
@@ -198,9 +198,7 @@ class EinkViewer(Viewer):
         """Display an image"""
 
         # Render on the eink display
-        logger.debug(f"Starting sending image to display for {title}")
-        # TODO this break stuff, but seems like it should be needed?
-        self.epd.should_stop = False
+        logger.info(f"Starting sending image to display for {title}")
         self.epd.display(self.epd.getbuffer(img), title)
         self.epd.should_stop = False
         logger.info(f"Finished sending image to display for {title}")
@@ -211,8 +209,9 @@ class EinkViewer(Viewer):
         if img is None:
             return
 
-        logger.info(f"Setting should_stop triggered by {title}") # TODO
-        self.epd.should_stop = True
+        if self.update_thread is not None:
+            logger.info(f"Setting should_stop triggered by {title}")
+            self.epd.should_stop = True
 
         # Process the image position, including scale and offset while we wait for the thread to stop
         img = self.process_image_position(img)
@@ -804,7 +803,6 @@ class RoonFrameConfig:
         
         config['DISPLAY'] = {
             'type' : 'epd13in3E'
-            ## TODO config not reading properly?
             #  - 'system_display': Standard display connected to your computer (monitor, laptop screen, TV, etc.)
             #  - 'epd13in3E'     : Waveshare Spectra 6 13.3 inch
         }
