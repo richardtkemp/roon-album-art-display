@@ -20,7 +20,7 @@ this_script = __file__
 log_format = '%(asctime)s [%(levelname)-7s] %(name)-12s: %(message)s [[%(funcName)s]]'
 # Configure logging
 logging.basicConfig(
-    level = logging.INFO,
+    level = logging.DEBUG,
     format = log_format,
     handlers = [logging.StreamHandler(sys.stdout)]
 )
@@ -40,6 +40,7 @@ if os.path.exists(libdir):
 else:
     raise FileNotFoundError
 
+cfgpath = os.path.join(os.path.dirname(os.path.realpath(this_script)), 'roon.cfg')
 
 def setCurrentImageKey(key):
     path = getSavedImageDir() / "current_key"
@@ -195,11 +196,10 @@ class EinkViewer(Viewer):
 
     def display_image(self, img, title):
         """Display an image"""
-        # Clear the display
-        # TODO not needed/wanted? self.epd.Clear()
 
         # Render on the eink display
         logger.debug(f"Starting sending image to display for {title}")
+        # TODO this break stuff, but seems like it should be needed?
         self.epd.should_stop = False
         self.epd.display(self.epd.getbuffer(img), title)
         self.epd.should_stop = False
@@ -211,7 +211,7 @@ class EinkViewer(Viewer):
         if img is None:
             return
 
-        logger.info(f"Setting should_stop for {title}") # TODO
+        logger.info(f"Setting should_stop triggered by {title}") # TODO
         self.epd.should_stop = True
 
         # Process the image position, including scale and offset while we wait for the thread to stop
@@ -376,7 +376,7 @@ class RoonAlbumArt:
             self.config['SERVER']['port'] = str(server_port)
             
             # Write to file
-            with open('roon.cfg', 'w') as configfile:
+            with open(cfgpath, 'w') as configfile:
                 self.config.write(configfile)
                 
             logger.info(f"Saved server details ({server_ip}:{server_port}) to config for future use")
@@ -779,14 +779,12 @@ class RoonFrameConfig:
 
     def load_config(self):
         """Load configuration from roon.cfg file"""
-        config_file = Path("roon.cfg")
-        
-        if not config_file.exists():
-            logger.info(f"Configuration file {config_file} not found. Creating default config.")
-            self.create_default_config(config_file)
+        if not Path(cfgpath).exists():
+            logger.info(f"Configuration file {cfgpath} not found. Creating default config.")
+            self.create_default_config(cfgpath)
         
         config = configparser.ConfigParser()
-        config.read(config_file)
+        config.read(cfgpath)
         
         logger.info("Configuration loaded")
         
@@ -805,7 +803,8 @@ class RoonFrameConfig:
         }
         
         config['DISPLAY'] = {
-            'type' : 'system_display'
+            'type' : 'epd13in3E'
+            ## TODO config not reading properly?
             #  - 'system_display': Standard display connected to your computer (monitor, laptop screen, TV, etc.)
             #  - 'epd13in3E'     : Waveshare Spectra 6 13.3 inch
         }
@@ -879,6 +878,7 @@ if __name__ == "__main__":
 
     display_type = config.get('DISPLAY', 'type')
     if display_type == 'system_display':
+        logger.info(f"Importing tkinter")
         import tkinter as tk           # aka tk
         from PIL import ImageTk
         # Set up the Tkinter display
