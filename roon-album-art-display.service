@@ -4,6 +4,7 @@ After=network.target
 
 [Service]
 Type=simple
+WorkingDirectory=/mnt/dietpi_userdata/roon-album-art-display
 ExecStart=/mnt/dietpi_userdata/roon-album-art-display/start_display.sh
 Restart=on-failure
 RestartSec=15s
