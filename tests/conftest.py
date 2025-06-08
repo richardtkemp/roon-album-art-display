@@ -39,7 +39,7 @@ def sample_config():
         "email": "test@example.com",
     }
 
-    config["DISPLAY"] = {"type": "system_display"}
+    config["DISPLAY"] = {"type": "system_display", "partial_refresh": "false"}
 
     config["IMAGE_RENDER"] = {
         "colour_balance_adjustment": "1.0",

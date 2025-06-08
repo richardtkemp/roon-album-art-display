@@ -17,11 +17,12 @@ logger = logging.getLogger(__name__)
 class RoonClient:
     """Handles communication with Roon server."""
 
-    def __init__(self, config_manager, viewer, image_processor):
+    def __init__(self, config_manager, viewer, image_processor, anniversary_manager=None):
         """Initialize Roon client."""
         self.config_manager = config_manager
         self.viewer = viewer
         self.image_processor = image_processor
+        self.anniversary_manager = anniversary_manager
 
         # Get configuration
         self.app_info = config_manager.get_app_info()
@@ -54,6 +55,9 @@ class RoonClient:
 
         # Process current zones
         self._process_initial_zones()
+
+        # Check for anniversaries on startup
+        self._check_startup_anniversary()
 
         logger.info("Successfully connected to Roon server")
         return self.roon
@@ -335,6 +339,10 @@ class RoonClient:
             track_info = self._extract_track_info(now_playing)
             logger.info(f"Now Playing: {track_info}")
 
+            # Update anniversary manager with track change
+            if self.anniversary_manager:
+                self.anniversary_manager.update_last_track_time()
+
             # Fetch and display album art
             self._fetch_and_display_album_art(image_key, track_info)
             return image_key
@@ -425,6 +433,35 @@ class RoonClient:
             logger.error(f"Error downloading album art: {e}")
             return None
 
+    def _display_anniversary(self, anniversary):
+        """Display anniversary message and image."""
+        try:
+            logger.info(f"Displaying anniversary: {anniversary['name']}")
+            
+            # Create anniversary display using shared logic
+            img = self.anniversary_manager.create_anniversary_display(anniversary, self.image_processor)
+            
+            # Update viewer with anniversary image
+            self.viewer.update("anniversary", None, img, f"Anniversary: {anniversary['message']}")
+            
+        except Exception as e:
+            logger.error(f"Error displaying anniversary: {e}")
+
+    def _check_startup_anniversary(self):
+        """Check for anniversaries on startup and display if found."""
+        if not self.anniversary_manager:
+            return
+            
+        try:
+            anniversary = self.anniversary_manager.get_current_anniversary()
+            if anniversary:
+                logger.info(f"Startup anniversary found: {anniversary['name']} - {anniversary['message']}")
+                self._display_anniversary(anniversary)
+            else:
+                logger.debug("No anniversary found on startup")
+        except Exception as e:
+            logger.error(f"Error checking startup anniversary: {e}")
+
     def run(self):
         """Start the Roon client event loop."""
         self.subscribe_to_events()
@@ -440,8 +477,17 @@ class RoonClient:
         """Main event loop."""
         try:
             logger.info("Roon client event loop started")
+            
             while self.running:
-                time.sleep(0.1)
+                # Check for anniversaries
+                if self.anniversary_manager:
+                    anniversary = self.anniversary_manager.get_current_anniversary()
+                    if anniversary:
+                        logger.info(f"Anniversary triggered: {anniversary['name']} - {anniversary['message']}")
+                        self._display_anniversary(anniversary)
+                
+                # Sleep for 10 minutes - Roon events come via callbacks independently
+                time.sleep(600)
         except Exception as e:
             logger.error(f"Error in event loop: {e}")
         finally:
