@@ -17,7 +17,9 @@ logger = logging.getLogger(__name__)
 class RoonClient:
     """Handles communication with Roon server."""
 
-    def __init__(self, config_manager, viewer, image_processor, anniversary_manager=None):
+    def __init__(
+        self, config_manager, viewer, image_processor, anniversary_manager=None
+    ):
         """Initialize Roon client."""
         self.config_manager = config_manager
         self.viewer = viewer
@@ -437,13 +439,17 @@ class RoonClient:
         """Display anniversary message and image."""
         try:
             logger.info(f"Displaying anniversary: {anniversary['name']}")
-            
+
             # Create anniversary display using shared logic
-            img = self.anniversary_manager.create_anniversary_display(anniversary, self.image_processor)
-            
+            img = self.anniversary_manager.create_anniversary_display(
+                anniversary, self.image_processor
+            )
+
             # Update viewer with anniversary image
-            self.viewer.update("anniversary", None, img, f"Anniversary: {anniversary['message']}")
-            
+            self.viewer.update(
+                "anniversary", None, img, f"Anniversary: {anniversary['message']}"
+            )
+
         except Exception as e:
             logger.error(f"Error displaying anniversary: {e}")
 
@@ -451,11 +457,13 @@ class RoonClient:
         """Check for anniversaries on startup and display if found."""
         if not self.anniversary_manager:
             return
-            
+
         try:
             anniversary = self.anniversary_manager.get_current_anniversary()
             if anniversary:
-                logger.info(f"Startup anniversary found: {anniversary['name']} - {anniversary['message']}")
+                logger.info(
+                    f"Startup anniversary found: {anniversary['name']} - {anniversary['message']}"
+                )
                 self._display_anniversary(anniversary)
             else:
                 logger.debug("No anniversary found on startup")
@@ -477,15 +485,17 @@ class RoonClient:
         """Main event loop."""
         try:
             logger.info("Roon client event loop started")
-            
+
             while self.running:
                 # Check for anniversaries
                 if self.anniversary_manager:
                     anniversary = self.anniversary_manager.get_current_anniversary()
                     if anniversary:
-                        logger.info(f"Anniversary triggered: {anniversary['name']} - {anniversary['message']}")
+                        logger.info(
+                            f"Anniversary triggered: {anniversary['name']} - {anniversary['message']}"
+                        )
                         self._display_anniversary(anniversary)
-                
+
                 # Sleep for 10 minutes - Roon events come via callbacks independently
                 time.sleep(600)
         except Exception as e:

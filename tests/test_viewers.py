@@ -141,14 +141,18 @@ class TestEinkViewer:
     def eink_viewer(self, config_manager, mock_eink_module):
         """Create EinkViewer instance for testing."""
         with patch("roon_display.viewers.eink_viewer.set_current_image_key"):
-            viewer = EinkViewer(config_manager.config, mock_eink_module, partial_refresh=False)
+            viewer = EinkViewer(
+                config_manager.config, mock_eink_module, partial_refresh=False
+            )
             viewer.startup = Mock()  # Mock startup to avoid file operations
             return viewer
 
     def test_initialization(self, config_manager, mock_eink_module):
         """Test EinkViewer initialization."""
         with patch("roon_display.viewers.eink_viewer.set_current_image_key"):
-            viewer = EinkViewer(config_manager.config, mock_eink_module, partial_refresh=False)
+            viewer = EinkViewer(
+                config_manager.config, mock_eink_module, partial_refresh=False
+            )
 
             assert viewer.eink == mock_eink_module
             assert viewer.screen_width == 800
@@ -682,18 +686,26 @@ class TestTkViewer:
 
             mock_logger.info.assert_called_with("Updated display with Test Song")
 
-    def test_initialization_with_partial_refresh(self, config_manager, mock_eink_module):
+    def test_initialization_with_partial_refresh(
+        self, config_manager, mock_eink_module
+    ):
         """Test EinkViewer initialization with partial_refresh enabled."""
         with patch("roon_display.viewers.eink_viewer.set_current_image_key"):
-            viewer = EinkViewer(config_manager.config, mock_eink_module, partial_refresh=True)
+            viewer = EinkViewer(
+                config_manager.config, mock_eink_module, partial_refresh=True
+            )
 
             assert viewer.partial_refresh is True
             assert viewer.eink == mock_eink_module
 
-    def test_update_with_partial_refresh_disabled(self, config_manager, mock_eink_module, sample_image):
+    def test_update_with_partial_refresh_disabled(
+        self, config_manager, mock_eink_module, sample_image
+    ):
         """Test that update waits for natural completion when partial_refresh is disabled."""
         with patch("roon_display.viewers.eink_viewer.set_current_image_key"):
-            viewer = EinkViewer(config_manager.config, mock_eink_module, partial_refresh=False)
+            viewer = EinkViewer(
+                config_manager.config, mock_eink_module, partial_refresh=False
+            )
             viewer.startup = Mock()
 
             # Mock a slow display operation
@@ -709,18 +721,24 @@ class TestTkViewer:
             # Start second update - should wait for first to complete naturally
             with patch("time.sleep") as mock_sleep:
                 viewer.update("key2", "/path2", sample_image, "Song 2")
-                
+
                 # Should NOT have set should_stop flag
-                assert not hasattr(viewer.epd, 'should_stop') or not viewer.epd.should_stop
+                assert (
+                    not hasattr(viewer.epd, "should_stop") or not viewer.epd.should_stop
+                )
 
             # Clean up threads
             if viewer.update_thread and viewer.update_thread.is_alive():
                 viewer.update_thread.join(timeout=1)
 
-    def test_update_with_partial_refresh_enabled(self, config_manager, mock_eink_module, sample_image):
+    def test_update_with_partial_refresh_enabled(
+        self, config_manager, mock_eink_module, sample_image
+    ):
         """Test that update uses should_stop when partial_refresh is enabled."""
         with patch("roon_display.viewers.eink_viewer.set_current_image_key"):
-            viewer = EinkViewer(config_manager.config, mock_eink_module, partial_refresh=True)
+            viewer = EinkViewer(
+                config_manager.config, mock_eink_module, partial_refresh=True
+            )
             viewer.startup = Mock()
 
             # Mock a slow display operation
@@ -735,9 +753,9 @@ class TestTkViewer:
 
             # Start second update - should set should_stop flag
             viewer.update("key2", "/path2", sample_image, "Song 2")
-            
+
             # Should have set should_stop flag for interruption
-            assert hasattr(viewer.epd, 'should_stop')
+            assert hasattr(viewer.epd, "should_stop")
 
             # Clean up threads
             if viewer.update_thread and viewer.update_thread.is_alive():

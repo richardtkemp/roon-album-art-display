@@ -51,11 +51,13 @@ logger = logging.getLogger(__name__)
 # This may fail in test environments without hardware libraries
 try:
     from libs.epd13in3E import EarlyExit
+
     EARLY_EXIT_AVAILABLE = True
 except (ImportError, OSError):
     # Create a dummy EarlyExit for test environments
     class EarlyExit(Exception):
         pass
+
     EARLY_EXIT_AVAILABLE = False
 
 
@@ -74,8 +76,10 @@ class EinkViewer(BaseViewer):
         self.epd = eink_module.EPD()
         self.epd.Init()
         self.startup()
-        
-        logger.info(f"EinkViewer initialized with partial_refresh: {self.partial_refresh}")
+
+        logger.info(
+            f"EinkViewer initialized with partial_refresh: {self.partial_refresh}"
+        )
 
     def display_image(self, image_key, img, title):
         """Display an image on the e-ink display."""
@@ -92,7 +96,10 @@ class EinkViewer(BaseViewer):
             elapsed_time = time.time() - start_time
 
             # Check for render timing issues (only when partial_refresh is disabled or timing is suspicious)
-            if elapsed_time < timing_config.render_success_threshold and not self.partial_refresh:
+            if (
+                elapsed_time < timing_config.render_success_threshold
+                and not self.partial_refresh
+            ):
                 logger.error("=" * 80)
                 logger.error("🚨 CRITICAL: FAST DISPLAY RENDER DETECTED! 🚨")
                 logger.error(f"Display took {elapsed_time:.2f} seconds (expected ~25s)")
@@ -102,7 +109,9 @@ class EinkViewer(BaseViewer):
                 logger.error("- Hardware not connected or malfunctioning")
                 logger.error("- E-ink display driver issues")
                 logger.error("- Concurrent display() calls (HARDWARE UNSAFE!)")
-                logger.error("Consider enabling partial_refresh=true in [DISPLAY] config if using rapid track changes")
+                logger.error(
+                    "Consider enabling partial_refresh=true in [DISPLAY] config if using rapid track changes"
+                )
                 logger.error("=" * 80)
             else:
                 logger.info(
@@ -120,7 +129,7 @@ class EinkViewer(BaseViewer):
                     f"Display interrupted by early exit for {title} after {elapsed_time:.2f}s (thread: {thread_id})"
                 )
                 return  # Early exit is expected with partial refresh
-                
+
             # Handle all other exceptions
             elapsed_time = time.time() - start_time
             thread_id = threading.current_thread().ident
@@ -148,7 +157,7 @@ class EinkViewer(BaseViewer):
         previous_thread_id = None
         if self.update_thread is not None:
             previous_thread_id = self.update_thread.ident
-            
+
             if self.partial_refresh:
                 # Use should_stop mechanism for partial refresh
                 logger.info(
@@ -169,7 +178,9 @@ class EinkViewer(BaseViewer):
         # Wait for previous thread to finish
         if self.update_thread is not None:
             wait_start = time.time()
-            wait_message = "to finish" if self.partial_refresh else "to complete naturally"
+            wait_message = (
+                "to finish" if self.partial_refresh else "to complete naturally"
+            )
             logger.info(
                 f"Waiting for previous thread {previous_thread_id} {wait_message} for {title}"
             )

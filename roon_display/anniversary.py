@@ -9,7 +9,12 @@ from typing import Dict, List, Optional
 
 from PIL import Image, ImageDraw, ImageFont
 
-from .utils import get_extra_images_dir, get_last_track_time, set_last_track_time, ensure_anniversary_dir_exists
+from .utils import (
+    ensure_anniversary_dir_exists,
+    get_extra_images_dir,
+    get_last_track_time,
+    set_last_track_time,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -21,7 +26,7 @@ class AnniversaryManager:
         """Initialize anniversary manager with configuration."""
         self.enabled = anniversaries_config.get("enabled", False)
         self.anniversaries = anniversaries_config.get("anniversaries", [])
-        
+
         # Load last track time from file, default to 1 hour ago if not found
         saved_time = get_last_track_time()
         if saved_time is not None:
@@ -30,12 +35,12 @@ class AnniversaryManager:
         else:
             self.last_track_time = time.time() - 3600  # 1 hour ago
             logger.info("No saved track time found, defaulting to 1 hour ago")
-            
+
         # Create directories for all configured anniversaries
         for anniversary in self.anniversaries:
             ensure_anniversary_dir_exists(anniversary["name"])
-            
-# No longer need image rotation tracking since we use random selection
+
+    # No longer need image rotation tracking since we use random selection
 
     def update_last_track_time(self):
         """Update the timestamp of the last track change."""
@@ -57,35 +62,43 @@ class AnniversaryManager:
                 # Parse date (dd/mm/yyyy format)
                 date_parts = anniversary["date"].split("/")
                 if len(date_parts) != 3:
-                    logger.warning(f"Invalid date format for {anniversary['name']}: {anniversary['date']}")
+                    logger.warning(
+                        f"Invalid date format for {anniversary['name']}: {anniversary['date']}"
+                    )
                     continue
 
                 day, month, year = date_parts
                 anniversary_date = f"{day}/{month}"
-                
+
                 # Check if today matches the anniversary date
                 if current_date == anniversary_date:
                     # Check if enough time has passed since last track
-                    time_since_track = (time.time() - self.last_track_time) / 60  # minutes
-                    
+                    time_since_track = (
+                        time.time() - self.last_track_time
+                    ) / 60  # minutes
+
                     if time_since_track >= anniversary["wait_minutes"]:
                         # Calculate years since the anniversary year
                         years_since = current_year - int(year)
-                        
+
                         # Process message template
-                        message = anniversary["message"].replace("${years}", str(years_since))
-                        
+                        message = anniversary["message"].replace(
+                            "${years}", str(years_since)
+                        )
+
                         # Get current image for this anniversary
                         image_path = self._get_current_image(anniversary)
-                        
+
                         return {
                             "name": anniversary["name"],
                             "message": message,
                             "image_path": image_path,
-                            "years_since": years_since
+                            "years_since": years_since,
                         }
             except (ValueError, IndexError) as e:
-                logger.warning(f"Error processing anniversary {anniversary['name']}: {e}")
+                logger.warning(
+                    f"Error processing anniversary {anniversary['name']}: {e}"
+                )
                 continue
 
         return None
@@ -94,40 +107,51 @@ class AnniversaryManager:
         """Get a random image from the anniversary's directory."""
         anniversary_name = anniversary["name"]
         anniversary_dir = get_extra_images_dir() / anniversary_name
-        
+
         if not anniversary_dir.exists():
             logger.warning(f"Anniversary directory not found: {anniversary_dir}")
             return None
-        
+
         # Find all image files in the directory
-        image_extensions = {'.jpg', '.jpeg', '.png', '.bmp', '.gif', '.tiff', '.webp'}
+        image_extensions = {".jpg", ".jpeg", ".png", ".bmp", ".gif", ".tiff", ".webp", ".avif"}
         image_files = []
-        
+
         for file_path in anniversary_dir.iterdir():
             if file_path.is_file() and file_path.suffix.lower() in image_extensions:
-                image_files.append(file_path)
-        
+                # Test if PIL can actually open this format
+                try:
+                    with Image.open(file_path) as test_img:
+                        test_img.verify()  # Check if it's a valid image
+                    image_files.append(file_path)
+                except Exception as e:
+                    logger.warning(f"Skipping unsupported image {file_path.name}: {e}")
+                    continue
+
         if not image_files:
             logger.warning(f"No image files found in {anniversary_dir}")
             return None
 
         # Choose a random image
         import random
+
         selected_file = random.choice(image_files)
-        
-        logger.debug(f"Selected random anniversary image: {selected_file.name} from {anniversary_name}/")
+
+        logger.debug(
+            f"Selected random anniversary image: {selected_file.name} from {anniversary_name}/"
+        )
         return str(selected_file)
 
     def should_display_anniversary(self) -> bool:
         """Check if an anniversary should be displayed now."""
         return self.get_current_anniversary() is not None
 
-
-    def create_anniversary_display(self, anniversary: Dict, image_processor) -> Image.Image:
+    def create_anniversary_display(
+        self, anniversary: Dict, image_processor
+    ) -> Image.Image:
         """Create anniversary display image (text or custom image)."""
         image_path = anniversary.get("image_path")
         message = anniversary["message"]
-        
+
         if image_path and Path(image_path).exists():
             # Image + text: image at 1/3 height, text below
             return self._create_image_with_text(image_path, message, image_processor)
@@ -139,49 +163,51 @@ class AnniversaryManager:
         """Create a text-only image with centered text."""
         width = image_processor.screen_width
         height = image_processor.screen_height
-        
+
         # Create blank image
-        img = Image.new('RGB', (width, height), 'white')
+        img = Image.new("RGB", (width, height), "white")
         draw = ImageDraw.Draw(img)
-        
+
         # Get font
         font = self._get_font(width)
-        
+
         # Calculate text position (centered)
         text_width, text_height = self._get_text_size(draw, message, font)
         x = (width - text_width) // 2
         y = (height - text_height) // 2
-        
+
         # Draw text
-        draw.text((x, y), message, fill='black', font=font)
-        
+        draw.text((x, y), message, fill="black", font=font)
+
         return img
 
-    def _create_image_with_text(self, image_path: str, message: str, image_processor) -> Image.Image:
+    def _create_image_with_text(
+        self, image_path: str, message: str, image_processor
+    ) -> Image.Image:
         """Create anniversary display with natural image scaling and text below."""
         screen_width = image_processor.screen_width
         screen_height = image_processor.screen_height
-        
+
         # Create blank canvas
-        canvas = Image.new('RGB', (screen_width, screen_height), 'white')
-        
+        canvas = Image.new("RGB", (screen_width, screen_height), "white")
+
         # Define layout parameters
         border_percent = 0.05  # 5% border on top and sides
         text_area_percent = 0.15  # Reserve 15% of height for text area at bottom
-        
+
         # Calculate areas
         border_size = int(screen_width * border_percent)
         text_area_height = int(screen_height * text_area_percent)
-        
+
         # Image area: screen minus borders and text area
         image_area_width = screen_width - (2 * border_size)
         image_area_height = screen_height - border_size - text_area_height
-        
+
         # Load and scale image to fit image area (always fill the space well)
         anniversary_img = Image.open(image_path)
         img_ratio = anniversary_img.width / anniversary_img.height
         area_ratio = image_area_width / image_area_height
-        
+
         # Scale image to fit within the image area boundaries
         if img_ratio > area_ratio:
             # Image is wider - fit to width, height will be smaller
@@ -199,33 +225,37 @@ class AnniversaryManager:
             if scaled_width > image_area_width:
                 scaled_width = image_area_width
                 scaled_height = int(scaled_width / img_ratio)
-        
+
         # Always resize (expand small images, shrink large ones)
-        anniversary_img = anniversary_img.resize((scaled_width, scaled_height), Image.Resampling.LANCZOS)
-        
+        anniversary_img = anniversary_img.resize(
+            (scaled_width, scaled_height), Image.Resampling.LANCZOS
+        )
+
         # Center image in the image area
         image_x = border_size + (image_area_width - scaled_width) // 2
         image_y = border_size + (image_area_height - scaled_height) // 2
-        
+
         # Debug logging
         logger.debug(f"Screen: {screen_width}x{screen_height}")
         logger.debug(f"Border: {border_size}, Text area: {text_area_height}")
         logger.debug(f"Image area: {image_area_width}x{image_area_height}")
         logger.debug(f"Scaled image: {scaled_width}x{scaled_height}")
         logger.debug(f"Image position: ({image_x}, {image_y})")
-        
+
         # Position text in the text area at bottom
         font = self._get_font(screen_width)
         draw = ImageDraw.Draw(canvas)
         text_width, text_height = self._get_text_size(draw, message, font)
-        
+
         text_x = (screen_width - text_width) // 2
-        text_y = screen_height - text_area_height + (text_area_height - text_height) // 2
-        
+        text_y = (
+            screen_height - text_area_height + (text_area_height - text_height) // 2
+        )
+
         # Draw image and text
         canvas.paste(anniversary_img, (image_x, image_y))
-        draw.text((text_x, text_y), message, fill='black', font=font)
-        
+        draw.text((text_x, text_y), message, fill="black", font=font)
+
         return canvas
 
     def _get_font(self, screen_width: int):

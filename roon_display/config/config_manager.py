@@ -122,7 +122,9 @@ class ConfigManager:
         """Get display configuration."""
         return {
             "type": self.config.get("DISPLAY", "type"),
-            "partial_refresh": self.config.getboolean("DISPLAY", "partial_refresh", fallback=False)
+            "partial_refresh": self.config.getboolean(
+                "DISPLAY", "partial_refresh", fallback=False
+            ),
         }
 
     def save_server_config(self, server_ip, server_port):
@@ -157,34 +159,36 @@ class ConfigManager:
         """Get anniversary configuration."""
         if "ANNIVERSARIES" not in self.config:
             return {"enabled": False, "anniversaries": []}
-        
+
         enabled = self.config.getboolean("ANNIVERSARIES", "enabled", fallback=False)
         if not enabled:
             return {"enabled": False, "anniversaries": []}
-        
+
         anniversaries = []
         for key, value in self.config["ANNIVERSARIES"].items():
             if key.startswith("#") or key == "enabled":
                 continue
-            
+
             try:
                 parts = [part.strip() for part in value.split(",")]
                 if len(parts) < 3:
                     logger.warning(f"Invalid anniversary config for {key}: {value}")
                     continue
-                
+
                 date_str = parts[0]
                 message = parts[1]
                 wait_minutes = int(parts[2])
-                
-                anniversaries.append({
-                    "name": key,
-                    "date": date_str,
-                    "message": message,
-                    "wait_minutes": wait_minutes
-                })
+
+                anniversaries.append(
+                    {
+                        "name": key,
+                        "date": date_str,
+                        "message": message,
+                        "wait_minutes": wait_minutes,
+                    }
+                )
             except (ValueError, IndexError) as e:
                 logger.warning(f"Error parsing anniversary config for {key}: {e}")
                 continue
-        
+
         return {"enabled": True, "anniversaries": anniversaries}

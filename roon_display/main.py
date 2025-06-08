@@ -9,7 +9,7 @@ from .anniversary import AnniversaryManager
 from .config.config_manager import ConfigManager
 from .roon_client.client import RoonClient
 from .simulation import SimulationServer
-from .utils import ensure_image_dir_exists, ensure_extra_images_dir_exists
+from .utils import ensure_extra_images_dir_exists, ensure_image_dir_exists
 from .viewers.eink_viewer import EinkViewer
 from .viewers.tk_viewer import TkViewer
 
@@ -44,7 +44,9 @@ def create_viewer(config_manager):
 
     elif display_type == "epd13in3E":
         partial_refresh = display_config["partial_refresh"]
-        logger.info(f"Creating e-ink viewer for {display_type} (partial_refresh: {partial_refresh})")
+        logger.info(
+            f"Creating e-ink viewer for {display_type} (partial_refresh: {partial_refresh})"
+        )
 
         # Add libs directory to path for e-ink modules
         libs_dir = Path(__file__).parent.parent / "libs"
@@ -82,7 +84,9 @@ def main():
         viewer, tk_root = create_viewer(config_manager)
 
         # Create Roon client with anniversary manager
-        roon_client = RoonClient(config_manager, viewer, viewer.image_processor, anniversary_manager)
+        roon_client = RoonClient(
+            config_manager, viewer, viewer.image_processor, anniversary_manager
+        )
 
         # Start simulation server for testing
         simulation_server = SimulationServer(roon_client)
