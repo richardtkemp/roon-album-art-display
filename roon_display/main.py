@@ -28,7 +28,8 @@ for handler in api_logger.handlers:
 def create_viewer(config_manager):
     """Create appropriate viewer based on configuration."""
     config = config_manager.config
-    display_type = config.get("DISPLAY", "type")
+    display_config = config_manager.get_display_config()
+    display_type = display_config["type"]
 
     if display_type == "system_display":
         logger.info("Creating Tkinter system display viewer")
@@ -41,7 +42,8 @@ def create_viewer(config_manager):
         return viewer, root
 
     elif display_type == "epd13in3E":
-        logger.info(f"Creating e-ink viewer for {display_type}")
+        partial_refresh = display_config["partial_refresh"]
+        logger.info(f"Creating e-ink viewer for {display_type} (partial_refresh: {partial_refresh})")
 
         # Add libs directory to path for e-ink modules
         libs_dir = Path(__file__).parent.parent / "libs"
@@ -50,7 +52,7 @@ def create_viewer(config_manager):
 
         try:
             eink_module = importlib.import_module(f"libs.{display_type}")
-            viewer = EinkViewer(config, eink_module)
+            viewer = EinkViewer(config, eink_module, partial_refresh=partial_refresh)
             return viewer, None
         except ImportError as e:
             logger.error(f"Could not import e-ink module {display_type}: {e}")
