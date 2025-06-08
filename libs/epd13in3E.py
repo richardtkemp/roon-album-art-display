@@ -6,7 +6,20 @@
 # *----------------
 # * |	This version:   V1.0
 # * | Date        :   2019-11-01
-# * | Info        :   
+# * | Info        :
+# *
+# * MODIFICATIONS FOR SAFE CANCELLATION:
+# * ====================================
+# * This library has been modified to support safe cancellation of display operations:
+# * - Added should_stop flag (line 80)
+# * - Added returnFunc() method to check should_stop at safe points (lines 335-340)
+# * - Modified display() to call returnFunc() at multiple checkpoints (lines 350+ )
+# * - Modified ReadBusyH() to observe should_stop flag (lines 114-121)
+# * - Raises EarlyExit exception when should_stop=True to cleanly abort operations
+# *
+# * CRITICAL: Do not modify the returnFunc() calls without understanding the hardware
+# * implications. Each call represents a safe point where display operations can be
+# * safely interrupted without leaving the e-ink hardware in an unusable state.
 # ******************************************************************************/
 # Permission is hereby granted, free of charge, to any person obtaining a copy
 # of this software and associated documnetation files (the "Software"), to deal
@@ -68,7 +81,7 @@ class EPD():
         self.RED    = 0x0000ff   #   0011
         self.BLUE   = 0xff0000   #   0101
         self.GREEN  = 0x00ff00   #   0110
-        
+
         self.EPD_CS_M_PIN  = epdconfig.EPD_CS_M_PIN
         self.EPD_CS_S_PIN  = epdconfig.EPD_CS_S_PIN
 
@@ -84,18 +97,18 @@ class EPD():
         # Dangerous? TODO
         self.powered_on = False
 
-    
+
     def Reset(self):
-        epdconfig.digital_write(self.EPD_RST_PIN, 1) 
-        time.sleep(0.03) 
-        epdconfig.digital_write(self.EPD_RST_PIN, 0) 
-        time.sleep(0.03) 
-        epdconfig.digital_write(self.EPD_RST_PIN, 1) 
-        time.sleep(0.03) 
-        epdconfig.digital_write(self.EPD_RST_PIN, 0) 
-        time.sleep(0.03) 
-        epdconfig.digital_write(self.EPD_RST_PIN, 1) 
-        time.sleep(0.03) 
+        epdconfig.digital_write(self.EPD_RST_PIN, 1)
+        time.sleep(0.03)
+        epdconfig.digital_write(self.EPD_RST_PIN, 0)
+        time.sleep(0.03)
+        epdconfig.digital_write(self.EPD_RST_PIN, 1)
+        time.sleep(0.03)
+        epdconfig.digital_write(self.EPD_RST_PIN, 0)
+        time.sleep(0.03)
+        epdconfig.digital_write(self.EPD_RST_PIN, 1)
+        time.sleep(0.03)
 
     # CS = chip select
     def CS_ALL(self, Value):
@@ -107,7 +120,7 @@ class EPD():
 
     def SendData(self, Data):
         epdconfig.spi_writebyte(Data)
-    
+
     def SendData2(self, buf, Len):
         epdconfig.spi_writebyte2(buf, Len)
 
@@ -175,8 +188,8 @@ class EPD():
     def Init(self):
         logger.debug("EPD init...")
         epdconfig.module_init()
-        
-        self.Reset() 
+
+        self.Reset()
         self.ReadBusyH("EPD init")
 
         epdconfig.digital_write(self.EPD_CS_M_PIN, 0)
@@ -283,7 +296,7 @@ class EPD():
         self.SendCommand(0xB1)
         self.SendData(0x02)
         self.CS_ALL(1)
-    
+
     def getbuffer(self, image):
         # Create a pallette with the 7 colors supported by the panel
         pal_image = Image.new("P", (1,1))
@@ -315,9 +328,9 @@ class EPD():
         for i in range(0, len(buf_7color), 2):
             buf[idx] = (buf_7color[i] << 4) + buf_7color[i+1]
             idx += 1
-            
+
         return buf
-    
+
     def Clear(self, color=0x11):
         epdconfig.digital_write(self.EPD_CS_M_PIN, 0)
         self.SendCommand(0x10)
@@ -335,7 +348,7 @@ class EPD():
     def returnFunc(self, title):
         if self.should_stop:
             logger.info(f"Returning early from [[{getParent()}]] due to should_stop for {title}")
-            epdconfig.digital_write(self.EPD_BUSY_PIN, 1) 
+            epdconfig.digital_write(self.EPD_BUSY_PIN, 1)
             self.should_stop = False
             raise EarlyExit()
 
@@ -383,5 +396,3 @@ class EPD():
         epdconfig.delay_ms(2000)
         epdconfig.module_exit()
 ### END OF FILE ###
-
-
