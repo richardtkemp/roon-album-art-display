@@ -18,7 +18,7 @@ class TkViewer(BaseViewer):
 
         # Configure window first to get correct size
         fullscreen = self._configure_window_size()
-        
+
         # Set screen size based on window configuration
         if fullscreen:
             window_width = self.root.winfo_screenwidth()
@@ -27,7 +27,7 @@ class TkViewer(BaseViewer):
             # Use the explicit size we set
             window_width = 800
             window_height = 600
-            
+
         self.set_screen_size(window_width, window_height)
 
         # Configure window
@@ -51,7 +51,7 @@ class TkViewer(BaseViewer):
         # If not fullscreen, set a reasonable window size
         if not fullscreen:
             self.root.geometry("800x600")
-            
+
         return fullscreen
 
     def _setup_window_appearance(self):
