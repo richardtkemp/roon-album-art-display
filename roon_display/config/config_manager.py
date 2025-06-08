@@ -104,6 +104,13 @@ class ConfigManager:
         ]
         return allowed, forbidden
 
+    def get_display_config(self):
+        """Get display configuration."""
+        return {
+            "type": self.config.get("DISPLAY", "type"),
+            "partial_refresh": self.config.getboolean("DISPLAY", "partial_refresh", fallback=False)
+        }
+
     def save_server_config(self, server_ip, server_port):
         """Save server details to config file."""
         try:

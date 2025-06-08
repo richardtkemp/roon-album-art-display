@@ -47,21 +47,35 @@ from .base import BaseViewer
 
 logger = logging.getLogger(__name__)
 
+# Try to import EarlyExit exception for proper error handling
+# This may fail in test environments without hardware libraries
+try:
+    from libs.epd13in3E import EarlyExit
+    EARLY_EXIT_AVAILABLE = True
+except (ImportError, OSError):
+    # Create a dummy EarlyExit for test environments
+    class EarlyExit(Exception):
+        pass
+    EARLY_EXIT_AVAILABLE = False
+
 
 class EinkViewer(BaseViewer):
     """Viewer for E-ink displays (Waveshare)."""
 
-    def __init__(self, config, eink_module):
+    def __init__(self, config, eink_module, partial_refresh=False):
         """Initialize with e-ink hardware module."""
         super().__init__(config)
         self.eink = eink_module
         self.set_screen_size(self.eink.EPD_WIDTH, self.eink.EPD_HEIGHT)
         self.update_thread = None
+        self.partial_refresh = partial_refresh
 
         # Initialize e-ink display
         self.epd = eink_module.EPD()
         self.epd.Init()
         self.startup()
+        
+        logger.info(f"EinkViewer initialized with partial_refresh: {self.partial_refresh}")
 
     def display_image(self, image_key, img, title):
         """Display an image on the e-ink display."""
@@ -77,21 +91,18 @@ class EinkViewer(BaseViewer):
 
             elapsed_time = time.time() - start_time
 
-            # CRITICAL: Detect failed renders by timing
-            # Successful renders: ~25 seconds, Failed renders: ~6 seconds
-            if elapsed_time < timing_config.render_success_threshold:
+            # Check for render timing issues (only when partial_refresh is disabled or timing is suspicious)
+            if elapsed_time < timing_config.render_success_threshold and not self.partial_refresh:
                 logger.error("=" * 80)
                 logger.error("🚨 CRITICAL: FAST DISPLAY RENDER DETECTED! 🚨")
                 logger.error(f"Display took {elapsed_time:.2f} seconds (expected ~25s)")
                 logger.error(f"Thread ID: {thread_id}")
-                logger.error(f"should_stop at start: {self.epd.should_stop}")
                 logger.error(f"Image: {title} (key: {image_key})")
                 logger.error("This indicates a FAILED render, likely due to:")
-                logger.error("- Hardware in bad state from improper interruption")
-                logger.error("- should_stop mechanism not working correctly")
+                logger.error("- Hardware not connected or malfunctioning")
+                logger.error("- E-ink display driver issues")
                 logger.error("- Concurrent display() calls (HARDWARE UNSAFE!)")
-                logger.error("- Previous render left hardware in invalid state")
-                logger.error("Check logs above for thread conflicts or timing issues")
+                logger.error("Consider enabling partial_refresh=true in [DISPLAY] config if using rapid track changes")
                 logger.error("=" * 80)
             else:
                 logger.info(
@@ -102,6 +113,15 @@ class EinkViewer(BaseViewer):
             set_current_image_key(image_key)
 
         except Exception as e:
+            # Check if this is an intentional early exit from partial refresh
+            if isinstance(e, EarlyExit) and self.partial_refresh:
+                elapsed_time = time.time() - start_time
+                logger.info(
+                    f"Display interrupted by early exit for {title} after {elapsed_time:.2f}s (thread: {thread_id})"
+                )
+                return  # Early exit is expected with partial refresh
+                
+            # Handle all other exceptions
             elapsed_time = time.time() - start_time
             thread_id = threading.current_thread().ident
             logger.error(
@@ -124,16 +144,24 @@ class EinkViewer(BaseViewer):
             logger.warning(f"Could not load image for {title}")
             return
 
-        # Stop any current update
+        # Handle previous update based on partial_refresh setting
         previous_thread_id = None
         if self.update_thread is not None:
             previous_thread_id = self.update_thread.ident
-            logger.info(
-                f"Setting stop flag for previous update (prev_thread: {previous_thread_id})"
-            )
-            logger.debug(f"should_stop before setting: {self.epd.should_stop}")
-            self.epd.should_stop = True
-            logger.debug(f"should_stop after setting: {self.epd.should_stop}")
+            
+            if self.partial_refresh:
+                # Use should_stop mechanism for partial refresh
+                logger.info(
+                    f"Setting stop flag for previous update (prev_thread: {previous_thread_id})"
+                )
+                logger.debug(f"should_stop before setting: {self.epd.should_stop}")
+                self.epd.should_stop = True
+                logger.debug(f"should_stop after setting: {self.epd.should_stop}")
+            else:
+                # No interruption - wait for current render to complete naturally
+                logger.info(
+                    f"Waiting for previous render to complete naturally (prev_thread: {previous_thread_id})"
+                )
 
         # Process image while waiting for thread to stop
         img = self.image_processor.process_image_position(img)
@@ -141,8 +169,9 @@ class EinkViewer(BaseViewer):
         # Wait for previous thread to finish
         if self.update_thread is not None:
             wait_start = time.time()
+            wait_message = "to finish" if self.partial_refresh else "to complete naturally"
             logger.info(
-                f"Waiting for previous thread {previous_thread_id} to finish for {title}"
+                f"Waiting for previous thread {previous_thread_id} {wait_message} for {title}"
             )
 
             while self.update_thread.is_alive():
