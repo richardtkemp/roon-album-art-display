@@ -1,0 +1,3 @@
+2025-05-19 22:51:50,590 [DEBUG  ] RoonArtFrame: Adding libdir to path: /mnt/dietpi_userdata/roon-album-art-display/libs [[<module>]]
+2025-05-19 22:51:50,596 [INFO   ] RoonArtFrame: Configuration loaded [[load_config]]
+2025-05-19 22:51:50,596 [INFO   ] RoonArtFrame: Importing tkinter [[<module>]]

@@ -1,0 +1,4 @@
+2025-05-20 14:38:06,403 [DEBUG  ] RoonArtFrame: Adding libdir to path: /mnt/dietpi_userdata/roon-album-art-display/libs [[<module>]]
+2025-05-20 14:38:06,407 [INFO   ] RoonArtFrame: Configuration file /mnt/dietpi_userdata/roon-album-art-display/roon.cfg not found. Creating default config. [[load_config]]
+2025-05-20 14:38:06,411 [INFO   ] RoonArtFrame: Default configuration created at /mnt/dietpi_userdata/roon-album-art-display/roon.cfg [[create_default_config]]
+2025-05-20 14:38:06,412 [INFO   ] RoonArtFrame: Please check it and re-run [[create_default_config]]

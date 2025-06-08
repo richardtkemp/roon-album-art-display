@@ -1,0 +1,5 @@
+2025-05-19 23:03:12,180 [DEBUG  ] RoonArtFrame: Adding libdir to path: /mnt/dietpi_userdata/roon-album-art-display/libs [[<module>]]
+2025-05-19 23:03:12,188 [INFO   ] RoonArtFrame: Configuration loaded [[load_config]]
+2025-05-19 23:03:12,189 [DEBUG  ] RoonArtFrame: Importing epd13in3E [[<module>]]
+2025-05-19 23:03:12,250 [DEBUG  ] RoonArtFrame: Finished importing epd13in3E [[<module>]]
+2025-05-19 23:03:12,251 [DEBUG  ] epd13in3E   : Write power off starting for Startup [[writePower]]
