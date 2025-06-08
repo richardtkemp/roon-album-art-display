@@ -1,0 +1,3 @@
+2025-05-19 22:15:08,529 [INFO   ] RoonArtFrame: Configuration file roon.cfg not found. Creating default config. [[load_config]]
+2025-05-19 22:15:08,534 [INFO   ] RoonArtFrame: Default configuration created at roon.cfg [[create_default_config]]
+2025-05-19 22:15:08,534 [INFO   ] RoonArtFrame: Please check it and re-run [[create_default_config]]
