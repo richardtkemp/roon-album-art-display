@@ -44,3 +44,8 @@ class BaseViewer(ABC):
     def display_image(self, image_key, image_path, title):
         """Display an image on the device."""
         pass
+
+    @abstractmethod
+    def update_anniversary(self, message, image_path=None):
+        """Display anniversary message and optional image."""
+        pass

@@ -180,6 +180,7 @@ roon.cfg
 todo.txt
 logs/
 album_art/
+extra_images/
 .roon_album_display_token.txt
 .claude
 

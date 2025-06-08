@@ -229,3 +229,40 @@ class TestConfigManager:
                 ConfigManager()  # No path provided, should use default
         finally:
             os.chdir(original_cwd)
+
+    def test_get_display_config(self, config_manager):
+        """Test getting display configuration."""
+        display_config = config_manager.get_display_config()
+        
+        assert display_config["type"] == "system_display"
+        assert display_config["partial_refresh"] is False
+
+    def test_get_display_config_partial_refresh_true(self, temp_dir, sample_config):
+        """Test getting display config with partial_refresh enabled."""
+        sample_config["DISPLAY"]["partial_refresh"] = "true"
+        
+        config_path = temp_dir / "partial_refresh.cfg"
+        with open(config_path, "w") as f:
+            sample_config.write(f)
+        
+        config_manager = ConfigManager(config_path)
+        display_config = config_manager.get_display_config()
+        
+        assert display_config["type"] == "system_display"
+        assert display_config["partial_refresh"] is True
+
+    def test_get_display_config_fallback(self, temp_dir, sample_config):
+        """Test getting display config with missing partial_refresh (fallback to False)."""
+        # Remove partial_refresh setting to test fallback
+        if "partial_refresh" in sample_config["DISPLAY"]:
+            del sample_config["DISPLAY"]["partial_refresh"]
+        
+        config_path = temp_dir / "no_partial_refresh.cfg"
+        with open(config_path, "w") as f:
+            sample_config.write(f)
+        
+        config_manager = ConfigManager(config_path)
+        display_config = config_manager.get_display_config()
+        
+        assert display_config["type"] == "system_display"
+        assert display_config["partial_refresh"] is False

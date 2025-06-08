@@ -5,6 +5,8 @@ import logging
 import sys
 from pathlib import Path
 
+from ..utils import get_extra_images_dir
+
 logger = logging.getLogger(__name__)
 
 
@@ -47,10 +49,12 @@ class ConfigManager:
         config["DISPLAY"] = {
             "type": "epd13in3E",
             "tkinter_fullscreen": "false",
+            "partial_refresh": "false",
             # Options:
             # - 'system_display': Standard display connected to your computer
             # - 'epd13in3E': Waveshare Spectra 6 13.3 inch
             # tkinter_fullscreen: true/false (ignored by e-ink displays)
+            # partial_refresh: true/false (e-ink only) - enables interrupting displays for rapid track changes
         }
 
         config["IMAGE_RENDER"] = {
@@ -71,6 +75,16 @@ class ConfigManager:
         config["ZONES"] = {
             "allowed_zone_names": "comma,separated,list of zone names",
             "forbidden_zone_names": "comma,separated,list of zone names",
+        }
+
+        config["ANNIVERSARIES"] = {
+            "enabled": "false",
+            "# Format: name = dd/mm/yyyy,message,wait_minutes": "",
+            "# Example: birthday_john = 15/03/1990,Happy ${years} birthday John!,30": "",
+            "# Date format: dd/mm/yyyy (year used to calculate ${years} = current_year - birth_year)": "",
+            "# wait_minutes: time to wait before showing if no new track": "",
+            "# Images: Put images in extra_images/[name]/ directory (e.g. extra_images/birthday_john/)": "",
+            "# All images in the directory will be used randomly": "",
         }
 
         with open(self.config_path, "w") as f:
@@ -138,3 +152,39 @@ class ConfigManager:
     def get_tkinter_fullscreen(self):
         """Get tkinter fullscreen setting."""
         return self.config.getboolean("DISPLAY", "tkinter_fullscreen", fallback=False)
+
+    def get_anniversaries_config(self):
+        """Get anniversary configuration."""
+        if "ANNIVERSARIES" not in self.config:
+            return {"enabled": False, "anniversaries": []}
+        
+        enabled = self.config.getboolean("ANNIVERSARIES", "enabled", fallback=False)
+        if not enabled:
+            return {"enabled": False, "anniversaries": []}
+        
+        anniversaries = []
+        for key, value in self.config["ANNIVERSARIES"].items():
+            if key.startswith("#") or key == "enabled":
+                continue
+            
+            try:
+                parts = [part.strip() for part in value.split(",")]
+                if len(parts) < 3:
+                    logger.warning(f"Invalid anniversary config for {key}: {value}")
+                    continue
+                
+                date_str = parts[0]
+                message = parts[1]
+                wait_minutes = int(parts[2])
+                
+                anniversaries.append({
+                    "name": key,
+                    "date": date_str,
+                    "message": message,
+                    "wait_minutes": wait_minutes
+                })
+            except (ValueError, IndexError) as e:
+                logger.warning(f"Error parsing anniversary config for {key}: {e}")
+                continue
+        
+        return {"enabled": True, "anniversaries": anniversaries}

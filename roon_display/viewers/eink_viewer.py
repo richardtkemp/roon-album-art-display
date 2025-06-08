@@ -199,3 +199,9 @@ class EinkViewer(BaseViewer):
         logger.info(
             f"UPDATE COMPLETE: {title} (new_thread: {new_thread_id}, setup_time: {update_elapsed:.2f}s)"
         )
+
+    def update_anniversary(self, message, image_path=None):
+        """Display anniversary message and optional image."""
+        # This method is now handled by RoonClient using shared anniversary logic
+        # Left as placeholder for interface compatibility
+        pass
