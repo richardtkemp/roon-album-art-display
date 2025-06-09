@@ -189,7 +189,9 @@ class ConfigManager:
         try:
             return parse_time_to_seconds(time_str)
         except ValueError as e:
-            logger.warning(f"Invalid loop_time format '{time_str}': {e}. Using default 600 seconds.")
+            logger.warning(
+                f"Invalid loop_time format '{time_str}': {e}. Using default 600 seconds."
+            )
             return 600
 
     def get_anniversaries_config(self):
@@ -241,7 +243,7 @@ class ConfigManager:
         """Get health script configuration."""
         if "HEALTH" not in self.config:
             return None
-        
+
         script_path = self.config.get("HEALTH", "health_script", fallback="").strip()
         return script_path if script_path else None
 
@@ -249,10 +251,14 @@ class ConfigManager:
         """Get health recheck interval in seconds."""
         if "HEALTH" not in self.config:
             return 1800  # Default 30 minutes
-        
-        time_str = self.config.get("HEALTH", "health_recheck_interval", fallback="30 minutes")
+
+        time_str = self.config.get(
+            "HEALTH", "health_recheck_interval", fallback="30 minutes"
+        )
         try:
             return parse_time_to_seconds(time_str)
         except ValueError as e:
-            logger.warning(f"Invalid health_recheck_interval format '{time_str}': {e}. Using default 1800 seconds.")
+            logger.warning(
+                f"Invalid health_recheck_interval format '{time_str}': {e}. Using default 1800 seconds."
+            )
             return 1800

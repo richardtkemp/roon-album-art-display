@@ -188,9 +188,7 @@ class AnniversaryManager:
             # If can't make relative, use the name
             relative_path = f"{anniversary_name}/{selected_file.name}"
 
-        logger.info(
-            f"Selected anniversary image: {relative_path}"
-        )
+        logger.info(f"Selected anniversary image: {relative_path}")
         return str(selected_file)
 
     def should_display_anniversary(self) -> bool:

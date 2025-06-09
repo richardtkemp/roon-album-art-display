@@ -54,7 +54,9 @@ def create_viewer(config_manager):
 
         try:
             eink_module = importlib.import_module(f"libs.{display_type}")
-            viewer = EinkViewer(config_manager, eink_module, partial_refresh=partial_refresh)
+            viewer = EinkViewer(
+                config_manager, eink_module, partial_refresh=partial_refresh
+            )
             return viewer, None
         except ImportError as e:
             logger.error(f"Could not import e-ink module {display_type}: {e}")

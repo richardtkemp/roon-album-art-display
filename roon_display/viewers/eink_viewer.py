@@ -110,19 +110,23 @@ class EinkViewer(BaseViewer):
                 logger.error("- E-ink display driver issues")
                 logger.error("- Concurrent display() calls (HARDWARE UNSAFE!)")
                 logger.error("=" * 80)
-                
+
                 # Call health script for render failure
                 if self.health_manager:
-                    additional_info = f"Fast render detected: {elapsed_time:.2f}s for {title}"
+                    additional_info = (
+                        f"Fast render detected: {elapsed_time:.2f}s for {title}"
+                    )
                     self.health_manager.report_render_failure(additional_info)
             else:
                 logger.info(
                     f"Finished displaying image for {title} ({elapsed_time:.1f}s, thread: {thread_id})"
                 )
-                
+
                 # Call health script for successful render
                 if self.health_manager:
-                    additional_info = f"Successful render: {elapsed_time:.1f}s for {title}"
+                    additional_info = (
+                        f"Successful render: {elapsed_time:.1f}s for {title}"
+                    )
                     self.health_manager.report_render_success(additional_info)
 
             # Update current image key after successful display
@@ -143,10 +147,12 @@ class EinkViewer(BaseViewer):
             logger.error(
                 f"Error displaying image after {elapsed_time:.2f}s (thread: {thread_id}): {e}"
             )
-            
+
             # Call health script for render error
             if self.health_manager:
-                additional_info = f"Display error after {elapsed_time:.2f}s for {title}: {str(e)}"
+                additional_info = (
+                    f"Display error after {elapsed_time:.2f}s for {title}: {str(e)}"
+                )
                 self.health_manager.report_render_failure(additional_info)
 
     def update(self, image_key, image_path, img, title):
@@ -201,7 +207,11 @@ class EinkViewer(BaseViewer):
                 time.sleep(0.1)
                 wait_elapsed = time.time() - wait_start
                 # Log warning every 5 seconds after 30 seconds
-                if wait_elapsed > 30 and int(wait_elapsed) % 5 == 0 and (wait_elapsed - int(wait_elapsed)) < 0.1:
+                if (
+                    wait_elapsed > 30
+                    and int(wait_elapsed) % 5 == 0
+                    and (wait_elapsed - int(wait_elapsed)) < 0.1
+                ):
                     logger.warning(
                         f"Still waiting for thread {previous_thread_id} after {wait_elapsed:.1f}s"
                     )

@@ -19,7 +19,7 @@ class BaseViewer(ABC):
         self.config_manager = config_manager
         self.config = config_manager.config
         self.image_processor = ImageProcessor(self.config)
-        
+
         # Initialize health manager if health script is configured
         health_script_path = config_manager.get_health_script()
         health_recheck_interval = config_manager.get_health_recheck_interval()
