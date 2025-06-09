@@ -64,13 +64,13 @@ class TestParseTimeToSeconds:
         """Test invalid time formats."""
         with pytest.raises(ValueError, match="Invalid time format"):
             parse_time_to_seconds("invalid")
-        
+
         with pytest.raises(ValueError, match="Invalid time format"):
             parse_time_to_seconds("5 mins 30 secs")
-        
+
         with pytest.raises(ValueError, match="Invalid time format"):
             parse_time_to_seconds("")
-        
+
         with pytest.raises(ValueError, match="Invalid time format"):
             parse_time_to_seconds("   ")
 
@@ -78,7 +78,7 @@ class TestParseTimeToSeconds:
         """Test unknown time units."""
         with pytest.raises(ValueError, match="Unknown time unit"):
             parse_time_to_seconds("5 weeks")
-        
+
         with pytest.raises(ValueError, match="Unknown time unit"):
             parse_time_to_seconds("10 xyz")
 
@@ -86,7 +86,7 @@ class TestParseTimeToSeconds:
         """Test invalid numbers."""
         with pytest.raises(ValueError, match="Invalid number"):
             parse_time_to_seconds("abc minutes")
-        
+
         with pytest.raises(ValueError, match="Invalid time format"):
             parse_time_to_seconds("minutes")
 
@@ -94,7 +94,7 @@ class TestParseTimeToSeconds:
         """Test non-string, non-integer input."""
         with pytest.raises(ValueError, match="Invalid time format"):
             parse_time_to_seconds(None)
-        
+
         with pytest.raises(ValueError, match="Invalid time format"):
             parse_time_to_seconds([])
 

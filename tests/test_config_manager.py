@@ -271,7 +271,7 @@ class TestConfigManager:
         """Test getting health script when configured."""
         # Add health script to config
         config_manager.config["HEALTH"] = {"health_script": "/path/to/health.sh"}
-        
+
         script_path = config_manager.get_health_script()
         assert script_path == "/path/to/health.sh"
 
@@ -279,7 +279,7 @@ class TestConfigManager:
         """Test getting health script when empty."""
         # Add empty health script to config
         config_manager.config["HEALTH"] = {"health_script": ""}
-        
+
         script_path = config_manager.get_health_script()
         assert script_path is None
 
@@ -288,7 +288,7 @@ class TestConfigManager:
         # Remove HEALTH section if it exists
         if "HEALTH" in config_manager.config:
             del config_manager.config["HEALTH"]
-        
+
         script_path = config_manager.get_health_script()
         assert script_path is None
 
@@ -296,7 +296,7 @@ class TestConfigManager:
         """Test getting health recheck interval when configured."""
         # Add health recheck interval to config
         config_manager.config["HEALTH"] = {"health_recheck_interval": "3600"}
-        
+
         interval = config_manager.get_health_recheck_interval()
         assert interval == 3600
 
@@ -305,7 +305,7 @@ class TestConfigManager:
         # Remove HEALTH section if it exists
         if "HEALTH" in config_manager.config:
             del config_manager.config["HEALTH"]
-        
+
         interval = config_manager.get_health_recheck_interval()
         assert interval == 1800  # Default 30 minutes
 
@@ -313,6 +313,6 @@ class TestConfigManager:
         """Test getting health recheck interval with fallback value."""
         # Add HEALTH section without recheck interval
         config_manager.config["HEALTH"] = {"health_script": "/path/to/script.sh"}
-        
+
         interval = config_manager.get_health_recheck_interval()
         assert interval == 1800  # Default 30 minutes

@@ -481,7 +481,10 @@ class RoonClient:
                         self._display_anniversary(anniversary)
 
                 # Check if health script should be re-called (configurable interval)
-                if self.viewer.health_manager and self.viewer.health_manager.should_recheck_health():
+                if (
+                    self.viewer.health_manager
+                    and self.viewer.health_manager.should_recheck_health()
+                ):
                     self.viewer.health_manager.recheck_health()
 
                 # Sleep for configured time - Roon events come via callbacks independently

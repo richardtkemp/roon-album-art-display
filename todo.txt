@@ -1,13 +1,17 @@
-Write time to the display on boot? Won't really help if it can't write...
-Send network ping somewhere on boot (to alert to cyclical system restarts)
-.. if image refresh succeeds in less than x seconds (indicates display is not connected)
-
-add healthchecks integration
 
 don't queue if multiple track changes come in together (or make a queue, but with max depth=1)
 
 Support multiple anniversaries on the same day
 
 
+Save template health script to repo
 
-I want to define in config a 'health_script', which will accept param1=good/bad and param2 "$additional_info". This script, if defined, should be called when display renderssuccessfully or non-successfully, i.e. at the same time as you do or do not log '🚨 CRITICAL: FAST DISPLAY RENDER DETECTED! 🚨'. We should record the health status somewhereaccording to the last time a render completed, and in the main event loop we should re-call the health script with the same params used the last time if it is >30 minutes since the last health script call.
+Rationalise rendering - choose which of art/anniversary to display, and just do that one rather than letting them compete.
+
+Figure out why avif still don't work
+
+Add a config server??
+
+Set up automated git pull
+Automated restarts?
+Consider that if the user modifies any files then a git pull will fail. OK?
