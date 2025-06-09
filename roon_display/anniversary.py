@@ -181,8 +181,15 @@ class AnniversaryManager:
 
         selected_file = random.choice(image_files)
 
-        logger.debug(
-            f"Selected random anniversary image: {selected_file.name} from {anniversary_name}/"
+        # Create relative path for logging
+        try:
+            relative_path = selected_file.relative_to(Path.cwd())
+        except ValueError:
+            # If can't make relative, use the name
+            relative_path = f"{anniversary_name}/{selected_file.name}"
+
+        logger.info(
+            f"Selected anniversary image: {relative_path}"
         )
         return str(selected_file)
 
