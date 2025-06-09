@@ -4,6 +4,7 @@ import logging
 import subprocess
 import time
 from datetime import datetime, timedelta
+from pathlib import Path
 from typing import Optional
 
 logger = logging.getLogger(__name__)
@@ -14,13 +15,29 @@ class HealthManager:
 
     def __init__(self, health_script_path: Optional[str] = None, recheck_interval_seconds: int = 1800):
         """Initialize health manager with optional health script path and recheck interval."""
-        self.health_script_path = health_script_path
+        self.health_script_path = self._resolve_script_path(health_script_path)
         self.last_status = None
         self.last_timestamp = None
         self.last_params = None
         self.recheck_interval = timedelta(seconds=recheck_interval_seconds)
         
-        logger.info(f"HealthManager initialized with script: {health_script_path}, recheck interval: {recheck_interval_seconds}s")
+        logger.info(f"HealthManager initialized with script: {self.health_script_path}, recheck interval: {recheck_interval_seconds}s")
+
+    def _resolve_script_path(self, script_path: Optional[str]) -> Optional[str]:
+        """Resolve script path, making relative paths relative to project root."""
+        if not script_path:
+            return None
+            
+        path = Path(script_path)
+        
+        # If absolute path, use as-is
+        if path.is_absolute():
+            return str(path)
+            
+        # For relative paths, resolve relative to current working directory
+        # This assumes the application is run from the project root
+        resolved_path = Path.cwd() / path
+        return str(resolved_path)
 
     def call_health_script(self, status: str, additional_info: str) -> bool:
         """Call the health script with status and additional info.
