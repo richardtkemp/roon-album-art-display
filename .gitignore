@@ -183,6 +183,7 @@ album_art/
 extra_images/
 .roon_album_display_token.txt
 .claude
+simulation_track_index.txt
 
 # Pre-commit
 .pre-commit-config.yaml
