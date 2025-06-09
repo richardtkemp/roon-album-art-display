@@ -109,9 +109,6 @@ class EinkViewer(BaseViewer):
                 logger.error("- Hardware not connected or malfunctioning")
                 logger.error("- E-ink display driver issues")
                 logger.error("- Concurrent display() calls (HARDWARE UNSAFE!)")
-                logger.error(
-                    "Consider enabling partial_refresh=true in [DISPLAY] config if using rapid track changes"
-                )
                 logger.error("=" * 80)
             else:
                 logger.info(

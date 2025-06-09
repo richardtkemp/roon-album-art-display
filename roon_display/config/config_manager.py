@@ -44,6 +44,8 @@ class ConfigManager:
             "display_version": "1.0.0",
             "publisher": "Richard Kemp",
             "email": "richardtkemp@gmail.com",
+            "log_level": "INFO",
+            "# log_level options: DEBUG, INFO, WARNING, ERROR": "",
         }
 
         config["DISPLAY"] = {
@@ -154,6 +156,20 @@ class ConfigManager:
     def get_tkinter_fullscreen(self):
         """Get tkinter fullscreen setting."""
         return self.config.getboolean("DISPLAY", "tkinter_fullscreen", fallback=False)
+
+    def get_log_level(self):
+        """Get logging level from config."""
+        log_level_str = self.config.get("APP", "log_level", fallback="INFO").upper()
+        
+        # Map string to logging constants
+        level_map = {
+            "DEBUG": logging.DEBUG,
+            "INFO": logging.INFO,
+            "WARNING": logging.WARNING,
+            "ERROR": logging.ERROR
+        }
+        
+        return level_map.get(log_level_str, logging.INFO)
 
     def get_anniversaries_config(self):
         """Get anniversary configuration."""

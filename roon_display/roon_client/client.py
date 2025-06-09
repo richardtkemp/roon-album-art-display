@@ -466,7 +466,7 @@ class RoonClient:
                 )
                 self._display_anniversary(anniversary)
             else:
-                logger.debug("No anniversary found on startup")
+                logger.info("No anniversary found on startup")
         except Exception as e:
             logger.error(f"Error checking startup anniversary: {e}")
 

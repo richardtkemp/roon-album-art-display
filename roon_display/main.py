@@ -13,7 +13,7 @@ from .utils import ensure_extra_images_dir_exists, ensure_image_dir_exists
 from .viewers.eink_viewer import EinkViewer
 from .viewers.tk_viewer import TkViewer
 
-# Configure logging
+# Configure logging format (level will be set after config is loaded)
 log_format = "%(asctime)s [%(levelname)-7s] %(name)-12s: %(message)s [[%(funcName)s]]"
 logging.basicConfig(
     level=logging.DEBUG, format=log_format, handlers=[logging.StreamHandler(sys.stdout)]
@@ -75,6 +75,11 @@ def main():
 
         # Load configuration
         config_manager = ConfigManager()
+        
+        # Set logging level from config
+        log_level = config_manager.get_log_level()
+        logging.getLogger().setLevel(log_level)
+        logger.info(f"Log level set to: {logging.getLevelName(log_level)}")
 
         # Create anniversary manager
         anniversary_config = config_manager.get_anniversaries_config()
