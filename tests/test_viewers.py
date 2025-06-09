@@ -19,7 +19,7 @@ class TestBaseViewer:
     def test_cannot_instantiate_base_viewer(self, config_manager):
         """Test that BaseViewer cannot be instantiated directly."""
         with pytest.raises(TypeError):
-            BaseViewer(config_manager.config)
+            BaseViewer(config_manager)
 
     def test_base_viewer_interface(self):
         """Test that BaseViewer defines required abstract methods."""
@@ -33,8 +33,8 @@ class TestBaseViewer:
         """Create a concrete implementation of BaseViewer for testing."""
 
         class ConcreteViewer(BaseViewer):
-            def __init__(self, config):
-                super().__init__(config)
+            def __init__(self, config_manager):
+                super().__init__(config_manager)
                 self.update_calls = []
                 self.display_calls = []
                 self.anniversary_calls = []
@@ -48,7 +48,7 @@ class TestBaseViewer:
             def update_anniversary(self, message, image_path=None):
                 self.anniversary_calls.append((message, image_path))
 
-        return ConcreteViewer(config_manager.config)
+        return ConcreteViewer(config_manager)
 
     def test_initialization(self, concrete_viewer):
         """Test BaseViewer initialization."""
