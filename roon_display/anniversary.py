@@ -39,7 +39,7 @@ class AnniversaryManager:
         # Create directories for all configured anniversaries
         for anniversary in self.anniversaries:
             ensure_anniversary_dir_exists(anniversary["name"])
-            
+
         # Track when we last checked for anniversaries
         self.last_check_date = None
         self.cached_anniversary_info = None  # Cache anniversary info without image path
@@ -61,7 +61,7 @@ class AnniversaryManager:
         current_day = today.day
         current_month = today.month
         current_year = today.year
-        
+
         found_anniversaries = []
         ready_anniversary = None
 
@@ -80,13 +80,18 @@ class AnniversaryManager:
                 anniversary_month = int(month)
 
                 # Check if today matches the anniversary date (using integers to avoid leading zero issues)
-                if current_day == anniversary_day and current_month == anniversary_month:
+                if (
+                    current_day == anniversary_day
+                    and current_month == anniversary_month
+                ):
                     # Calculate years since the anniversary year
                     years_since = current_year - int(year)
-                    
+
                     # Process message template
-                    message = anniversary["message"].replace("${years}", str(years_since))
-                    
+                    message = anniversary["message"].replace(
+                        "${years}", str(years_since)
+                    )
+
                     # Log that we found this anniversary
                     logger.info(
                         f"Anniversary found: {anniversary['name']} - {message} (wait time: {anniversary['wait_minutes']} minutes)"
@@ -94,11 +99,15 @@ class AnniversaryManager:
                     found_anniversaries.append(anniversary["name"])
 
                     # Check if enough time has passed since last track
-                    time_since_track = (time.time() - self.last_track_time) / 60  # minutes
+                    time_since_track = (
+                        time.time() - self.last_track_time
+                    ) / 60  # minutes
 
                     if time_since_track >= anniversary["wait_minutes"]:
-                        logger.debug(f"Anniversary {anniversary['name']} ready to display now")
-                        
+                        logger.debug(
+                            f"Anniversary {anniversary['name']} ready to display now"
+                        )
+
                         # Get current image for this anniversary (fresh each time)
                         image_path = self._get_current_image(anniversary)
 
@@ -107,7 +116,9 @@ class AnniversaryManager:
                             "message": message,
                             "image_path": image_path,
                             "years_since": years_since,
-                            "wait_minutes": anniversary["wait_minutes"],  # Keep for cached checks
+                            "wait_minutes": anniversary[
+                                "wait_minutes"
+                            ],  # Keep for cached checks
                         }
                         break  # Return first ready anniversary
                     else:
@@ -138,7 +149,16 @@ class AnniversaryManager:
             return None
 
         # Find all image files in the directory
-        image_extensions = {".jpg", ".jpeg", ".png", ".bmp", ".gif", ".tiff", ".webp", ".avif"}
+        image_extensions = {
+            ".jpg",
+            ".jpeg",
+            ".png",
+            ".bmp",
+            ".gif",
+            ".tiff",
+            ".webp",
+            ".avif",
+        }
         image_files = []
 
         for file_path in anniversary_dir.iterdir():
@@ -174,21 +194,25 @@ class AnniversaryManager:
         """Only check for anniversaries if the date has changed since last check."""
         if not self.enabled:
             return None
-            
+
         today = datetime.now().date()
-        
+
         # If we haven't checked today, or date changed, do a fresh anniversary detection
         if self.last_check_date != today:
-            logger.debug(f"Date changed from {self.last_check_date} to {today}, checking anniversaries")
+            logger.debug(
+                f"Date changed from {self.last_check_date} to {today}, checking anniversaries"
+            )
             self.last_check_date = today
             self.cached_anniversary_info = self._get_anniversary_info_for_today()
         else:
             logger.debug("Date unchanged, using cached anniversary info")
-        
+
         # If we have an anniversary for today, check if it's ready to display (with fresh image)
         if self.cached_anniversary_info:
-            return self._check_anniversary_ready_with_fresh_image(self.cached_anniversary_info)
-        
+            return self._check_anniversary_ready_with_fresh_image(
+                self.cached_anniversary_info
+            )
+
         return None
 
     def _get_anniversary_info_for_today(self) -> Optional[Dict]:
@@ -216,13 +240,18 @@ class AnniversaryManager:
                 anniversary_month = int(month)
 
                 # Check if today matches the anniversary date
-                if current_day == anniversary_day and current_month == anniversary_month:
+                if (
+                    current_day == anniversary_day
+                    and current_month == anniversary_month
+                ):
                     # Calculate years since the anniversary year
                     years_since = current_year - int(year)
-                    
+
                     # Process message template
-                    message = anniversary["message"].replace("${years}", str(years_since))
-                    
+                    message = anniversary["message"].replace(
+                        "${years}", str(years_since)
+                    )
+
                     # Log that we found this anniversary (only on date change)
                     logger.info(
                         f"Anniversary found: {anniversary['name']} - {message} (wait time: {anniversary['wait_minutes']} minutes)"
@@ -246,14 +275,16 @@ class AnniversaryManager:
         logger.info("No anniversaries configured for today")
         return None
 
-    def _check_anniversary_ready_with_fresh_image(self, anniversary_info: Dict) -> Optional[Dict]:
+    def _check_anniversary_ready_with_fresh_image(
+        self, anniversary_info: Dict
+    ) -> Optional[Dict]:
         """Check if cached anniversary is ready to display, with fresh image selection."""
         # Check if enough time has passed since last track
         time_since_track = (time.time() - self.last_track_time) / 60  # minutes
 
         if time_since_track >= anniversary_info["wait_minutes"]:
             logger.debug(f"Anniversary {anniversary_info['name']} ready to display now")
-            
+
             # Get fresh random image each time
             image_path = self._get_current_image(anniversary_info["config"])
 

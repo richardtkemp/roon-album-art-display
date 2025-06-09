@@ -64,9 +64,9 @@ except (ImportError, OSError):
 class EinkViewer(BaseViewer):
     """Viewer for E-ink displays (Waveshare)."""
 
-    def __init__(self, config, eink_module, partial_refresh=False):
+    def __init__(self, config_manager, eink_module, partial_refresh=False):
         """Initialize with e-ink hardware module."""
-        super().__init__(config)
+        super().__init__(config_manager)
         self.eink = eink_module
         self.set_screen_size(self.eink.EPD_WIDTH, self.eink.EPD_HEIGHT)
         self.update_thread = None
@@ -81,7 +81,7 @@ class EinkViewer(BaseViewer):
             f"EinkViewer initialized with partial_refresh: {self.partial_refresh}"
         )
 
-    def display_image(self, image_key, img, title):
+    def display_image(self, image_key, image_path, img, title):
         """Display an image on the e-ink display."""
         thread_id = threading.current_thread().ident
         logger.debug(f"Starting display update for {title} (thread: {thread_id})")
@@ -110,10 +110,20 @@ class EinkViewer(BaseViewer):
                 logger.error("- E-ink display driver issues")
                 logger.error("- Concurrent display() calls (HARDWARE UNSAFE!)")
                 logger.error("=" * 80)
+                
+                # Call health script for render failure
+                if self.health_manager:
+                    additional_info = f"Fast render detected: {elapsed_time:.2f}s for {title}"
+                    self.health_manager.report_render_failure(additional_info)
             else:
                 logger.info(
                     f"Finished displaying image for {title} ({elapsed_time:.1f}s, thread: {thread_id})"
                 )
+                
+                # Call health script for successful render
+                if self.health_manager:
+                    additional_info = f"Successful render: {elapsed_time:.1f}s for {title}"
+                    self.health_manager.report_render_success(additional_info)
 
             # Update current image key after successful display
             set_current_image_key(image_key)
@@ -133,6 +143,11 @@ class EinkViewer(BaseViewer):
             logger.error(
                 f"Error displaying image after {elapsed_time:.2f}s (thread: {thread_id}): {e}"
             )
+            
+            # Call health script for render error
+            if self.health_manager:
+                additional_info = f"Display error after {elapsed_time:.2f}s for {title}: {str(e)}"
+                self.health_manager.report_render_failure(additional_info)
 
     def update(self, image_key, image_path, img, title):
         """Update the display with new image (thread-safe)."""
@@ -198,7 +213,7 @@ class EinkViewer(BaseViewer):
         # Start new update thread
         logger.info(f"Creating new update thread for {title}")
         self.update_thread = threading.Thread(
-            target=self.display_image, args=(image_key, img, title)
+            target=self.display_image, args=(image_key, image_path, img, title)
         )
         self.update_thread.start()
 

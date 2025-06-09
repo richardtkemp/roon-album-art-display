@@ -25,7 +25,9 @@ class TestRoonClient:
     @pytest.fixture
     def roon_client(self, config_manager, mock_viewer, temp_dir):
         """Create RoonClient instance for testing."""
-        with patch("roon_display.roon_client.client.get_saved_image_dir") as mock_image_dir:
+        with patch(
+            "roon_display.roon_client.client.get_saved_image_dir"
+        ) as mock_image_dir:
             mock_image_dir.return_value = temp_dir
             client = RoonClient(
                 config_manager, mock_viewer, mock_viewer.image_processor
@@ -35,7 +37,9 @@ class TestRoonClient:
 
     def test_initialization(self, config_manager, mock_viewer, temp_dir):
         """Test RoonClient initialization."""
-        with patch("roon_display.roon_client.client.get_saved_image_dir") as mock_image_dir:
+        with patch(
+            "roon_display.roon_client.client.get_saved_image_dir"
+        ) as mock_image_dir:
             mock_image_dir.return_value = temp_dir
 
             client = RoonClient(
@@ -102,9 +106,9 @@ class TestRoonClient:
         mock_api.token = "existing_token"
         mock_roon_api.return_value = mock_api
 
-        with patch.object(roon_client, "_get_token", return_value="existing_token"), patch.object(
-            roon_client.config_manager, "save_server_config"
-        ) as mock_save:
+        with patch.object(
+            roon_client, "_get_token", return_value="existing_token"
+        ), patch.object(roon_client.config_manager, "save_server_config") as mock_save:
             result = roon_client._discover_and_connect()
 
             assert result == mock_api
@@ -151,8 +155,8 @@ class TestRoonClient:
         mock_token_file = Mock()
         mock_token_file.exists.return_value = True
         mock_token_file.read_text.return_value = "  stored_token  "
-        
-        with patch.object(roon_client, 'token_file', mock_token_file):
+
+        with patch.object(roon_client, "token_file", mock_token_file):
             token = roon_client._get_token()
 
             assert token == "stored_token"
@@ -161,8 +165,8 @@ class TestRoonClient:
         """Test getting token when file doesn't exist."""
         mock_token_file = Mock()
         mock_token_file.exists.return_value = False
-        
-        with patch.object(roon_client, 'token_file', mock_token_file):
+
+        with patch.object(roon_client, "token_file", mock_token_file):
             token = roon_client._get_token()
 
             assert token is None
@@ -395,7 +399,9 @@ class TestRoonClient:
         image_path = temp_dir / "album_art_existing_key.jpg"
         sample_image.save(image_path)
 
-        with patch("roon_display.roon_client.client.get_saved_image_dir", return_value=temp_dir):
+        with patch(
+            "roon_display.roon_client.client.get_saved_image_dir", return_value=temp_dir
+        ):
             roon_client._fetch_and_display_album_art("existing_key", "Test Track")
 
             roon_client.viewer.update.assert_called_once_with(
@@ -408,9 +414,9 @@ class TestRoonClient:
         """Test fetch and display with new image download."""
         image_path = temp_dir / "album_art_new_key.jpg"
 
-        with patch("roon_display.roon_client.client.get_saved_image_dir", return_value=temp_dir), patch.object(
-            roon_client, "_download_album_art", return_value=sample_image
-        ):
+        with patch(
+            "roon_display.roon_client.client.get_saved_image_dir", return_value=temp_dir
+        ), patch.object(roon_client, "_download_album_art", return_value=sample_image):
             roon_client._fetch_and_display_album_art("new_key", "New Track")
 
             roon_client.viewer.update.assert_called_once_with(
