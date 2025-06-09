@@ -200,7 +200,8 @@ class EinkViewer(BaseViewer):
             while self.update_thread.is_alive():
                 time.sleep(0.1)
                 wait_elapsed = time.time() - wait_start
-                if wait_elapsed > 30:  # Log if waiting too long
+                # Log warning every 5 seconds after 30 seconds
+                if wait_elapsed > 30 and int(wait_elapsed) % 5 == 0 and (wait_elapsed - int(wait_elapsed)) < 0.1:
                     logger.warning(
                         f"Still waiting for thread {previous_thread_id} after {wait_elapsed:.1f}s"
                     )
