@@ -5,3 +5,5 @@ Send network ping somewhere on boot (to alert to cyclical system restarts)
 add healthchecks integration
 
 don't queue if multiple track changes come in together (or make a queue, but with max depth=1)
+
+Support multiple anniversaries on the same day

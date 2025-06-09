@@ -58,9 +58,6 @@ class RoonClient:
         # Process current zones
         self._process_initial_zones()
 
-        # Check for anniversaries on startup
-        self._check_startup_anniversary()
-
         logger.info("Successfully connected to Roon server")
         return self.roon
 
@@ -453,22 +450,6 @@ class RoonClient:
         except Exception as e:
             logger.error(f"Error displaying anniversary: {e}")
 
-    def _check_startup_anniversary(self):
-        """Check for anniversaries on startup and display if found."""
-        if not self.anniversary_manager:
-            return
-
-        try:
-            anniversary = self.anniversary_manager.get_current_anniversary()
-            if anniversary:
-                logger.info(
-                    f"Startup anniversary found: {anniversary['name']} - {anniversary['message']}"
-                )
-                self._display_anniversary(anniversary)
-            else:
-                logger.info("No anniversary found on startup")
-        except Exception as e:
-            logger.error(f"Error checking startup anniversary: {e}")
 
     def run(self):
         """Start the Roon client event loop."""
@@ -487,9 +468,9 @@ class RoonClient:
             logger.info("Roon client event loop started")
 
             while self.running:
-                # Check for anniversaries
+                # Check for anniversaries (only if date changed)
                 if self.anniversary_manager:
-                    anniversary = self.anniversary_manager.get_current_anniversary()
+                    anniversary = self.anniversary_manager.check_anniversary_if_date_changed()
                     if anniversary:
                         logger.info(
                             f"Anniversary triggered: {anniversary['name']} - {anniversary['message']}"
