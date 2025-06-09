@@ -154,7 +154,7 @@ class EinkViewer(BaseViewer):
         update_start = time.time()
         main_thread_id = threading.current_thread().ident
 
-        logger.info(
+        logger.debug(
             f"UPDATE START: {title} (key: {image_key}, main_thread: {main_thread_id})"
         )
 
@@ -167,12 +167,12 @@ class EinkViewer(BaseViewer):
 
         # Handle previous update based on partial_refresh setting
         previous_thread_id = None
-        if self.update_thread is not None:
+        if self.update_thread is not None and self.update_thread.is_alive():
             previous_thread_id = self.update_thread.ident
 
             if self.partial_refresh:
                 # Use should_stop mechanism for partial refresh
-                logger.info(
+                logger.debug(
                     f"Setting stop flag for previous update (prev_thread: {previous_thread_id})"
                 )
                 logger.debug(f"should_stop before setting: {self.epd.should_stop}")
@@ -180,7 +180,7 @@ class EinkViewer(BaseViewer):
                 logger.debug(f"should_stop after setting: {self.epd.should_stop}")
             else:
                 # No interruption - wait for current render to complete naturally
-                logger.info(
+                logger.debug(
                     f"Waiting for previous render to complete naturally (prev_thread: {previous_thread_id})"
                 )
 
@@ -188,12 +188,12 @@ class EinkViewer(BaseViewer):
         img = self.image_processor.process_image_position(img)
 
         # Wait for previous thread to finish
-        if self.update_thread is not None:
+        if self.update_thread is not None and self.update_thread.is_alive():
             wait_start = time.time()
             wait_message = (
                 "to finish" if self.partial_refresh else "to complete naturally"
             )
-            logger.info(
+            logger.debug(
                 f"Waiting for previous thread {previous_thread_id} {wait_message} for {title}"
             )
 
@@ -206,12 +206,16 @@ class EinkViewer(BaseViewer):
                     )
 
             wait_elapsed = time.time() - wait_start
-            logger.info(
+            logger.debug(
                 f"Previous thread {previous_thread_id} finished after {wait_elapsed:.1f}s"
             )
 
+        # Clear finished thread reference
+        if self.update_thread is not None and not self.update_thread.is_alive():
+            self.update_thread = None
+
         # Start new update thread
-        logger.info(f"Creating new update thread for {title}")
+        logger.debug(f"Creating new update thread for {title}")
         self.update_thread = threading.Thread(
             target=self.display_image, args=(image_key, image_path, img, title)
         )
@@ -219,7 +223,7 @@ class EinkViewer(BaseViewer):
 
         update_elapsed = time.time() - update_start
         new_thread_id = self.update_thread.ident
-        logger.info(
+        logger.debug(
             f"UPDATE COMPLETE: {title} (new_thread: {new_thread_id}, setup_time: {update_elapsed:.2f}s)"
         )
 
