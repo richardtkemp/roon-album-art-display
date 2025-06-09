@@ -11,9 +11,9 @@ logger = logging.getLogger(__name__)
 class TkViewer(BaseViewer):
     """Viewer for system displays using Tkinter."""
 
-    def __init__(self, config, root):
+    def __init__(self, config_manager, root):
         """Initialize with Tkinter root window."""
-        super().__init__(config)
+        super().__init__(config_manager)
         self.root = root
 
         # Configure window first to get correct size

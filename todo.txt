@@ -7,3 +7,7 @@ add healthchecks integration
 don't queue if multiple track changes come in together (or make a queue, but with max depth=1)
 
 Support multiple anniversaries on the same day
+
+
+
+I want to define in config a 'health_script', which will accept param1=good/bad and param2 "$additional_info". This script, if defined, should be called when display renderssuccessfully or non-successfully, i.e. at the same time as you do or do not log '🚨 CRITICAL: FAST DISPLAY RENDER DETECTED! 🚨'. We should record the health status somewhereaccording to the last time a render completed, and in the main event loop we should re-call the health script with the same params used the last time if it is >30 minutes since the last health script call.

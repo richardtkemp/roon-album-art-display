@@ -2,7 +2,7 @@
 
 import sys
 from pathlib import Path
-from unittest.mock import MagicMock, Mock, patch, call
+from unittest.mock import MagicMock, Mock, call, patch
 
 import pytest
 
@@ -35,7 +35,9 @@ class TestMainApplication:
         """Test creating e-ink display viewer."""
         config_manager.config.set("DISPLAY", "type", "epd13in3E")
 
-        with patch("importlib.import_module") as mock_import, patch("roon_display.main.sys.path"):
+        with patch("importlib.import_module") as mock_import, patch(
+            "roon_display.main.sys.path"
+        ):
             mock_eink_module = Mock()
             mock_eink_module.EPD_WIDTH = 960
             mock_eink_module.EPD_HEIGHT = 680
@@ -63,7 +65,8 @@ class TestMainApplication:
         config_manager.config.set("DISPLAY", "type", "epd13in3E")
 
         with patch("roon_display.main.sys.path"), patch(
-            "roon_display.main.importlib.import_module", side_effect=ImportError("Module not found")
+            "roon_display.main.importlib.import_module",
+            side_effect=ImportError("Module not found"),
         ):
             with pytest.raises(ImportError):
                 main.create_viewer(config_manager)
@@ -78,6 +81,11 @@ class TestMainApplication:
         """Test main application flow with system display."""
         # Setup mocks
         mock_config_manager_instance = Mock()
+        mock_config_manager_instance.get_log_level.return_value = "INFO"
+        mock_config_manager_instance.get_anniversaries_config.return_value = {
+            "enabled": False,
+            "anniversaries": [],
+        }
         mock_config_manager.return_value = mock_config_manager_instance
 
         mock_viewer = Mock()
@@ -95,9 +103,14 @@ class TestMainApplication:
         mock_ensure_dir.assert_called_once()
         mock_config_manager.assert_called_once()
         mock_create_viewer.assert_called_once_with(mock_config_manager_instance)
-        mock_roon_client.assert_called_once_with(
-            mock_config_manager_instance, mock_viewer, mock_viewer.image_processor
-        )
+        # RoonClient should be called with config, viewer, processor, and anniversary manager
+        assert mock_roon_client.call_count == 1
+        call_args = mock_roon_client.call_args[0]
+        assert call_args[0] == mock_config_manager_instance
+        assert call_args[1] == mock_viewer
+        assert call_args[2] == mock_viewer.image_processor
+        # 4th argument is anniversary manager - just verify it exists
+        assert len(call_args) == 4
         mock_client.connect.assert_called_once()
         mock_client.run.assert_called_once()
         mock_viewer.check_pending_updates.assert_called_once()
@@ -113,6 +126,11 @@ class TestMainApplication:
         """Test main application flow with e-ink display."""
         # Setup mocks
         mock_config_manager_instance = Mock()
+        mock_config_manager_instance.get_log_level.return_value = "INFO"
+        mock_config_manager_instance.get_anniversaries_config.return_value = {
+            "enabled": False,
+            "anniversaries": [],
+        }
         mock_config_manager.return_value = mock_config_manager_instance
 
         mock_viewer = Mock()
@@ -141,6 +159,11 @@ class TestMainApplication:
         """Test main application handling keyboard interrupt."""
         # Setup mocks
         mock_config_manager_instance = Mock()
+        mock_config_manager_instance.get_log_level.return_value = "INFO"
+        mock_config_manager_instance.get_anniversaries_config.return_value = {
+            "enabled": False,
+            "anniversaries": [],
+        }
         mock_config_manager.return_value = mock_config_manager_instance
 
         mock_viewer = Mock()
@@ -164,6 +187,15 @@ class TestMainApplication:
         self, mock_create_viewer, mock_config_manager, mock_ensure_dir
     ):
         """Test main application error handling."""
+        # Setup mocks
+        mock_config_manager_instance = Mock()
+        mock_config_manager_instance.get_log_level.return_value = "INFO"
+        mock_config_manager_instance.get_anniversaries_config.return_value = {
+            "enabled": False,
+            "anniversaries": [],
+        }
+        mock_config_manager.return_value = mock_config_manager_instance
+
         mock_create_viewer.side_effect = Exception("Application error")
 
         with pytest.raises(Exception, match="Application error"):
@@ -179,6 +211,11 @@ class TestMainApplication:
         """Test that cleanup happens even when error occurs."""
         # Setup mocks
         mock_config_manager_instance = Mock()
+        mock_config_manager_instance.get_log_level.return_value = "INFO"
+        mock_config_manager_instance.get_anniversaries_config.return_value = {
+            "enabled": False,
+            "anniversaries": [],
+        }
         mock_config_manager.return_value = mock_config_manager_instance
 
         mock_viewer = Mock()
@@ -258,6 +295,11 @@ class TestMainApplication:
         """Test keyboard interrupt with e-ink display."""
         # Setup mocks for e-ink flow
         mock_config_manager_instance = Mock()
+        mock_config_manager_instance.get_log_level.return_value = "INFO"
+        mock_config_manager_instance.get_anniversaries_config.return_value = {
+            "enabled": False,
+            "anniversaries": [],
+        }
         mock_config_manager.return_value = mock_config_manager_instance
 
         mock_viewer = Mock()

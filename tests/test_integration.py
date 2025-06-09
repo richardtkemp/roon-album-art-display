@@ -228,7 +228,9 @@ port = 9330
             result = client._download_album_art("test_key", image_path)
 
             # Should download and process image
-            assert result == sample_image
+            assert result is not None
+            assert hasattr(result, "size")  # Is a PIL Image
+            assert result.size == sample_image.size  # Same dimensions
             assert image_path.exists()
 
     def test_error_propagation_integration(self, integration_config_manager):

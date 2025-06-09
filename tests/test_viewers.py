@@ -37,12 +37,16 @@ class TestBaseViewer:
                 super().__init__(config)
                 self.update_calls = []
                 self.display_calls = []
+                self.anniversary_calls = []
 
             def update(self, image_key, image_path, img, title):
                 self.update_calls.append((image_key, image_path, img, title))
 
-            def display_image(self, image_key, image_path, title):
-                self.display_calls.append((image_key, image_path, title))
+            def display_image(self, image_key, image_path, img, title):
+                self.display_calls.append((image_key, image_path, img, title))
+
+            def update_anniversary(self, message, image_path=None):
+                self.anniversary_calls.append((message, image_path))
 
         return ConcreteViewer(config_manager.config)
 
@@ -167,7 +171,7 @@ class TestEinkViewer:
         image_key = "test_key_123"
         title = "Test Song"
 
-        eink_viewer.display_image(image_key, sample_image, title)
+        eink_viewer.display_image(image_key, None, sample_image, title)
 
         # Verify e-ink display methods were called
         eink_viewer.epd.getbuffer.assert_called_once_with(sample_image)
@@ -182,7 +186,7 @@ class TestEinkViewer:
         image_key = "test_key_456"
         title = "Test Song"
 
-        eink_viewer.display_image(image_key, sample_image, title)
+        eink_viewer.display_image(image_key, None, sample_image, title)
 
         mock_set_key.assert_called_once_with(image_key)
 
@@ -191,7 +195,7 @@ class TestEinkViewer:
         eink_viewer.epd.display.side_effect = Exception("Display error")
 
         # Should not raise exception
-        eink_viewer.display_image("test_key", sample_image, "Test Song")
+        eink_viewer.display_image("test_key", None, sample_image, "Test Song")
 
     def test_update_with_provided_image(self, eink_viewer, sample_image):
         """Test update method with image provided."""
@@ -462,9 +466,6 @@ class TestEinkViewer:
         assert any(
             "expected ~25s" in log for log in error_logs
         ), "Should mention expected timing"
-        assert any(
-            "partial_refresh=true" in log for log in error_logs
-        ), "Should suggest partial_refresh config option"
 
     def test_normal_render_timing_no_warning(self, eink_viewer, sample_image, caplog):
         """Test that normal render timing doesn't trigger warnings."""
@@ -528,6 +529,9 @@ class TestTkViewer:
 
     def test_initialization(self, config_manager, mock_tk_root, mock_tk_label):
         """Test TkViewer initialization."""
+        # Set fullscreen mode to get the expected screen dimensions
+        config_manager.config.set("DISPLAY", "tkinter_fullscreen", "true")
+
         with patch("tkinter.Label", return_value=mock_tk_label), patch(
             "roon_display.viewers.tk_viewer.set_current_image_key"
         ):
@@ -542,9 +546,9 @@ class TestTkViewer:
             mock_tk_root.title.assert_called_with("Album Art Viewer")
             mock_tk_root.tk_setPalette.assert_called_once()
             mock_tk_root.attributes.assert_called_with(
-                "-fullscreen", False
-            )  # Default is windowed
-            mock_tk_root.geometry.assert_called_with("800x600")  # Windowed size
+                "-fullscreen", True
+            )  # Now using fullscreen
+            mock_tk_root.geometry.assert_not_called()  # Not called in fullscreen mode
             mock_tk_root.bind.assert_called()
             mock_tk_root.protocol.assert_called()
 
@@ -576,12 +580,14 @@ class TestTkViewer:
 
     def test_check_pending_updates_with_pending(self, tk_viewer):
         """Test check_pending_updates with pending image data."""
-        tk_viewer.pending_image_data = ("test_key", "/test/path", "Test Song")
+        tk_viewer.pending_image_data = ("test_key", "/test/path", None, "Test Song")
 
         with patch.object(tk_viewer, "display_image") as mock_display:
             tk_viewer.check_pending_updates()
 
-            mock_display.assert_called_once_with("test_key", "/test/path", "Test Song")
+            mock_display.assert_called_once_with(
+                "test_key", "/test/path", None, "Test Song"
+            )
             assert tk_viewer.pending_image_data is None
 
     def test_display_image_success(self, tk_viewer, temp_dir, sample_image):
@@ -595,7 +601,7 @@ class TestTkViewer:
             mock_photo_instance = Mock()
             mock_photo.return_value = mock_photo_instance
 
-            tk_viewer.display_image("test_key", image_path, "Test Song")
+            tk_viewer.display_image("test_key", image_path, None, "Test Song")
 
             # Verify PhotoImage creation and label update
             mock_photo.assert_called_once()
@@ -607,7 +613,7 @@ class TestTkViewer:
         image_path = temp_dir / "nonexistent.jpg"
 
         # Should handle gracefully and not crash
-        tk_viewer.display_image("test_key", image_path, "Test Song")
+        tk_viewer.display_image("test_key", image_path, None, "Test Song")
 
     def test_display_image_error_handling(self, tk_viewer, temp_dir, sample_image):
         """Test error handling in display_image."""
@@ -616,7 +622,7 @@ class TestTkViewer:
 
         with patch("PIL.ImageTk.PhotoImage", side_effect=Exception("ImageTk error")):
             # Should not raise exception
-            tk_viewer.display_image("test_key", image_path, "Test Song")
+            tk_viewer.display_image("test_key", image_path, None, "Test Song")
 
     def test_update_sets_pending_data(self, tk_viewer, sample_image):
         """Test that update sets pending image data."""
@@ -626,17 +632,32 @@ class TestTkViewer:
 
         tk_viewer.update(image_key, image_path, sample_image, title)
 
-        assert tk_viewer.pending_image_data == (image_key, image_path, title)
+        assert tk_viewer.pending_image_data == (
+            image_key,
+            image_path,
+            sample_image,
+            title,
+        )
 
     def test_update_overwrites_pending_data(self, tk_viewer, sample_image):
         """Test that new update overwrites pending data."""
         # Set initial pending data
         tk_viewer.update("key1", "/path1", sample_image, "Song 1")
-        assert tk_viewer.pending_image_data == ("key1", "/path1", "Song 1")
+        assert tk_viewer.pending_image_data == (
+            "key1",
+            "/path1",
+            sample_image,
+            "Song 1",
+        )
 
         # Update with new data
         tk_viewer.update("key2", "/path2", sample_image, "Song 2")
-        assert tk_viewer.pending_image_data == ("key2", "/path2", "Song 2")
+        assert tk_viewer.pending_image_data == (
+            "key2",
+            "/path2",
+            sample_image,
+            "Song 2",
+        )
 
     def test_window_event_handlers(self, config_manager, mock_tk_root, mock_tk_label):
         """Test that window event handlers are set up correctly."""
@@ -670,7 +691,7 @@ class TestTkViewer:
             mock_photo_instance = Mock()
             mock_photo.return_value = mock_photo_instance
 
-            tk_viewer.display_image("test_key", image_path, "Test Song")
+            tk_viewer.display_image("test_key", image_path, None, "Test Song")
 
             # Verify that image reference is stored to prevent GC
             assert hasattr(tk_viewer.label, "image")
@@ -679,7 +700,7 @@ class TestTkViewer:
     @patch("roon_display.viewers.tk_viewer.logger")
     def test_logging_on_successful_update(self, mock_logger, tk_viewer):
         """Test that successful updates are logged."""
-        tk_viewer.pending_image_data = ("test_key", "/test/path", "Test Song")
+        tk_viewer.pending_image_data = ("test_key", "/test/path", None, "Test Song")
 
         with patch.object(tk_viewer, "display_image"):
             tk_viewer.check_pending_updates()

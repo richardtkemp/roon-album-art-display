@@ -29,6 +29,7 @@ class RoonClient:
         # Get configuration
         self.app_info = config_manager.get_app_info()
         self.allowed_zones, self.forbidden_zones = config_manager.get_zone_config()
+        self.loop_time = config_manager.get_loop_time()
 
         # Token storage in current directory
         self.token_file = Path(".roon_album_display_token.txt")
@@ -41,6 +42,7 @@ class RoonClient:
 
         logger.info(f"Allowed zones: {self.allowed_zones}")
         logger.info(f"Forbidden zones: {self.forbidden_zones}")
+        logger.info(f"Event loop time: {self.loop_time} seconds")
 
     def connect(self):
         """Connect to Roon server."""
@@ -450,7 +452,6 @@ class RoonClient:
         except Exception as e:
             logger.error(f"Error displaying anniversary: {e}")
 
-
     def run(self):
         """Start the Roon client event loop."""
         self.subscribe_to_events()
@@ -470,15 +471,21 @@ class RoonClient:
             while self.running:
                 # Check for anniversaries (only if date changed)
                 if self.anniversary_manager:
-                    anniversary = self.anniversary_manager.check_anniversary_if_date_changed()
+                    anniversary = (
+                        self.anniversary_manager.check_anniversary_if_date_changed()
+                    )
                     if anniversary:
                         logger.info(
                             f"Anniversary triggered: {anniversary['name']} - {anniversary['message']}"
                         )
                         self._display_anniversary(anniversary)
 
-                # Sleep for 10 minutes - Roon events come via callbacks independently
-                time.sleep(600)
+                # Check if health script should be re-called (configurable interval)
+                if self.viewer.health_manager and self.viewer.health_manager.should_recheck_health():
+                    self.viewer.health_manager.recheck_health()
+
+                # Sleep for configured time - Roon events come via callbacks independently
+                time.sleep(self.loop_time)
         except Exception as e:
             logger.error(f"Error in event loop: {e}")
         finally:

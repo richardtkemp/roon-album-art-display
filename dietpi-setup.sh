@@ -7,7 +7,7 @@
 #58 tailscale
 #130 python3
 
-apt install neovim python3-pil python3-requests python3-numpy
+apt install neovim python3-pil python3-requests python3-numpy libavif-dev
 pip install roonapi
 
 #wpa_passphrase ssid pass >> /etc/wpa_supplicant/wpa_supplicant.conf

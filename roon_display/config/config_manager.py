@@ -5,6 +5,7 @@ import logging
 import sys
 from pathlib import Path
 
+from ..time_utils import parse_time_to_minutes, parse_time_to_seconds
 from ..utils import get_extra_images_dir
 
 logger = logging.getLogger(__name__)
@@ -46,6 +47,8 @@ class ConfigManager:
             "email": "richardtkemp@gmail.com",
             "log_level": "INFO",
             "# log_level options: DEBUG, INFO, WARNING, ERROR": "",
+            "loop_time": "10 minutes",
+            "# loop_time: Event loop sleep time (default: 10 minutes). Accepts: '5 mins', '30 seconds', '2h', etc.": "",
         }
 
         config["DISPLAY"] = {
@@ -81,12 +84,21 @@ class ConfigManager:
 
         config["ANNIVERSARIES"] = {
             "enabled": "false",
-            "# Format: name = dd/mm/yyyy,message,wait_minutes": "",
-            "# Example: birthday_john = 15/03/1990,Happy ${years} birthday John!,30": "",
+            "# Format: name = dd/mm/yyyy,message,wait_time": "",
+            "# Example: birthday_john = 15/03/1990,Happy ${years} birthday John!,30 minutes": "",
             "# Date format: dd/mm/yyyy (year used to calculate ${years} = current_year - birth_year)": "",
-            "# wait_minutes: time to wait before showing if no new track": "",
+            "# wait_time: time to wait before showing if no new track (accepts: '30 mins', '2h', etc.)": "",
             "# Images: Put images in extra_images/[name]/ directory (e.g. extra_images/birthday_john/)": "",
             "# All images in the directory will be used randomly": "",
+        }
+
+        config["HEALTH"] = {
+            "# health_script: Path to script called with health status": "",
+            "# Script receives param1=good/bad and param2='$additional_info'": "",
+            "# Called on render success/failure and re-called at health_recheck_interval": "",
+            "health_script": "",
+            "health_recheck_interval": "30 minutes",
+            "# health_recheck_interval: Time between health script re-calls (default: 30 minutes). Accepts: '5 mins', '2h', etc.": "",
         }
 
         with open(self.config_path, "w") as f:
@@ -160,16 +172,25 @@ class ConfigManager:
     def get_log_level(self):
         """Get logging level from config."""
         log_level_str = self.config.get("APP", "log_level", fallback="INFO").upper()
-        
+
         # Map string to logging constants
         level_map = {
             "DEBUG": logging.DEBUG,
             "INFO": logging.INFO,
             "WARNING": logging.WARNING,
-            "ERROR": logging.ERROR
+            "ERROR": logging.ERROR,
         }
-        
+
         return level_map.get(log_level_str, logging.INFO)
+
+    def get_loop_time(self):
+        """Get event loop sleep time in seconds."""
+        time_str = self.config.get("APP", "loop_time", fallback="10 minutes")
+        try:
+            return parse_time_to_seconds(time_str)
+        except ValueError as e:
+            logger.warning(f"Invalid loop_time format '{time_str}': {e}. Using default 600 seconds.")
+            return 600
 
     def get_anniversaries_config(self):
         """Get anniversary configuration."""
@@ -193,7 +214,14 @@ class ConfigManager:
 
                 date_str = parts[0]
                 message = parts[1]
-                wait_minutes = int(parts[2])
+                wait_time_str = parts[2]
+
+                # Parse wait time using natural language parser
+                try:
+                    wait_minutes = parse_time_to_minutes(wait_time_str)
+                except ValueError:
+                    # Fallback: try to parse as plain integer (backward compatibility)
+                    wait_minutes = int(wait_time_str)
 
                 anniversaries.append(
                     {
@@ -208,3 +236,23 @@ class ConfigManager:
                 continue
 
         return {"enabled": True, "anniversaries": anniversaries}
+
+    def get_health_script(self):
+        """Get health script configuration."""
+        if "HEALTH" not in self.config:
+            return None
+        
+        script_path = self.config.get("HEALTH", "health_script", fallback="").strip()
+        return script_path if script_path else None
+
+    def get_health_recheck_interval(self):
+        """Get health recheck interval in seconds."""
+        if "HEALTH" not in self.config:
+            return 1800  # Default 30 minutes
+        
+        time_str = self.config.get("HEALTH", "health_recheck_interval", fallback="30 minutes")
+        try:
+            return parse_time_to_seconds(time_str)
+        except ValueError as e:
+            logger.warning(f"Invalid health_recheck_interval format '{time_str}': {e}. Using default 1800 seconds.")
+            return 1800
