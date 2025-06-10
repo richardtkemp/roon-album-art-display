@@ -25,7 +25,7 @@ class TkViewer(BaseViewer):
             window_height = self.root.winfo_screenheight()
         else:
             # Use the explicit size we set
-            window_width = 800
+            window_width = 600
             window_height = 600
 
         self.set_screen_size(window_width, window_height)
@@ -50,7 +50,7 @@ class TkViewer(BaseViewer):
 
         # If not fullscreen, set a reasonable window size
         if not fullscreen:
-            self.root.geometry("800x600")
+            self.root.geometry("600x600")
 
         return fullscreen
 

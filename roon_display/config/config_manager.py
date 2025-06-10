@@ -233,15 +233,17 @@ class ConfigManager:
     def get_anniversaries_config(self):
         """Get anniversary configuration."""
         if "ANNIVERSARIES" not in self.config:
-            return {"enabled": False, "anniversaries": []}
+            return {"enabled": False, "anniversaries": [], "border": 10}
 
         enabled = self.config.getboolean("ANNIVERSARIES", "enabled", fallback=False)
+        border = self.config.getint("ANNIVERSARIES", "border", fallback=10)
+        
         if not enabled:
-            return {"enabled": False, "anniversaries": []}
+            return {"enabled": False, "anniversaries": [], "border": border}
 
         anniversaries = []
         for key, value in self.config["ANNIVERSARIES"].items():
-            if key.startswith("#") or key == "enabled":
+            if key.startswith("#") or key in ["enabled", "border"]:
                 continue
 
             try:
@@ -273,7 +275,21 @@ class ConfigManager:
                 logger.warning(f"Error parsing anniversary config for {key}: {e}")
                 continue
 
-        return {"enabled": True, "anniversaries": anniversaries}
+        return {"enabled": True, "anniversaries": anniversaries, "border": border}
+
+    def get_overlay_config(self):
+        """Get overlay size configuration."""
+        if "OVERLAY" not in self.config:
+            return {"size_x": 33, "size_y": 25}
+
+        size_x = self.config.getint("OVERLAY", "size_x", fallback=33)
+        size_y = self.config.getint("OVERLAY", "size_y", fallback=25)
+        
+        # Clamp values to reasonable ranges (5-50%)
+        size_x = max(5, min(50, size_x))
+        size_y = max(5, min(50, size_y))
+        
+        return {"size_x": size_x, "size_y": size_y}
 
     def get_health_script(self):
         """Get health script configuration."""
