@@ -184,6 +184,7 @@ extra_images/
 .roon_album_display_token.txt
 .claude
 simulation_track_index.txt
+myhealth.sh
 
 # Pre-commit
 .pre-commit-config.yaml

@@ -9,13 +9,13 @@ from typing import Dict, List, Optional
 
 from PIL import Image, ImageDraw, ImageFont
 
+from .message_renderer import MessageRenderer
 from .utils import (
     ensure_anniversary_dir_exists,
     get_extra_images_dir,
     get_last_track_time,
     set_last_track_time,
 )
-from .message_renderer import MessageRenderer
 
 logger = logging.getLogger(__name__)
 
@@ -315,7 +315,9 @@ class AnniversaryManager:
         message = anniversary["message"]
 
         # Use the reusable message renderer
-        renderer = MessageRenderer(image_processor.screen_width, image_processor.screen_height)
+        renderer = MessageRenderer(
+            image_processor.screen_width, image_processor.screen_height
+        )
         return renderer.create_text_message(message, image_path)
 
     def _create_text_only_image(self, message: str, image_processor) -> Image.Image:

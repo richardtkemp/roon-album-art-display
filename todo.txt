@@ -3,6 +3,8 @@ don't queue if multiple track changes come in together (or make a queue, but wit
 
 Rationalise rendering - choose which of art/anniversary to display, and just do that one rather than letting them compete.
 
+Show on screen if wifi connection down
+
 Automated restarts?
 
 Support multiple anniversaries on the same day

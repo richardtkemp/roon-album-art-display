@@ -9,8 +9,8 @@ import requests
 from PIL import Image
 from roonapi import RoonApi, RoonDiscovery
 
-from ..utils import get_saved_image_dir, set_current_image_key, log_performance
 from ..message_renderer import MessageRenderer
+from ..utils import get_saved_image_dir, log_performance, set_current_image_key
 
 logger = logging.getLogger(__name__)
 
@@ -40,6 +40,8 @@ class RoonClient:
         self.last_event = None
         self.last_image_key = None
         self.running = False
+        self.connection_monitor_thread = None
+        self.last_connection_check = time.time()
 
         logger.info(f"Allowed zones: {self.allowed_zones}")
         logger.info(f"Forbidden zones: {self.forbidden_zones}")
@@ -49,10 +51,37 @@ class RoonClient:
         """Connect to Roon server."""
         logger.info("Connecting to Roon server...")
 
-        # Try saved server first, then discovery
-        self.roon = self._try_saved_connection() or self._discover_and_connect()
+        # Try saved server first, then fall back to discovery
+        server_ip, server_port = self._get_server_details()
+        if server_ip and server_port:
+            logger.info(f"Trying saved server at {server_ip}:{server_port}")
+            self.roon = self._create_roon_connection(server_ip, server_port)
+
+            # If saved server failed, try discovery
+            if not self.roon:
+                logger.warning(
+                    "Saved server connection failed, falling back to discovery"
+                )
+                server_ip, server_port = self._discover_server()
+                logger.info(
+                    f"Connecting to discovered server at {server_ip}:{server_port}"
+                )
+                self.roon = self._create_roon_connection(server_ip, server_port)
+        else:
+            # No saved server, use discovery
+            server_ip, server_port = self._discover_server()
+            logger.info(f"Connecting to discovered server at {server_ip}:{server_port}")
+            self.roon = self._create_roon_connection(server_ip, server_port)
 
         if not self.roon:
+            if (
+                self.viewer
+                and hasattr(self.viewer, "health_manager")
+                and self.viewer.health_manager
+            ):
+                self.viewer.health_manager.report_render_failure(
+                    "Failed to connect to Roon server"
+                )
             raise ConnectionError("Could not connect to Roon server")
 
         # Validate connection
@@ -64,87 +93,12 @@ class RoonClient:
         logger.info("Successfully connected to Roon server")
         return self.roon
 
-    def _try_saved_connection(self):
-        """Try connecting to saved server details."""
-        server_ip, server_port = self.config_manager.get_server_config()
+    def _get_server_details(self):
+        """Get saved server details if available."""
+        return self.config_manager.get_server_config()
 
-        if not server_ip or not server_port:
-            logger.info("No saved server details found")
-            return None
-
-        logger.info(f"Trying saved server at {server_ip}:{server_port}")
-
-        try:
-            token = self._get_token()
-            logger.debug(f"About to create RoonApi with token={token}")
-            api = RoonApi(self.app_info, token, server_ip, server_port)
-            logger.debug(f"RoonApi created successfully, api.token={getattr(api, 'token', 'NO_TOKEN_ATTR')}")
-
-            # Handle authorization if needed
-            self._handle_authorization(api)
-
-            # Add validation to confirm the connection is actually working
-            if api and api.host:
-                # Test the connection by trying to fetch zones
-                try:
-                    zones = api.zones
-                    if zones is not None and zones:
-                        logger.info("Successfully connected to saved server!")
-                        logger.debug(f"Zones data: {zones}")
-                        return self._finalize_connection(api, server_ip, server_port)
-                    else:
-                        api.stop()
-                        logger.warning(
-                            "Connected but couldn't fetch zones - token may be invalid"
-                        )
-                        return None
-                except Exception as zone_error:
-                    logger.warning(f"Error fetching zones: {zone_error}")
-                    api.stop()
-                    return None
-            else:
-                logger.warning("Saved server connection failed initial validation")
-                return None
-
-        except Exception as e:
-            logger.warning(f"Failed to connect to saved server: {e}")
-            return None
-
-    def _finalize_connection(self, api, server_ip, server_port):
-        """Finalize connection by saving token and server details."""
-        if not api or not api.token:
-            logger.error("Cannot finalize connection - no valid API or token")
-            return None
-
-        # Always save the token after successful connection
-        try:
-            logger.info(
-                f"Saving token after successful connection: {api.token[:20]}..."
-            )
-            self.token_file.write_text(api.token)
-            logger.info("Token saved successfully")
-
-            # Verify token was saved
-            if self.token_file.exists():
-                saved_token = self.token_file.read_text().strip()
-                logger.info(f"Verified token file exists, length: {len(saved_token)}")
-            else:
-                logger.error("Token file was not created!")
-        except Exception as e:
-            logger.error(f"Error saving token: {e}")
-            import traceback
-
-            logger.error(f"Traceback: {traceback.format_exc()}")
-
-        # Save server details
-        self.config_manager.save_server_config(server_ip, server_port)
-
-        return api
-
-    def _discover_and_connect(self):
-        """Discover and connect to Roon server."""
-        logger.info("Starting Roon server discovery...")
-
+    def _discover_server(self):
+        """Discover Roon server on network."""
         token = self._get_token()
         discover = RoonDiscovery(None)
 
@@ -158,22 +112,130 @@ class RoonClient:
             time.sleep(1)
 
         discover.stop()
+        return servers[0]  # Return first server found
 
-        # Connect to first server found
-        server_ip, server_port = servers[0]
-        logger.info(f"Connecting to {server_ip}:{server_port}")
+    def _create_roon_connection(self, server_ip, server_port):
+        """Create RoonApi connection with authorization monitoring."""
+        token = self._get_token()
+
+        # Always start auth monitoring (even with existing token - it might be invalid)
+        auth_monitor = self._start_auth_monitor()
 
         try:
-            api = RoonApi(self.app_info, token, server_ip, server_port, False)
+            api = RoonApi(self.app_info, token, server_ip, server_port)
+            logger.debug("RoonApi created successfully")
 
-            # Handle authorization if needed
-            self._handle_authorization(api)
+            # Test the connection by trying to fetch zones
+            try:
+                zones = api.zones
+                if zones is not None:
+                    logger.info("Successfully connected and validated!")
+                    logger.debug(f"Found {len(zones)} zones")
 
-            return self._finalize_connection(api, server_ip, server_port)
+                    # Save token and server details after successful connection
+                    self._save_connection_details(api, server_ip, server_port)
+                    
+                    # Report successful connection
+                    self._report_health_success("Successfully connected to Roon server")
+                    
+                    return api
+                else:
+                    api.stop()
+                    logger.warning(
+                        "Connected but couldn't fetch zones - token may be invalid"
+                    )
+                    self._report_health_failure("Invalid or expired authentication token")
+                    return None
+            except Exception as zone_error:
+                logger.warning(f"Error validating connection: {zone_error}")
+                api.stop()
+                self._report_health_failure(f"Connection validation failed: {zone_error}")
+                return None
 
         except Exception as e:
-            logger.error(f"Error connecting to server: {e}")
+            logger.error(f"Error creating RoonApi: {e}")
+            self._report_health_failure(f"Roon connection failed: {e}")
             return None
+        finally:
+            # Stop authorization monitoring
+            if auth_monitor:
+                auth_monitor["stop_event"].set()
+                auth_monitor["thread"].join(timeout=1)
+
+    def _start_auth_monitor(self):
+        """Start background thread to monitor for authorization needs."""
+        import threading
+
+        stop_event = threading.Event()
+        auth_displayed = threading.Event()
+
+        def monitor_auth():
+            """Monitor for authorization state and display message."""
+            # Wait a bit for websocket to connect
+            time.sleep(2)
+
+            timeout_seconds = 300  # 5 minutes timeout
+            start_time = time.time()
+            health_failure_sent = False
+
+            while not stop_event.is_set():
+                elapsed = time.time() - start_time
+
+                # Check for timeout
+                if elapsed > timeout_seconds:
+                    logger.error("Authorization timeout after 5 minutes")
+                    if (
+                        self.viewer
+                        and hasattr(self.viewer, "health_manager")
+                        and self.viewer.health_manager
+                        and not health_failure_sent
+                    ):
+                        self.viewer.health_manager.report_render_failure(
+                            "Authorization timeout - user did not approve extension"
+                        )
+                        health_failure_sent = True
+                    break
+
+                # Check if we need authorization by trying to access zones
+                try:
+                    # If we can access zones, authorization is working
+                    if hasattr(self, "roon") and self.roon:
+                        zones = self.roon.zones
+                        if zones is not None:
+                            # Authorization is working, stop monitoring
+                            logger.info("Authorization successful - zones accessible")
+                            self._report_health_success("Roon authorization successful - extension approved")
+                            break
+                except Exception as e:
+                    logger.debug(f"Zones not accessible yet: {e}")
+
+                # Still waiting for authorization - show message and send health failure
+                if not auth_displayed.is_set():
+                    logger.info("Displaying authorization message")
+                    self._display_authorization_message()
+                    auth_displayed.set()
+
+                    # Send health check failure for authorization needed
+                    if (
+                        self.viewer
+                        and hasattr(self.viewer, "health_manager")
+                        and self.viewer.health_manager
+                        and not health_failure_sent
+                    ):
+                        self.viewer.health_manager.report_render_failure(
+                            "Waiting for Roon authorization - extension needs approval"
+                        )
+                        health_failure_sent = True
+                        logger.info(
+                            "Sent health check failure for authorization needed"
+                        )
+
+                time.sleep(2)
+
+        thread = threading.Thread(target=monitor_auth, daemon=True)
+        thread.start()
+
+        return {"thread": thread, "stop_event": stop_event}
 
     def _get_token(self):
         """Get saved authentication token."""
@@ -458,6 +520,12 @@ class RoonClient:
         self.subscribe_to_events()
         self.running = True
 
+        # Start connection monitoring
+        self.connection_monitor_thread = threading.Thread(
+            target=self._monitor_connection, daemon=True
+        )
+        self.connection_monitor_thread.start()
+
         # Start event loop in separate thread
         event_thread = threading.Thread(target=self._event_loop)
         event_thread.start()
@@ -495,47 +563,207 @@ class RoonClient:
         finally:
             self.cleanup()
 
-    def _handle_authorization(self, api):
-        """Handle authorization if needed."""
-        logger.debug(f"_handle_authorization: api exists={api is not None}")
-        if api:
-            logger.debug(f"_handle_authorization: api.token={api.token}")
-            
-        if api and api.token is None:
-            logger.info("Waiting for authorization in Roon app...")
-            
-            # Display authorization message on screen
-            self._display_authorization_message()
-            
-            # Wait for authorization indefinitely - just sleep, no repeated logging
-            while api.token is None:
-                time.sleep(2)
-                
-            logger.info("Authorization successful")
-        elif api is not None:
-            logger.info("Successfully connected using existing token")
+    def _save_connection_details(self, api, server_ip, server_port):
+        """Save token and server details after successful connection."""
+        if not api or not api.token:
+            logger.error("Cannot save connection details - no valid API or token")
+            return
+
+        # Save the token after successful connection
+        try:
+            logger.info(
+                f"Saving token after successful connection: {api.token[:20]}..."
+            )
+            self.token_file.write_text(api.token)
+            logger.info("Token saved successfully")
+
+            # Verify token was saved
+            if self.token_file.exists():
+                saved_token = self.token_file.read_text().strip()
+                logger.info(f"Verified token file exists, length: {len(saved_token)}")
+            else:
+                logger.error("Token file was not created!")
+        except Exception as e:
+            logger.error(f"Error saving token: {e}")
+            import traceback
+
+            logger.error(f"Traceback: {traceback.format_exc()}")
+
+        # Save server details
+        self.config_manager.save_server_config(server_ip, server_port)
+
+    def _report_health_success(self, message: str):
+        """Report success to health manager."""
+        if (
+            self.viewer
+            and hasattr(self.viewer, "health_manager")
+            and self.viewer.health_manager
+        ):
+            self.viewer.health_manager.report_render_success(message)
+            logger.info(f"Sent health check success: {message}")
+
+    def _report_health_failure(self, message: str):
+        """Report failure to health manager."""
+        if (
+            self.viewer
+            and hasattr(self.viewer, "health_manager")
+            and self.viewer.health_manager
+        ):
+            self.viewer.health_manager.report_render_failure(message)
+            logger.info(f"Sent health check failure: {message}")
 
     def _display_authorization_message(self):
         """Display authorization waiting message on screen."""
         try:
             logger.info("Displaying authorization message on screen")
-            message = ("Please approve this extension in the Roon app.\n\n"
-                      "Look for 'Album Art Display' in:\n"
-                      "Roon → Settings → Extensions\n\n"
-                      "Waiting for authorization...")
-            
+            message = (
+                "Please approve this extension in the Roon app.\n\n"
+                "Look for 'Album Art Display' in:\n"
+                "Roon → Settings → Extensions\n\n"
+                "Waiting for authorization...\n"
+                "Timeout in 5:00"
+            )
+
             renderer = MessageRenderer(
-                self.image_processor.screen_width, 
-                self.image_processor.screen_height
+                self.image_processor.screen_width, self.image_processor.screen_height
             )
             img = renderer.create_text_message(message)
-            
+
             # Display the authorization message
             self.viewer.update("auth_waiting", None, img, "Authorization Required")
             logger.info("Authorization message sent to viewer")
-            
+
         except Exception as e:
             logger.warning(f"Could not display authorization message: {e}")
+
+    def _monitor_connection(self):
+        """Monitor connection status and detect different failure types."""
+        logger.info("Starting connection monitoring")
+
+        while self.running:
+            try:
+                if hasattr(self, "roon") and self.roon:
+                    # Check if RoonAPI is still connected
+                    if hasattr(self.roon, "_roonsocket"):
+                        socket_state = self.roon._roonsocket
+
+                        # Check for failed state
+                        if (
+                            hasattr(socket_state, "failed_state")
+                            and socket_state.failed_state
+                        ):
+                            logger.warning("RoonAPI socket is in failed state")
+                            self._handle_connection_failure("roon_host_down")
+
+                        # Check if websocket is still connected
+                        elif hasattr(socket_state, "websocket"):
+                            ws = socket_state.websocket
+                            if ws and hasattr(ws, "sock") and ws.sock is None:
+                                logger.warning("WebSocket connection lost")
+                                self._handle_connection_failure("roon_host_down")
+
+                        # Try to test the connection by accessing zones
+                        try:
+                            if (
+                                time.time() - self.last_connection_check > 30
+                            ):  # Check every 30 seconds
+                                zones = self.roon.zones
+                                if zones is None:
+                                    logger.warning(
+                                        "Cannot access zones - possible auth revocation"
+                                    )
+                                    self._handle_connection_failure("auth_revoked")
+                                else:
+                                    # Connection seems healthy
+                                    self.last_connection_check = time.time()
+                        except Exception as e:
+                            logger.warning(f"Connection test failed: {e}")
+                            # Distinguish between network errors and auth errors
+                            if (
+                                "unauthorized" in str(e).lower()
+                                or "auth" in str(e).lower()
+                            ):
+                                self._handle_connection_failure("auth_revoked")
+                            else:
+                                self._handle_connection_failure("roon_host_down")
+
+                time.sleep(10)  # Check every 10 seconds
+
+            except Exception as e:
+                logger.error(f"Error in connection monitoring: {e}")
+                time.sleep(10)
+
+    def _handle_connection_failure(self, failure_type: str):
+        """Handle different types of connection failures."""
+        logger.error(f"Connection failure detected: {failure_type}")
+
+        if failure_type == "auth_revoked":
+            # Show re-authorization message
+            message = (
+                "Authorization has been revoked!\n\n"
+                "Please re-approve this extension in the Roon app.\n\n"
+                "Look for 'Album Art Display' in:\n"
+                "Roon → Settings → Extensions\n\n"
+                "Waiting for re-authorization..."
+            )
+
+            try:
+                renderer = MessageRenderer(
+                    self.image_processor.screen_width,
+                    self.image_processor.screen_height,
+                )
+                img = renderer.create_text_message(message)
+                self.viewer.update(
+                    "auth_revoked", None, img, "Re-Authorization Required"
+                )
+                logger.info("Displayed re-authorization message")
+            except Exception as e:
+                logger.error(f"Could not display re-auth message: {e}")
+
+            # Report to health manager
+            if (
+                self.viewer
+                and hasattr(self.viewer, "health_manager")
+                and self.viewer.health_manager
+            ):
+                self.viewer.health_manager.report_render_failure(
+                    "Roon authorization revoked - extension needs re-approval"
+                )
+
+        elif failure_type == "roon_host_down":
+            # Roon host or process issue
+            message = (
+                "Connection to Roon server lost!\n\n"
+                "Possible causes:\n"
+                "• Roon server stopped\n"
+                "• Roon host is down\n"
+                "• Network connectivity issue\n"
+                "• Server IP address changed\n\n"
+                "Attempting to reconnect..."
+            )
+
+            try:
+                renderer = MessageRenderer(
+                    self.image_processor.screen_width,
+                    self.image_processor.screen_height,
+                )
+                img = renderer.create_text_message(message)
+                self.viewer.update(
+                    "roon_host_down", None, img, "Roon Server Unavailable"
+                )
+                logger.info("Displayed Roon server unavailable message")
+            except Exception as e:
+                logger.error(f"Could not display server unavailable message: {e}")
+
+            # Report to health manager
+            if (
+                self.viewer
+                and hasattr(self.viewer, "health_manager")
+                and self.viewer.health_manager
+            ):
+                self.viewer.health_manager.report_render_failure(
+                    "Roon server unavailable - host down or process not responding"
+                )
 
     def stop(self):
         """Stop the client."""

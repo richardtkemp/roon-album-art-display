@@ -100,17 +100,18 @@ def set_performance_logging(level: str) -> None:
 
 def log_performance(threshold: float = 0.5, description: str = None):
     """Decorator to log function execution time if performance logging is enabled.
-    
+
     Args:
         threshold: Minimum time in seconds to log (default: 0.5s)
         description: Optional custom description for the operation
     """
+
     def decorator(func):
         @functools.wraps(func)
         def wrapper(*args, **kwargs):
             if not _performance_logging_enabled:
                 return func(*args, **kwargs)
-            
+
             start_time = time.time()
             try:
                 result = func(*args, **kwargs)
@@ -120,6 +121,7 @@ def log_performance(threshold: float = 0.5, description: str = None):
                 if elapsed_time >= threshold:
                     operation_desc = description or f"{func.__module__}.{func.__name__}"
                     logger.info(f"⏱️  PERF: {operation_desc} took {elapsed_time:.2f}s")
-        
+
         return wrapper
+
     return decorator
