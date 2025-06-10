@@ -29,6 +29,10 @@ api_logger = logging.getLogger("roonapi")
 for handler in api_logger.handlers:
     handler.setFormatter(logging.Formatter(log_format))
 
+# Suppress verbose PIL debug logs
+pil_logger = logging.getLogger("PIL")
+pil_logger.setLevel(logging.WARNING)
+
 
 def create_viewer(config_manager):
     """Create appropriate viewer based on configuration."""
@@ -46,10 +50,7 @@ def create_viewer(config_manager):
         return viewer, root
 
     elif display_type == "epd13in3E":
-        partial_refresh = display_config["partial_refresh"]
-        logger.info(
-            f"Creating e-ink viewer for {display_type} (partial_refresh: {partial_refresh})"
-        )
+        logger.info(f"Creating e-ink viewer for {display_type}")
 
         # Add libs directory to path for e-ink modules
         libs_dir = Path(__file__).parent.parent / "libs"
@@ -58,9 +59,7 @@ def create_viewer(config_manager):
 
         try:
             eink_module = importlib.import_module(f"libs.{display_type}")
-            viewer = EinkViewer(
-                config_manager, eink_module, partial_refresh=partial_refresh
-            )
+            viewer = EinkViewer(config_manager, eink_module)
             return viewer, None
         except ImportError as e:
             logger.error(f"Could not import e-ink module {display_type}: {e}")
@@ -99,10 +98,50 @@ def main():
         # Create viewer
         viewer, tk_root = create_viewer(config_manager)
 
-        # Create Roon client with anniversary manager
-        roon_client = RoonClient(
-            config_manager, viewer, viewer.image_processor, anniversary_manager
+        # Create message renderer for coordinator
+        from .message_renderer import MessageRenderer
+
+        message_renderer = MessageRenderer(
+            viewer.image_processor.screen_width, viewer.image_processor.screen_height
         )
+
+        # Create render coordinator
+        from .render_coordinator import RenderCoordinator
+
+        render_coordinator = RenderCoordinator(
+            viewer, viewer.image_processor, message_renderer, anniversary_manager
+        )
+
+        # Set coordinator in viewer for state tracking
+        viewer.set_render_coordinator(render_coordinator)
+
+        # Create Roon client with coordinator
+        roon_client = RoonClient(
+            config_manager,
+            viewer,
+            viewer.image_processor,
+            render_coordinator,
+        )
+
+        # Load any existing image on startup through coordinator
+        from .utils import get_current_image_key, get_saved_image_dir
+
+        try:
+            current_key = get_current_image_key()
+            if current_key:
+                image_path = get_saved_image_dir() / f"album_art_{current_key}.jpg"
+                if image_path.exists():
+                    logger.info(
+                        f"Loading last displayed image on startup: {current_key}"
+                    )
+                    render_coordinator.set_main_content(
+                        content_type="last_art",
+                        image_key=current_key,
+                        image_path=image_path,
+                        track_info="Last displayed artwork"
+                    )
+        except Exception as e:
+            logger.warning(f"Could not load startup image: {e}")
 
         # Start simulation server for testing
         simulation_server = SimulationServer(roon_client)

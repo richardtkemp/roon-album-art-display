@@ -92,7 +92,6 @@ class HealthManager:
 
             # Execute the health script with the parameters
             cmd = [self.health_script_path, status, additional_info]
-            logger.info(f"Calling health script: {' '.join(cmd)}")
 
             result = subprocess.run(
                 cmd, capture_output=True, text=True, timeout=30  # 30 second timeout

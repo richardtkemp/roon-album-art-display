@@ -50,12 +50,10 @@ class ConfigManager:
         config["DISPLAY"] = {
             "type": "epd13in3E",
             "tkinter_fullscreen": "false",
-            "partial_refresh": "false",
             # Options:
             # - 'system_display': Standard display connected to your computer
             # - 'epd13in3E': Waveshare Spectra 6 13.3 inch
             # tkinter_fullscreen: true/false (ignored by e-ink displays)
-            # partial_refresh: true/false (e-ink only) - enables interrupting displays for rapid track changes
         }
 
         config["IMAGE_RENDER"] = {
@@ -139,8 +137,8 @@ class ConfigManager:
         """Get display configuration."""
         return {
             "type": self.config.get("DISPLAY", "type"),
-            "partial_refresh": self.config.getboolean(
-                "DISPLAY", "partial_refresh", fallback=False
+            "tkinter_fullscreen": self.config.getboolean(
+                "DISPLAY", "tkinter_fullscreen", fallback=False
             ),
         }
 

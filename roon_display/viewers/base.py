@@ -25,6 +25,62 @@ class BaseViewer(ABC):
         health_recheck_interval = config_manager.get_health_recheck_interval()
         self.health_manager = HealthManager(health_script_path, health_recheck_interval)
 
+        # Render coordinator callback for tracking display state
+        self.render_coordinator = None
+
+    def set_render_coordinator(self, coordinator):
+        """Set the render coordinator for display state tracking."""
+        self.render_coordinator = coordinator
+
+    def _notify_render_complete(self, image_key: str):
+        """Notify render coordinator that a render completed successfully."""
+        if self.render_coordinator and image_key:
+            self.render_coordinator.set_current_display_image_key(image_key)
+
+    def _finalize_successful_render(self, image_key: str):
+        """Common logic for successful renders - update tracking and notify coordinator."""
+        # Update current image key tracking
+        from ..utils import set_current_image_key
+
+        set_current_image_key(image_key)
+
+        # Notify render coordinator of successful render
+        self._notify_render_complete(image_key)
+
+    def _load_and_process_image(self, img, image_path, title):
+        """Common logic to load and process images."""
+        # Load image if not provided
+        if img is None:
+            if image_path is None:
+                logger.warning(f"No image or path provided for display: {title}")
+                return None
+
+            img = self.image_processor.fetch_image(image_path)
+            if img is None:
+                logger.warning(f"Could not load image for display: {image_path}")
+                return None
+
+            # Process image position (for fresh images)
+            img = self.image_processor.process_image_position(img)
+
+        # If img was provided, assume it's already processed (e.g., anniversaries, errors)
+        return img
+
+    def _log_render_attempt(self, image_key, title, viewer_type=""):
+        """Common logging for render attempts."""
+        logger.debug(
+            f"Starting {viewer_type} display update for {title} (key: {image_key})"
+        )
+
+    def _log_render_warning(self, message, title):
+        """Common warning logging for render issues."""
+        logger.warning(f"{message} for {title}")
+
+    def _log_render_error(self, error, title, duration=None):
+        """Common error logging for render failures."""
+        duration_str = f" after {duration:.2f}s" if duration else ""
+        logger.error(f"Error displaying image{duration_str} for {title}: {error}")
+
     def set_screen_size(self, width, height):
         """Set screen dimensions and update image processor."""
         self.image_processor.set_screen_size(width, height)
@@ -32,15 +88,10 @@ class BaseViewer(ABC):
         self.screen_height = height
 
     def startup(self):
-        """Load any existing image on startup."""
-        try:
-            image_key = get_current_image_key()
-            if image_key:
-                image_path = get_saved_image_dir() / f"album_art_{image_key}.jpg"
-                if Path(image_path).exists():
-                    self.update(image_key, image_path, None, "startup")
-        except Exception as e:
-            logger.warning(f"Error during startup image loading: {e}")
+        """Startup hook for viewers - now handled by coordinator."""
+        # Startup image loading is now handled by the RenderCoordinator
+        # This method is kept for backward compatibility
+        pass
 
     @abstractmethod
     def update(self, image_key, image_path, img, title):
