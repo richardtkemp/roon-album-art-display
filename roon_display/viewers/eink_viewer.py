@@ -47,7 +47,6 @@ from .base import BaseViewer
 logger = logging.getLogger(__name__)
 
 
-
 class EinkViewer(BaseViewer):
     """Viewer for E-ink displays (Waveshare)."""
 
@@ -104,9 +103,7 @@ class EinkViewer(BaseViewer):
 
             # Call health script for successful render
             if self.health_manager:
-                additional_info = (
-                    f"Successful render: {elapsed_time:.1f}s for {title}"
-                )
+                additional_info = f"Successful render: {elapsed_time:.1f}s for {title}"
                 self.health_manager.report_render_success(additional_info)
 
         # Finalize successful render (update tracking and notify coordinator)
@@ -183,4 +180,3 @@ class EinkViewer(BaseViewer):
         logger.debug(
             f"UPDATE COMPLETE: {title} (new_thread: {new_thread_id}, setup_time: {update_elapsed:.2f}s)"
         )
-

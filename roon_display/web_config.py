@@ -376,7 +376,7 @@ CONFIG_TEMPLATE = """
             const formData = new FormData(form);
             
             // Send AJAX request
-            fetch(form.action || window.location.pathname, {
+            fetch(window.location.pathname, {
                 method: 'POST',
                 headers: {
                     'X-Requested-With': 'XMLHttpRequest'
@@ -457,6 +457,9 @@ CONFIG_TEMPLATE = """
         
         function deleteImage(anniversaryName, filename) {
             if (confirm(`Are you sure you want to delete "${filename}"?`)) {
+                const button = event.target;
+                const thumbnailItem = button.closest('.thumbnail-item');
+                
                 fetch('/delete-image', {
                     method: 'POST',
                     headers: {
@@ -470,8 +473,15 @@ CONFIG_TEMPLATE = """
                 .then(response => response.json())
                 .then(data => {
                     if (data.success) {
-                        // Reload the page to update the thumbnail display
-                        location.reload();
+                        // Remove the thumbnail from the DOM
+                        thumbnailItem.remove();
+                        
+                        // Check if this was the last image in the container
+                        const container = thumbnailItem.closest('.thumbnail-container');
+                        if (container && container.children.length === 0) {
+                            // If no thumbnails left, show "No images uploaded yet" message
+                            container.innerHTML = '<p class="no-images">No images uploaded yet.</p>';
+                        }
                     } else {
                         alert('Error deleting image: ' + (data.error || 'Unknown error'));
                     }
@@ -1416,6 +1426,9 @@ def config_interface():
         
         # Check if this is an AJAX request
         is_ajax = request.headers.get('X-Requested-With') == 'XMLHttpRequest'
+        
+        # Check for health_script specifically
+        health_script_value = request.form.get('MONITORING.health_script')
         
         success, error_messages, config_updates = web_server._save_config(request.form, request.files)
         
