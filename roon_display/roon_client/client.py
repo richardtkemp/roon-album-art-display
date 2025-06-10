@@ -74,14 +74,7 @@ class RoonClient:
             self.roon = self._create_roon_connection(server_ip, server_port)
 
         if not self.roon:
-            if (
-                self.viewer
-                and hasattr(self.viewer, "health_manager")
-                and self.viewer.health_manager
-            ):
-                self.viewer.health_manager.report_render_failure(
-                    "Failed to connect to Roon server"
-                )
+            self._report_health_failure("Failed to connect to Roon server")
             raise ConnectionError("Could not connect to Roon server")
 
         # Validate connection
@@ -134,22 +127,26 @@ class RoonClient:
 
                     # Save token and server details after successful connection
                     self._save_connection_details(api, server_ip, server_port)
-                    
+
                     # Report successful connection
                     self._report_health_success("Successfully connected to Roon server")
-                    
+
                     return api
                 else:
                     api.stop()
                     logger.warning(
                         "Connected but couldn't fetch zones - token may be invalid"
                     )
-                    self._report_health_failure("Invalid or expired authentication token")
+                    self._report_health_failure(
+                        "Invalid or expired authentication token"
+                    )
                     return None
             except Exception as zone_error:
                 logger.warning(f"Error validating connection: {zone_error}")
                 api.stop()
-                self._report_health_failure(f"Connection validation failed: {zone_error}")
+                self._report_health_failure(
+                    f"Connection validation failed: {zone_error}"
+                )
                 return None
 
         except Exception as e:
@@ -184,13 +181,8 @@ class RoonClient:
                 # Check for timeout
                 if elapsed > timeout_seconds:
                     logger.error("Authorization timeout after 5 minutes")
-                    if (
-                        self.viewer
-                        and hasattr(self.viewer, "health_manager")
-                        and self.viewer.health_manager
-                        and not health_failure_sent
-                    ):
-                        self.viewer.health_manager.report_render_failure(
+                    if not health_failure_sent:
+                        self._report_health_failure(
                             "Authorization timeout - user did not approve extension"
                         )
                         health_failure_sent = True
@@ -204,7 +196,9 @@ class RoonClient:
                         if zones is not None:
                             # Authorization is working, stop monitoring
                             logger.info("Authorization successful - zones accessible")
-                            self._report_health_success("Roon authorization successful - extension approved")
+                            self._report_health_success(
+                                "Roon authorization successful - extension approved"
+                            )
                             break
                 except Exception as e:
                     logger.debug(f"Zones not accessible yet: {e}")
@@ -216,13 +210,8 @@ class RoonClient:
                     auth_displayed.set()
 
                     # Send health check failure for authorization needed
-                    if (
-                        self.viewer
-                        and hasattr(self.viewer, "health_manager")
-                        and self.viewer.health_manager
-                        and not health_failure_sent
-                    ):
-                        self.viewer.health_manager.report_render_failure(
+                    if not health_failure_sent:
+                        self._report_health_failure(
                             "Waiting for Roon authorization - extension needs approval"
                         )
                         health_failure_sent = True
@@ -721,14 +710,9 @@ class RoonClient:
                 logger.error(f"Could not display re-auth message: {e}")
 
             # Report to health manager
-            if (
-                self.viewer
-                and hasattr(self.viewer, "health_manager")
-                and self.viewer.health_manager
-            ):
-                self.viewer.health_manager.report_render_failure(
-                    "Roon authorization revoked - extension needs re-approval"
-                )
+            self._report_health_failure(
+                "Roon authorization revoked - extension needs re-approval"
+            )
 
         elif failure_type == "roon_host_down":
             # Roon host or process issue
@@ -756,14 +740,9 @@ class RoonClient:
                 logger.error(f"Could not display server unavailable message: {e}")
 
             # Report to health manager
-            if (
-                self.viewer
-                and hasattr(self.viewer, "health_manager")
-                and self.viewer.health_manager
-            ):
-                self.viewer.health_manager.report_render_failure(
-                    "Roon server unavailable - host down or process not responding"
-                )
+            self._report_health_failure(
+                "Roon server unavailable - host down or process not responding"
+            )
 
     def stop(self):
         """Stop the client."""

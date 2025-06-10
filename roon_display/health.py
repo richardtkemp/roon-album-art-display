@@ -1,6 +1,8 @@
 """Health monitoring and script execution for the Roon display application."""
 
 import logging
+import os
+import stat
 import subprocess
 import time
 from datetime import datetime, timedelta
@@ -65,6 +67,29 @@ class HealthManager:
         self.last_params = (status, additional_info)
 
         try:
+            # Check if script exists and make it executable if needed
+            script_path = Path(self.health_script_path)
+            if not script_path.exists():
+                logger.error(f"Health script not found: {self.health_script_path}")
+                return False
+
+            # Check if script is executable, make it executable if not
+            if not os.access(script_path, os.X_OK):
+                logger.info(
+                    f"Health script is not executable, making it executable: {script_path}"
+                )
+                try:
+                    # Add execute permission for owner, group, and others
+                    current_permissions = script_path.stat().st_mode
+                    new_permissions = (
+                        current_permissions | stat.S_IXUSR | stat.S_IXGRP | stat.S_IXOTH
+                    )
+                    script_path.chmod(new_permissions)
+                    logger.info(f"Successfully made health script executable")
+                except Exception as e:
+                    logger.error(f"Failed to make health script executable: {e}")
+                    return False
+
             # Execute the health script with the parameters
             cmd = [self.health_script_path, status, additional_info]
             logger.info(f"Calling health script: {' '.join(cmd)}")
@@ -86,9 +111,6 @@ class HealthManager:
 
         except subprocess.TimeoutExpired:
             logger.error("Health script timed out after 30 seconds")
-            return False
-        except FileNotFoundError:
-            logger.error(f"Health script not found: {self.health_script_path}")
             return False
         except Exception as e:
             logger.error(f"Error executing health script: {e}")
