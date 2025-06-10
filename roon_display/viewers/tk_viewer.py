@@ -118,8 +118,3 @@ class TkViewer(BaseViewer):
         # Store update data for main thread to process
         self.pending_image_data = (image_key, image_path, img, title)
 
-    def update_anniversary(self, message, image_path=None):
-        """Display anniversary message and optional image."""
-        # This method is now handled by RoonClient using shared anniversary logic
-        # Left as placeholder for interface compatibility
-        pass

@@ -166,10 +166,6 @@ class ConfigManager:
             return ip, port
         return None, None
 
-    def get_tkinter_fullscreen(self):
-        """Get tkinter fullscreen setting."""
-        return self.config.getboolean("DISPLAY", "tkinter_fullscreen", fallback=False)
-
     def get_log_level(self):
         """Get logging level from config."""
         log_level_str = self.config.get(

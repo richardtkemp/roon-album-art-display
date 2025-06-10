@@ -47,18 +47,6 @@ from .base import BaseViewer
 
 logger = logging.getLogger(__name__)
 
-# Try to import EarlyExit exception for proper error handling
-# This may fail in test environments without hardware libraries
-try:
-    from libs.epd13in3E import EarlyExit
-
-    EARLY_EXIT_AVAILABLE = True
-except (ImportError, OSError):
-    # Create a dummy EarlyExit for test environments
-    class EarlyExit(Exception):
-        pass
-
-    EARLY_EXIT_AVAILABLE = False
 
 
 class EinkViewer(BaseViewer):
@@ -219,8 +207,3 @@ class EinkViewer(BaseViewer):
             f"UPDATE COMPLETE: {title} (new_thread: {new_thread_id}, setup_time: {update_elapsed:.2f}s)"
         )
 
-    def update_anniversary(self, message, image_path=None):
-        """Display anniversary message and optional image."""
-        # This method is now handled by RoonClient using shared anniversary logic
-        # Left as placeholder for interface compatibility
-        pass
