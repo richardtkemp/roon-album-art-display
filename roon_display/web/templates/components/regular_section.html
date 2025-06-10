@@ -1,0 +1,37 @@
+<!-- Regular section handling -->
+{% for key, config_item in section_data.items() %}
+    {% if not key.startswith('#') %}
+    <div class="form-group">
+        <label for="{{ section_name }}_{{ key }}">{{ key.replace('_', ' ').title() }}:</label>
+
+        {% if config_item.type == 'boolean' %}
+            <input type="checkbox" id="{{ section_name }}_{{ key }}"
+                   name="{{ section_name }}.{{ key }}"
+                   value="true" {{ 'checked' if config_item.value else '' }}>
+        {% elif config_item.type == 'select' %}
+            <select id="{{ section_name }}_{{ key }}" name="{{ section_name }}.{{ key }}">
+                {% for option in config_item.options %}
+                    <option value="{{ option }}" {{ 'selected' if option == config_item.value else '' }}>
+                        {{ option }}
+                    </option>
+                {% endfor %}
+            </select>
+        {% elif config_item.type == 'textarea' %}
+            <textarea id="{{ section_name }}_{{ key }}" name="{{ section_name }}.{{ key }}"
+                      class="textarea-large">{{ config_item.value }}</textarea>
+        {% else %}
+            <input type="{{ config_item.input_type }}"
+                   id="{{ section_name }}_{{ key }}"
+                   name="{{ section_name }}.{{ key }}"
+                   value="{{ config_item.value }}"
+                   {% if config_item.min %}min="{{ config_item.min }}"{% endif %}
+                   {% if config_item.max %}max="{{ config_item.max }}"{% endif %}
+                   {% if config_item.step %}step="{{ config_item.step }}"{% endif %}>
+        {% endif %}
+
+        {% if config_item.comment %}
+            <div class="comment">{{ config_item.comment }}</div>
+        {% endif %}
+    </div>
+    {% endif %}
+{% endfor %}
