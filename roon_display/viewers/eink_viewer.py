@@ -42,7 +42,7 @@ import time
 
 from timing_config import timing_config
 
-from ..utils import set_current_image_key, log_performance
+from ..utils import log_performance, set_current_image_key
 from .base import BaseViewer
 
 logger = logging.getLogger(__name__)

@@ -174,7 +174,9 @@ class ConfigManager:
 
     def get_log_level(self):
         """Get logging level from config."""
-        log_level_str = self.config.get("MONITORING", "log_level", fallback="INFO").upper()
+        log_level_str = self.config.get(
+            "MONITORING", "log_level", fallback="INFO"
+        ).upper()
 
         # Map string to logging constants
         level_map = {
@@ -188,12 +190,16 @@ class ConfigManager:
 
     def get_performance_logging(self):
         """Get performance logging setting from config.
-        
+
         Returns:
             str: Performance logging level or empty string if disabled
         """
-        perf_logging = self.config.get("MONITORING", "performance_logging", fallback="").strip().lower()
-        
+        perf_logging = (
+            self.config.get("MONITORING", "performance_logging", fallback="")
+            .strip()
+            .lower()
+        )
+
         # Map various string values to standardized levels
         level_mapping = {
             "": "",  # Empty/disabled
@@ -202,7 +208,7 @@ class ConfigManager:
             "off": "",
             "0": "",
             "info": "info",
-            "information": "info", 
+            "information": "info",
             "debug": "debug",
             "dbg": "debug",
             "verbose": "debug",
@@ -210,8 +216,10 @@ class ConfigManager:
             "1": "info",
             "on": "info",
         }
-        
-        return level_mapping.get(perf_logging, perf_logging)  # Return as-is if not in mapping
+
+        return level_mapping.get(
+            perf_logging, perf_logging
+        )  # Return as-is if not in mapping
 
     def get_loop_time(self):
         """Get event loop sleep time in seconds."""
@@ -274,7 +282,9 @@ class ConfigManager:
         if "MONITORING" not in self.config:
             return None
 
-        script_path = self.config.get("MONITORING", "health_script", fallback="").strip()
+        script_path = self.config.get(
+            "MONITORING", "health_script", fallback=""
+        ).strip()
         return script_path if script_path else None
 
     def get_health_recheck_interval(self):

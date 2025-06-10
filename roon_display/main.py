@@ -9,7 +9,11 @@ from .anniversary import AnniversaryManager
 from .config.config_manager import ConfigManager
 from .roon_client.client import RoonClient
 from .simulation import SimulationServer
-from .utils import ensure_extra_images_dir_exists, ensure_image_dir_exists, set_performance_logging
+from .utils import (
+    ensure_extra_images_dir_exists,
+    ensure_image_dir_exists,
+    set_performance_logging,
+)
 from .viewers.eink_viewer import EinkViewer
 from .viewers.tk_viewer import TkViewer
 
@@ -108,7 +112,7 @@ def main():
             # For Tkinter, we need to start connection in background thread
             # so the GUI can show authorization messages
             import threading
-            
+
             def connect_and_run():
                 """Connect to Roon and start event loop in background."""
                 try:
@@ -116,15 +120,15 @@ def main():
                     roon_client.run()
                 except Exception as e:
                     logger.error(f"Error in Roon client: {e}")
-            
+
             # Start Roon connection in background thread
             roon_thread = threading.Thread(target=connect_and_run, daemon=True)
             roon_thread.start()
-            
+
             # Start Tkinter main loop immediately (blocks here)
             viewer.check_pending_updates()
             tk_root.mainloop()
-            
+
         else:
             # For e-ink, connect synchronously (no GUI to show)
             roon_client.connect()
