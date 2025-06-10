@@ -2,6 +2,7 @@
 """Minimalist web server for Roon display configuration management."""
 
 import configparser
+import io
 import logging
 import os
 import sys
@@ -10,6 +11,7 @@ import time
 from pathlib import Path
 from typing import Dict, Any, List, Tuple, Optional
 
+import requests
 from flask import Flask, render_template_string, request, redirect, url_for, flash, send_file, jsonify
 from PIL import Image
 from werkzeug.utils import secure_filename
@@ -93,10 +95,68 @@ CONFIG_TEMPLATE = """
         .status-error { background-color: #f44336; }
         .status-unknown { background-color: #ff9800; }
         @keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.5; } }
+        .display-preview-section {
+            background: #ffffff; border: 1px solid #ddd; border-radius: 8px;
+            padding: 20px; margin-bottom: 30px; box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+        .display-header { 
+            display: flex; justify-content: space-between; align-items: center; 
+            margin-bottom: 15px; font-size: 1.3em; font-weight: bold;
+        }
+        .display-controls { display: flex; align-items: center; gap: 10px; }
+        .control-btn { 
+            background: #f0f0f0; border: 1px solid #ccc; padding: 6px 12px; 
+            border-radius: 4px; cursor: pointer; font-size: 0.9em;
+        }
+        .control-btn:hover { background: #e0e0e0; }
+        .display-container { 
+            position: relative; text-align: center; margin-bottom: 15px;
+            background: #f8f8f8; border-radius: 6px; padding: 10px;
+        }
+        #current-display-image { 
+            max-width: 100%; max-height: 400px; border-radius: 4px; 
+            box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+        }
+        .display-overlay { 
+            position: absolute; top: 15px; right: 15px; 
+            background: rgba(255, 152, 0, 0.9); color: white; 
+            padding: 4px 12px; border-radius: 12px; font-size: 0.8em; font-weight: bold;
+        }
+        .display-overlay.hidden { display: none; }
+        .display-info { 
+            font-size: 0.9em; color: #666; text-align: center; 
+            padding: 8px; background: #f0f0f0; border-radius: 4px;
+        }
+        .status-indicator.connected { color: #4CAF50; }
+        .status-indicator.disconnected { color: #f44336; }
+        .preview-active { 
+            box-shadow: 0 0 20px rgba(255, 152, 0, 0.6) !important;
+            transition: box-shadow 0.3s ease;
+        }
     </style>
 </head>
 <body>
     <h1>Roon Display Configuration</h1>
+    
+    <!-- Current Display Preview -->
+    <div class="display-preview-section">
+        <div class="display-header">
+            <span>Current Display</span>
+            <div class="display-controls">
+                <button id="refresh-display" class="control-btn">↻ Refresh</button>
+                <span id="display-connection-status" class="status-indicator">●</span>
+            </div>
+        </div>
+        <div class="display-container">
+            <img id="current-display-image" src="/current-display-image" alt="Current Display" loading="lazy">
+            <div id="display-overlay" class="display-overlay hidden">
+                <span class="overlay-text">PREVIEW</span>
+            </div>
+        </div>
+        <div class="display-info">
+            <span id="display-metadata">Loading display info...</span>
+        </div>
+    </div>
     
     <!-- Current Display Status -->
     <div class="status-section" id="status-section">
@@ -344,33 +404,150 @@ CONFIG_TEMPLATE = """
             }
         }
         
+        // Display image and status update functionality
+        let previewMode = false;
+        let previewTimeout = null;
+
+        function updateDisplayImage() {
+            const img = document.getElementById('current-display-image');
+            const timestamp = Date.now();
+            
+            if (!previewMode) {
+                img.src = `/current-display-image?t=${timestamp}`;
+            }
+        }
+
+        function updateDisplayMetadata() {
+            fetch('/display-status')
+                .then(response => response.json())
+                .then(data => {
+                    const metadataEl = document.getElementById('display-metadata');
+                    const connectionEl = document.getElementById('display-connection-status');
+                    
+                    // Update connection status
+                    if (data.internal_app_connected) {
+                        connectionEl.className = 'status-indicator connected';
+                        connectionEl.title = 'Connected to display app';
+                    } else {
+                        connectionEl.className = 'status-indicator disconnected';
+                        connectionEl.title = 'Display app not connected';
+                    }
+                    
+                    // Update metadata
+                    const info = data.track_info || 'No track info';
+                    const timestamp = data.timestamp ? 
+                        new Date(data.timestamp * 1000).toLocaleTimeString() : 
+                        'Unknown time';
+                    
+                    metadataEl.textContent = `${info} (${timestamp})`;
+                })
+                .catch(error => {
+                    console.error('Failed to update display metadata:', error);
+                    const connectionEl = document.getElementById('display-connection-status');
+                    connectionEl.className = 'status-indicator disconnected';
+                    connectionEl.title = 'Connection error';
+                });
+        }
+
+        function revertToLiveDisplay() {
+            previewMode = false;
+            const overlay = document.getElementById('display-overlay');
+            const container = document.querySelector('.display-container');
+            
+            overlay.classList.add('hidden');
+            container.classList.remove('preview-active');
+            updateDisplayImage();
+        }
+
+        function generatePreview() {
+            if (previewTimeout) {
+                clearTimeout(previewTimeout);
+            }
+            
+            previewTimeout = setTimeout(() => {
+                const formData = new FormData(document.querySelector('form'));
+                const overlay = document.getElementById('display-overlay');
+                
+                // Show loading state
+                overlay.innerHTML = '<span class="overlay-text">Generating Preview...</span>';
+                overlay.classList.remove('hidden');
+                
+                // Send preview request
+                fetch('/preview-image', {
+                    method: 'POST',
+                    body: formData
+                })
+                .then(response => {
+                    if (response.ok) {
+                        return response.blob();
+                    }
+                    throw new Error(`Preview generation failed: HTTP ${response.status}`);
+                })
+                .then(blob => {
+                    const img = document.getElementById('current-display-image');
+                    const container = document.querySelector('.display-container');
+                    
+                    // Show preview image
+                    const imageUrl = URL.createObjectURL(blob);
+                    img.src = imageUrl;
+                    
+                    // Update overlay to show preview state
+                    overlay.innerHTML = '<span class="overlay-text">PREVIEW</span>';
+                    container.classList.add('preview-active');
+                    previewMode = true;
+                    
+                    console.log('Preview generated successfully');
+                    
+                    // Auto-revert after 30 seconds
+                    setTimeout(() => {
+                        revertToLiveDisplay();
+                    }, 30000);
+                })
+                .catch(error => {
+                    console.error('Preview failed:', error);
+                    
+                    // Show error in overlay briefly
+                    overlay.innerHTML = '<span class="overlay-text">Preview Failed</span>';
+                    overlay.style.background = 'rgba(244, 67, 54, 0.9)'; // Red background
+                    
+                    // Revert to live after error
+                    setTimeout(() => {
+                        overlay.style.background = 'rgba(255, 152, 0, 0.9)'; // Reset to orange
+                        revertToLiveDisplay();
+                    }, 2000);
+                });
+            }, 500); // 500ms debounce
+        }
+
         // Status update functionality
         function updateStatus() {
-            fetch('/status')
+            fetch('/display-status')
                 .then(response => response.json())
                 .then(data => {
                     // Update status indicator
                     const indicator = document.getElementById('status-indicator');
                     indicator.className = 'status-indicator';
                     
-                    if (data.display_type === 'Error') {
+                    if (data.error || !data.internal_app_connected) {
                         indicator.classList.add('status-error');
-                    } else if (data.current_image_key) {
+                    } else if (data.current_image_key || data.has_image) {
                         indicator.classList.add('status-active');
                     } else {
                         indicator.classList.add('status-unknown');
                     }
                     
                     // Update status fields
-                    document.getElementById('status-display-type').textContent = data.display_type || 'Unknown';
-                    document.getElementById('status-current').textContent = data.status || 'No status available';
+                    document.getElementById('status-display-type').textContent = 
+                        data.content_type || data.display_type || 'Unknown';
+                    document.getElementById('status-current').textContent = 
+                        data.track_info || data.status || 'No status available';
                     
                     // Format last track time
                     const lastTrackElement = document.getElementById('status-last-track');
                     if (data.time_since_last_track) {
                         lastTrackElement.textContent = data.time_since_last_track;
-                    } else if (data.last_track_time) {
-                        const date = new Date(data.last_track_time * 1000);
+                    } else if (data.timestamp) {
+                        const date = new Date(data.timestamp * 1000);
                         lastTrackElement.textContent = date.toLocaleString();
                     } else {
                         lastTrackElement.textContent = 'No track data';
@@ -378,8 +555,8 @@ CONFIG_TEMPLATE = """
                     
                     // Update image key
                     const imageKeyElement = document.getElementById('status-image-key');
-                    if (data.current_image_key) {
-                        imageKeyElement.textContent = data.current_image_key;
+                    if (data.image_key) {
+                        imageKeyElement.textContent = data.image_key;
                         imageKeyElement.style.fontFamily = 'monospace';
                         imageKeyElement.style.fontSize = '0.9em';
                     } else {
@@ -399,16 +576,170 @@ CONFIG_TEMPLATE = """
                     document.getElementById('status-image-key').textContent = 'Error';
                 });
         }
+
+        function shouldTriggerPreview(section, fieldName) {
+            // Define which sections should trigger preview
+            const previewSections = ['ANNIVERSARIES', 'IMAGE_RENDER', 'IMAGE_POSITION', 'DISPLAY'];
+            
+            // Skip non-visual fields
+            const skipFields = ['APP', 'ZONES', 'MONITORING'];
+            if (skipFields.includes(section)) {
+                return false;
+            }
+            
+            // Skip specific fields that don't affect visual output
+            const skipSpecificFields = [
+                'loop_time', 'log_level', 'performance_logging', 
+                'health_script', 'health_recheck_interval',
+                'allowed_zone_names', 'forbidden_zone_names'
+            ];
+            if (skipSpecificFields.some(field => fieldName.includes(field))) {
+                return false;
+            }
+            
+            return previewSections.includes(section);
+        }
+
+        function getFormSection(inputElement) {
+            // Extract section name from input name
+            const name = inputElement.name;
+            if (name.includes('.')) {
+                return name.split('.')[0];
+            }
+            if (name.startsWith('anniversary_')) {
+                return 'ANNIVERSARIES';
+            }
+            return 'unknown';
+        }
+
+        function setupFormChangeDetection() {
+            const form = document.querySelector('form');
+            const inputs = form.querySelectorAll('input, select, textarea');
+            
+            inputs.forEach(input => {
+                // Use both 'input' and 'change' events for comprehensive coverage
+                ['input', 'change'].forEach(eventType => {
+                    input.addEventListener(eventType, (e) => {
+                        const section = getFormSection(e.target);
+                        const fieldName = e.target.name || '';
+                        
+                        if (shouldTriggerPreview(section, fieldName)) {
+                            // Add visual feedback
+                            if (!previewMode) {
+                                const overlay = document.getElementById('display-overlay');
+                                overlay.innerHTML = '<span class="overlay-text">Generating Preview...</span>';
+                                overlay.classList.remove('hidden');
+                            }
+                            
+                            generatePreview();
+                        }
+                    });
+                });
+                
+                // Special handling for file inputs (anniversary images)
+                if (input.type === 'file' && input.name.startsWith('anniversary_images_')) {
+                    input.addEventListener('change', () => {
+                        if (input.files.length > 0) {
+                            // Note: File previews are limited - files aren't sent to preview
+                            console.log(`File uploaded for ${input.name}, preview will use existing images`);
+                            generatePreview();
+                        }
+                    });
+                }
+            });
+            
+            console.log(`Set up change detection for ${inputs.length} form inputs`);
+        }
         
-        // Initial status load and periodic updates
+        // Initial load and periodic updates
         document.addEventListener('DOMContentLoaded', function() {
-            updateStatus(); // Load immediately
-            setInterval(updateStatus, 10000); // Update every 10 seconds
+            updateDisplayImage();
+            updateDisplayMetadata();
+            updateStatus();
+            setupFormChangeDetection();
+            
+            // Auto-refresh every 10 seconds
+            setInterval(() => {
+                if (!previewMode) {
+                    updateDisplayImage();
+                    updateDisplayMetadata();
+                }
+                updateStatus();
+            }, 10000);
+            
+            // Refresh button
+            document.getElementById('refresh-display').addEventListener('click', () => {
+                revertToLiveDisplay();
+                updateDisplayMetadata();
+            });
         });
     </script>
 </body>
 </html>
 """
+
+
+class InternalAppClient:
+    """HTTP client for communication with the main Roon display app."""
+    
+    def __init__(self, base_url="http://127.0.0.1:9090"):
+        """Initialize client with base URL of internal server."""
+        self.base_url = base_url
+        
+    def get_current_image(self) -> Optional[bytes]:
+        """Get current display image from main app."""
+        try:
+            response = requests.get(f"{self.base_url}/current-image", timeout=5)
+            if response.status_code == 200:
+                return response.content
+            else:
+                logger.warning(f"Failed to get current image: HTTP {response.status_code}")
+                return None
+        except requests.RequestException as e:
+            logger.debug(f"Failed to get current image: {e}")
+            return None
+    
+    def get_current_status(self) -> Dict[str, Any]:
+        """Get current display status from main app."""
+        try:
+            response = requests.get(f"{self.base_url}/current-status", timeout=5)
+            if response.status_code == 200:
+                return response.json()
+            else:
+                logger.warning(f"Failed to get current status: HTTP {response.status_code}")
+                return {}
+        except requests.RequestException as e:
+            logger.debug(f"Failed to get current status: {e}")
+            return {}
+    
+    def generate_preview(self, config_data: Dict) -> Optional[bytes]:
+        """Generate preview image with config changes."""
+        try:
+            response = requests.post(
+                f"{self.base_url}/preview", 
+                json=config_data, 
+                timeout=10
+            )
+            if response.status_code == 200:
+                return response.content
+            else:
+                logger.warning(f"Failed to generate preview: HTTP {response.status_code}")
+                return None
+        except requests.RequestException as e:
+            logger.debug(f"Failed to generate preview: {e}")
+            return None
+    
+    def check_health(self) -> bool:
+        """Check if main app is responsive."""
+        try:
+            response = requests.get(f"{self.base_url}/health", timeout=2)
+            return response.status_code == 200
+        except requests.RequestException:
+            return False
+
+
+# Global client instance
+internal_client = InternalAppClient()
 
 
 def validate_image_format(file_data: bytes, filename: str) -> bool:
@@ -972,6 +1303,180 @@ def delete_image():
     except Exception as e:
         logger.error(f"Error in delete image endpoint: {e}")
         return jsonify({'success': False, 'error': str(e)})
+
+
+@app.route('/current-display-image')
+def serve_current_display_image():
+    """Proxy current display image from main app."""
+    try:
+        image_data = internal_client.get_current_image()
+        if image_data:
+            return send_file(
+                io.BytesIO(image_data),
+                mimetype='image/jpeg',
+                as_attachment=False
+            )
+        else:
+            # Return placeholder image when no image available
+            return _create_placeholder_response()
+    except Exception as e:
+        logger.error(f"Error serving current display image: {e}")
+        return _create_placeholder_response()
+
+
+@app.route('/display-status')
+def get_display_status():
+    """Get enhanced status including internal app data."""
+    try:
+        # Get status from internal app
+        internal_status = internal_client.get_current_status()
+        
+        # Combine with existing file-based status
+        file_status = get_current_display_status()
+        
+        # Check connection health
+        is_connected = internal_client.check_health()
+        
+        return jsonify({
+            **file_status,
+            **internal_status,
+            'internal_app_connected': is_connected,
+            'internal_app_responsive': is_connected
+        })
+    except Exception as e:
+        logger.error(f"Error getting display status: {e}")
+        return jsonify({
+            'error': str(e),
+            'internal_app_connected': False,
+            'internal_app_responsive': False
+        })
+
+
+@app.route('/preview-image', methods=['POST'])
+def generate_preview_image():
+    """Generate preview image with form changes."""
+    try:
+        # Parse form data into config format, excluding file uploads for now
+        config_data = _parse_form_to_config_for_preview(request.form, request.files)
+        
+        # Request preview from main app
+        preview_data = internal_client.generate_preview(config_data)
+        
+        if preview_data:
+            return send_file(
+                io.BytesIO(preview_data),
+                mimetype='image/jpeg',
+                as_attachment=False
+            )
+        else:
+            return jsonify({'error': 'Preview generation failed'}), 500
+    except Exception as e:
+        logger.error(f"Error generating preview: {e}")
+        return jsonify({'error': str(e)}), 500
+
+
+def _create_placeholder_response():
+    """Create placeholder image response when main app not available."""
+    try:
+        # Create simple placeholder image
+        placeholder = Image.new('RGB', (400, 300), color=(200, 200, 200))
+        
+        # Convert to bytes
+        img_io = io.BytesIO()
+        placeholder.save(img_io, 'JPEG', quality=85)
+        img_io.seek(0)
+        
+        return send_file(img_io, mimetype='image/jpeg')
+    except Exception as e:
+        logger.error(f"Error creating placeholder: {e}")
+        return jsonify({'error': 'No image available'}), 404
+
+
+def _parse_form_to_config(form_data, files) -> Dict[str, Any]:
+    """Parse form data into configuration format for saving to config file."""
+    config = {}
+    
+    try:
+        # Parse regular configuration fields (section.field format)
+        for key, value in form_data.items():
+            if '.' in key and not key.startswith('anniversary_'):
+                # Handle nested config like IMAGE_RENDER.brightness_adjustment
+                config[key] = value
+            elif key.startswith('anniversary_'):
+                # Handle anniversary fields
+                config[key] = value
+            else:
+                # Handle other fields
+                config[key] = value
+        
+        # Handle checkboxes that are only present when checked
+        # For unchecked checkboxes, we need to detect them and set to false
+        # This is a simplified approach - in full implementation we'd track all possible checkboxes
+        checkbox_fields = [
+            'ANNIVERSARIES.enabled',
+            'DISPLAY.tkinter_fullscreen'
+        ]
+        
+        for checkbox_field in checkbox_fields:
+            if checkbox_field not in config:
+                config[checkbox_field] = 'false'
+        
+        # Handle file uploads (for anniversary images)
+        if files:
+            for field_name, file_list in files.items():
+                if field_name.startswith('anniversary_images_'):
+                    config[f"{field_name}_files"] = file_list
+        
+        logger.debug(f"Parsed form to config with {len(config)} fields")
+        return config
+        
+    except Exception as e:
+        logger.error(f"Error parsing form data: {e}")
+        return {}
+
+
+def _parse_form_to_config_for_preview(form_data, files) -> Dict[str, Any]:
+    """Parse form data for preview generation, excluding non-serializable file objects."""
+    config = {}
+    
+    try:
+        # Parse regular configuration fields (section.field format)
+        for key, value in form_data.items():
+            if '.' in key and not key.startswith('anniversary_'):
+                # Handle nested config like IMAGE_RENDER.brightness_adjustment
+                config[key] = value
+            elif key.startswith('anniversary_'):
+                # Handle anniversary fields
+                config[key] = value
+            else:
+                # Handle other fields
+                config[key] = value
+        
+        # Handle checkboxes that are only present when checked
+        checkbox_fields = [
+            'ANNIVERSARIES.enabled',
+            'DISPLAY.tkinter_fullscreen'
+        ]
+        
+        for checkbox_field in checkbox_fields:
+            if checkbox_field not in config:
+                config[checkbox_field] = 'false'
+        
+        # For preview, we'll skip file uploads for now
+        # TODO: In future, could convert files to base64 or handle differently
+        if files:
+            file_count = sum(len(file_list) if hasattr(file_list, '__len__') else 1 
+                           for file_list in files.values() if file_list)
+            if file_count > 0:
+                config['_has_file_uploads'] = str(file_count)
+                logger.debug(f"Preview request has {file_count} file uploads (skipped for preview)")
+        
+        logger.debug(f"Parsed form to preview config with {len(config)} fields")
+        return config
+        
+    except Exception as e:
+        logger.error(f"Error parsing form data for preview: {e}")
+        return {}
 
 
 @app.route('/status')
