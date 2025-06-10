@@ -13,13 +13,18 @@ pip install roonapi flask
 #wpa_passphrase ssid pass >> /etc/wpa_supplicant/wpa_supplicant.conf
 #dropbearkey -t rsa -f ~/.ssh/id_dropbear
 DATA=/mnt/dietpi_userdata
-FRAME=$DATA/roon-album-art-display
+PROJECT=roon-album-art-display
+FRAME=$DATA/$PROJECT
 mkdir -p $FRAME/logs
 
-cd $DATA
-#GIT_SSH="dbclient" GIT_SSH_COMMAND="dbclient -i ~/.ssh/id_dropbear" git clone git@github.com:richardtkemp/roon-album-art-display.git
-GIT_SSH=dbclient git clone git@github.com:richardtkemp/roon-album-art-display.git
-#GIT_SSH=dbclient git clone https://github.com/richardtkemp/roon-album-art-display.git
+if [[ ! -d "$FRAME" ]] ; then
+	cd $DATA
+	GIT_SSH=dbclient git clone git@github.com:richardtkemp/roon-album-art-display.git
+	cd $PROJECT
+else
+	cd $FRAME
+	git pull
+fi
 
 cp $FRAME/space-cleaner.{service,timer}  /etc/systemd/system/
 cp $FRAME/roon-album-art-display.service /etc/systemd/system/
@@ -32,14 +37,12 @@ systemctl start  space-cleaner.timer
 systemctl start  roon-album-art-display.service
 systemctl start  roon-web-config.service
 
-echo 'export GIT_SSH=dbclient' >> /root/.bashrc
+grep GIT_SSH /root/.bashrc || echo 'export GIT_SSH=dbclient' >> /root/.bashrc
 ## TODO
-# display err when not connected, not auth'd
 # tailscale login
 # change hostname#
 
 # wifi goes to /var/lib/dietpi/dietpi-wifi.db
 # Seems that is used as source for /etc/wpa_supplicant/wpa_supplicant.conf when dietpi-config saves network settings
-
 
 # Probably want to restart after..?

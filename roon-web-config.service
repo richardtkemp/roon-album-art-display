@@ -5,11 +5,11 @@ Wants=network.target
 
 [Service]
 Type=simple
-User=dietpi
-Group=dietpi
-WorkingDirectory=/home/dietpi/roon-full-art-display
-Environment=PATH=/home/dietpi/roon-full-art-display/bin:/usr/local/bin:/usr/bin:/bin
-ExecStart=/home/dietpi/roon-full-art-display/bin/python -m roon_display.web_config --port 8080 --host 0.0.0.0
+User=root
+Group=root
+WorkingDirectory=/mnt/dietpi_userdata/roon-album-art-display
+Environment=PATH=/mnt/dietpi_userdata/roon-album-art-display/bin:/usr/local/bin:/usr/bin:/bin
+ExecStart=/usr/bin/python3 -m roon_display.web_config --port 8080 --host 0.0.0.0
 Restart=always
 RestartSec=10
 StandardOutput=journal
@@ -17,11 +17,10 @@ StandardError=journal
 SyslogIdentifier=roon-web-config
 
 # Security settings
-NoNewPrivileges=yes
-PrivateTmp=yes
-ProtectSystem=strict
-ProtectHome=yes
-ReadWritePaths=/home/dietpi/roon-full-art-display
+NoNewPrivileges=no
+PrivateTmp=no
+ProtectSystem=no
+ProtectHome=no
 
 [Install]
 WantedBy=multi-user.target
