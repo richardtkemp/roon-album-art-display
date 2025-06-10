@@ -114,6 +114,11 @@ def main():
 
         # Set coordinator in viewer for state tracking
         viewer.set_render_coordinator(render_coordinator)
+        
+        # Create internal server for web communication
+        from .internal_server import InternalServer
+        internal_server = InternalServer(render_coordinator, port=9090)
+        internal_server.start()
 
         # Create Roon client with coordinator
         roon_client = RoonClient(

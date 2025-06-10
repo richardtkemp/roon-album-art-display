@@ -57,6 +57,7 @@ roon_display/                 # Main package
 - **Development**: Mac with pyenv/venv (automatically detected)
 - **Production**: Raspberry Pi with system Python
 - **Commands**: `make setup`, `make check-env`, `make test-quick`
+- **Local Development Python**: Always use `./bin/python` (not `python` or `python3`) to ensure virtual environment is used
 
 ## Important TODOs
 - [ ] **Image Processing Optimization**: Remove potentially unnecessary `img.copy()` in `apply_enhancements()` method after testing complete (see TODO in processor.py line 144-146)
