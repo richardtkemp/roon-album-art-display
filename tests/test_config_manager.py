@@ -270,7 +270,7 @@ class TestConfigManager:
     def test_get_health_script_configured(self, config_manager):
         """Test getting health script when configured."""
         # Add health script to config
-        config_manager.config["HEALTH"] = {"health_script": "/path/to/health.sh"}
+        config_manager.config["MONITORING"] = {"health_script": "/path/to/health.sh"}
 
         script_path = config_manager.get_health_script()
         assert script_path == "/path/to/health.sh"
@@ -278,16 +278,16 @@ class TestConfigManager:
     def test_get_health_script_empty(self, config_manager):
         """Test getting health script when empty."""
         # Add empty health script to config
-        config_manager.config["HEALTH"] = {"health_script": ""}
+        config_manager.config["MONITORING"] = {"health_script": ""}
 
         script_path = config_manager.get_health_script()
         assert script_path is None
 
     def test_get_health_script_not_configured(self, config_manager):
         """Test getting health script when section doesn't exist."""
-        # Remove HEALTH section if it exists
-        if "HEALTH" in config_manager.config:
-            del config_manager.config["HEALTH"]
+        # Remove MONITORING section if it exists
+        if "MONITORING" in config_manager.config:
+            del config_manager.config["MONITORING"]
 
         script_path = config_manager.get_health_script()
         assert script_path is None
@@ -295,24 +295,24 @@ class TestConfigManager:
     def test_get_health_recheck_interval_configured(self, config_manager):
         """Test getting health recheck interval when configured."""
         # Add health recheck interval to config
-        config_manager.config["HEALTH"] = {"health_recheck_interval": "3600"}
+        config_manager.config["MONITORING"] = {"health_recheck_interval": "3600"}
 
         interval = config_manager.get_health_recheck_interval()
         assert interval == 3600
 
     def test_get_health_recheck_interval_default(self, config_manager):
         """Test getting health recheck interval with default value."""
-        # Remove HEALTH section if it exists
-        if "HEALTH" in config_manager.config:
-            del config_manager.config["HEALTH"]
+        # Remove MONITORING section if it exists
+        if "MONITORING" in config_manager.config:
+            del config_manager.config["MONITORING"]
 
         interval = config_manager.get_health_recheck_interval()
         assert interval == 1800  # Default 30 minutes
 
     def test_get_health_recheck_interval_fallback(self, config_manager):
         """Test getting health recheck interval with fallback value."""
-        # Add HEALTH section without recheck interval
-        config_manager.config["HEALTH"] = {"health_script": "/path/to/script.sh"}
+        # Add MONITORING section without recheck interval
+        config_manager.config["MONITORING"] = {"health_script": "/path/to/script.sh"}
 
         interval = config_manager.get_health_recheck_interval()
         assert interval == 1800  # Default 30 minutes

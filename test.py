@@ -338,8 +338,9 @@ class RoonAlbumArt:
             "email":           self.config.get('APP', 'email'),
         }
         
-        # Path for token storage
-        self.token_file = Path.home() / ".roon_album_display_token.txt"
+        # Path for token storage - use temp directory for test file
+        import tempfile
+        self.token_file = Path(tempfile.gettempdir()) / f".roon_album_display_token_test_{os.getpid()}.txt"
         logger.info(f"Token file path: {self.token_file}")
         
         # Initiate some variables

@@ -45,10 +45,6 @@ class ConfigManager:
             "display_version": "1.0.0",
             "publisher": "Richard Kemp",
             "email": "richardtkemp@gmail.com",
-            "log_level": "INFO",
-            "# log_level options: DEBUG, INFO, WARNING, ERROR": "",
-            "loop_time": "10 minutes",
-            "# loop_time: Event loop sleep time (default: 10 minutes). Accepts: '5 mins', '30 seconds', '2h', etc.": "",
         }
 
         config["DISPLAY"] = {
@@ -92,7 +88,14 @@ class ConfigManager:
             "# All images in the directory will be used randomly": "",
         }
 
-        config["HEALTH"] = {
+        config["MONITORING"] = {
+            "log_level": "INFO",
+            "# log_level options: DEBUG, INFO, WARNING, ERROR": "",
+            "loop_time": "10 minutes",
+            "# loop_time: Event loop sleep time (default: 10 minutes). Accepts: '5 mins', '30 seconds', '2h', etc.": "",
+            "performance_logging": "",
+            "# performance_logging: Enable detailed timing logs for functions >0.5s": "",
+            "# Options: '' (disabled), 'info', 'debug', 'DEBUG', etc. Case insensitive.": "",
             "# health_script: Path to script called with health status": "",
             "# Script receives param1=good/bad and param2='$additional_info'": "",
             "# Called on render success/failure and re-called at health_recheck_interval": "",
@@ -171,7 +174,7 @@ class ConfigManager:
 
     def get_log_level(self):
         """Get logging level from config."""
-        log_level_str = self.config.get("APP", "log_level", fallback="INFO").upper()
+        log_level_str = self.config.get("MONITORING", "log_level", fallback="INFO").upper()
 
         # Map string to logging constants
         level_map = {
@@ -183,9 +186,36 @@ class ConfigManager:
 
         return level_map.get(log_level_str, logging.INFO)
 
+    def get_performance_logging(self):
+        """Get performance logging setting from config.
+        
+        Returns:
+            str: Performance logging level or empty string if disabled
+        """
+        perf_logging = self.config.get("MONITORING", "performance_logging", fallback="").strip().lower()
+        
+        # Map various string values to standardized levels
+        level_mapping = {
+            "": "",  # Empty/disabled
+            "none": "",
+            "false": "",
+            "off": "",
+            "0": "",
+            "info": "info",
+            "information": "info", 
+            "debug": "debug",
+            "dbg": "debug",
+            "verbose": "debug",
+            "true": "info",  # Default to info for backward compatibility
+            "1": "info",
+            "on": "info",
+        }
+        
+        return level_mapping.get(perf_logging, perf_logging)  # Return as-is if not in mapping
+
     def get_loop_time(self):
         """Get event loop sleep time in seconds."""
-        time_str = self.config.get("APP", "loop_time", fallback="10 minutes")
+        time_str = self.config.get("MONITORING", "loop_time", fallback="10 minutes")
         try:
             return parse_time_to_seconds(time_str)
         except ValueError as e:
@@ -241,19 +271,19 @@ class ConfigManager:
 
     def get_health_script(self):
         """Get health script configuration."""
-        if "HEALTH" not in self.config:
+        if "MONITORING" not in self.config:
             return None
 
-        script_path = self.config.get("HEALTH", "health_script", fallback="").strip()
+        script_path = self.config.get("MONITORING", "health_script", fallback="").strip()
         return script_path if script_path else None
 
     def get_health_recheck_interval(self):
         """Get health recheck interval in seconds."""
-        if "HEALTH" not in self.config:
+        if "MONITORING" not in self.config:
             return 1800  # Default 30 minutes
 
         time_str = self.config.get(
-            "HEALTH", "health_recheck_interval", fallback="30 minutes"
+            "MONITORING", "health_recheck_interval", fallback="30 minutes"
         )
         try:
             return parse_time_to_seconds(time_str)

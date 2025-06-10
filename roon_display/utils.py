@@ -1,7 +1,9 @@
 """Utility functions for file and path operations."""
 
+import functools
 import logging
 import os
+import time
 from pathlib import Path
 from typing import Optional
 
@@ -84,3 +86,40 @@ def ensure_anniversary_dir_exists(anniversary_name: str) -> Path:
         anniversary_dir.mkdir(parents=True, exist_ok=True)
         logger.info(f"Created anniversary directory: {anniversary_dir}")
     return anniversary_dir
+
+
+# Global flag for performance logging - set by main.py from config
+_performance_logging_enabled = False
+
+
+def set_performance_logging(level: str) -> None:
+    """Set global performance logging level."""
+    global _performance_logging_enabled
+    _performance_logging_enabled = bool(level)  # Any non-empty string enables it
+
+
+def log_performance(threshold: float = 0.5, description: str = None):
+    """Decorator to log function execution time if performance logging is enabled.
+    
+    Args:
+        threshold: Minimum time in seconds to log (default: 0.5s)
+        description: Optional custom description for the operation
+    """
+    def decorator(func):
+        @functools.wraps(func)
+        def wrapper(*args, **kwargs):
+            if not _performance_logging_enabled:
+                return func(*args, **kwargs)
+            
+            start_time = time.time()
+            try:
+                result = func(*args, **kwargs)
+                return result
+            finally:
+                elapsed_time = time.time() - start_time
+                if elapsed_time >= threshold:
+                    operation_desc = description or f"{func.__module__}.{func.__name__}"
+                    logger.info(f"⏱️  PERF: {operation_desc} took {elapsed_time:.2f}s")
+        
+        return wrapper
+    return decorator

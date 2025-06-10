@@ -9,7 +9,8 @@ import requests
 from PIL import Image
 from roonapi import RoonApi, RoonDiscovery
 
-from ..utils import get_saved_image_dir, set_current_image_key
+from ..utils import get_saved_image_dir, set_current_image_key, log_performance
+from ..message_renderer import MessageRenderer
 
 logger = logging.getLogger(__name__)
 
@@ -75,7 +76,12 @@ class RoonClient:
 
         try:
             token = self._get_token()
+            logger.debug(f"About to create RoonApi with token={token}")
             api = RoonApi(self.app_info, token, server_ip, server_port)
+            logger.debug(f"RoonApi created successfully, api.token={getattr(api, 'token', 'NO_TOKEN_ATTR')}")
+
+            # Handle authorization if needed
+            self._handle_authorization(api)
 
             # Add validation to confirm the connection is actually working
             if api and api.host:
@@ -160,15 +166,8 @@ class RoonClient:
         try:
             api = RoonApi(self.app_info, token, server_ip, server_port, False)
 
-            # Handle authorization
-            if token is None and api:
-                logger.info("Waiting for authorization in Roon app...")
-                while api.token is None:
-                    logger.info("Please approve this extension in Roon...")
-                    time.sleep(2)
-                logger.info("Authorization successful")
-            elif api is not None:
-                logger.info("Successfully connected using existing token")
+            # Handle authorization if needed
+            self._handle_authorization(api)
 
             return self._finalize_connection(api, server_ip, server_port)
 
@@ -378,6 +377,7 @@ class RoonClient:
 
         return "Unknown Track"
 
+    @log_performance(threshold=0.5, description="Fetch and display album art")
     def _fetch_and_display_album_art(self, image_key, track_info):
         """Fetch album art and update display."""
         try:
@@ -398,6 +398,7 @@ class RoonClient:
         except Exception as e:
             logger.error(f"Error fetching/displaying album art: {e}")
 
+    @log_performance(threshold=0.5, description="Album art download")
     def _download_album_art(self, image_key, image_path):
         """Download album art from Roon server."""
         try:
@@ -493,6 +494,48 @@ class RoonClient:
             logger.error(f"Error in event loop: {e}")
         finally:
             self.cleanup()
+
+    def _handle_authorization(self, api):
+        """Handle authorization if needed."""
+        logger.debug(f"_handle_authorization: api exists={api is not None}")
+        if api:
+            logger.debug(f"_handle_authorization: api.token={api.token}")
+            
+        if api and api.token is None:
+            logger.info("Waiting for authorization in Roon app...")
+            
+            # Display authorization message on screen
+            self._display_authorization_message()
+            
+            # Wait for authorization indefinitely - just sleep, no repeated logging
+            while api.token is None:
+                time.sleep(2)
+                
+            logger.info("Authorization successful")
+        elif api is not None:
+            logger.info("Successfully connected using existing token")
+
+    def _display_authorization_message(self):
+        """Display authorization waiting message on screen."""
+        try:
+            logger.info("Displaying authorization message on screen")
+            message = ("Please approve this extension in the Roon app.\n\n"
+                      "Look for 'Album Art Display' in:\n"
+                      "Roon → Settings → Extensions\n\n"
+                      "Waiting for authorization...")
+            
+            renderer = MessageRenderer(
+                self.image_processor.screen_width, 
+                self.image_processor.screen_height
+            )
+            img = renderer.create_text_message(message)
+            
+            # Display the authorization message
+            self.viewer.update("auth_waiting", None, img, "Authorization Required")
+            logger.info("Authorization message sent to viewer")
+            
+        except Exception as e:
+            logger.warning(f"Could not display authorization message: {e}")
 
     def stop(self):
         """Stop the client."""

@@ -42,7 +42,7 @@ import time
 
 from timing_config import timing_config
 
-from ..utils import set_current_image_key
+from ..utils import set_current_image_key, log_performance
 from .base import BaseViewer
 
 logger = logging.getLogger(__name__)
@@ -155,6 +155,7 @@ class EinkViewer(BaseViewer):
                 )
                 self.health_manager.report_render_failure(additional_info)
 
+    @log_performance(threshold=0.5, description="E-ink display update")
     def update(self, image_key, image_path, img, title):
         """Update the display with new image (thread-safe)."""
         update_start = time.time()
