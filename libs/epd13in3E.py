@@ -316,6 +316,9 @@ class EPD():
             image_temp = image.rotate(90, expand=True)
         else:
             logger.error("Invalid image dimensions: %d x %d, expected %d x %d" % (imwidth, imheight, self.width, self.height))
+            # Resize image to fit display if dimensions don't match TODO Should send correct in the first place
+            image_temp = image.resize((self.width, self.height), Image.Resampling.LANCZOS)
+
 
         # Convert the soruce image to the 7 colors, dithering if needed
         image_7color = image_temp.convert("RGB").quantize(palette=pal_image)
