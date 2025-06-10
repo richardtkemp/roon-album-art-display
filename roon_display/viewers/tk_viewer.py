@@ -92,17 +92,10 @@ class TkViewer(BaseViewer):
 
     def display_image(self, image_key, image_path, img, title):
         """Display image (must be called from main thread)."""
-        # Load and process image if not provided
+        # Load and process image using common logic
+        img = self._load_and_process_image(img, image_path, title)
         if img is None:
-            if image_path is None:
-                logger.warning(f"No image or path provided for display: {title}")
-                return
-            img = self.image_processor.fetch_image(image_path)
-            if img is None:
-                logger.warning(f"Could not load image for display: {image_path}")
-                return
-            img = self.image_processor.process_image_position(img)
-        # If img is provided, use it directly (already processed for anniversaries)
+            return
 
         try:
             # Convert to PhotoImage for Tkinter
@@ -114,11 +107,11 @@ class TkViewer(BaseViewer):
             self.label.configure(image=self.photo)
             self.label.image = self.photo  # Keep reference for GC
 
-            # Update current image key
-            set_current_image_key(image_key)
+            # Finalize successful render (update tracking and notify coordinator)
+            self._finalize_successful_render(image_key)
 
         except Exception as e:
-            logger.error(f"Error displaying image in Tkinter: {e}")
+            self._log_render_error(e, title)
 
     def update(self, image_key, image_path, img, title):
         """Thread-safe method to request image update."""

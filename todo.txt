@@ -1,9 +1,5 @@
 
-don't queue if multiple track changes come in together (or make a queue, but with max depth=1)
-
-Rationalise rendering - choose which of art/anniversary to display, and just do that one rather than letting them compete.
-
-Show on screen if wifi connection down
+Completely disable logging to disk to protect it (or move logs to a ramdisk)
 
 Automated restarts?
 

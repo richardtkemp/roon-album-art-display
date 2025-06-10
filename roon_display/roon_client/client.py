@@ -19,13 +19,17 @@ class RoonClient:
     """Handles communication with Roon server."""
 
     def __init__(
-        self, config_manager, viewer, image_processor, anniversary_manager=None
+        self,
+        config_manager,
+        viewer,
+        image_processor,
+        render_coordinator=None,
     ):
         """Initialize Roon client."""
         self.config_manager = config_manager
         self.viewer = viewer
         self.image_processor = image_processor
-        self.anniversary_manager = anniversary_manager
+        self.render_coordinator = render_coordinator
 
         # Get configuration
         self.app_info = config_manager.get_app_info()
@@ -42,10 +46,28 @@ class RoonClient:
         self.running = False
         self.connection_monitor_thread = None
         self.last_connection_check = time.time()
+        self.last_reconnect_attempt = 0
+        self.reconnect_interval = 60  # 1 minute between reconnect attempts
+        
+        # Connection state tracking (combines auth + connection)
+        self.last_callback_time = 0
+        self._is_connected = False
 
         logger.info(f"Allowed zones: {self.allowed_zones}")
         logger.info(f"Forbidden zones: {self.forbidden_zones}")
         logger.info(f"Event loop time: {self.loop_time} seconds")
+
+    @property
+    def is_connected(self):
+        """Get connection status (combines auth + connection state)."""
+        return self._is_connected
+    
+    @is_connected.setter
+    def is_connected(self, value):
+        """Set connection status with state change logging."""
+        if self._is_connected != value:
+            logger.warning(f"🔗 CONNECTION STATE CHANGE: {self._is_connected} → {value}")
+            self._is_connected = value
 
     def connect(self):
         """Connect to Roon server."""
@@ -74,6 +96,7 @@ class RoonClient:
             self.roon = self._create_roon_connection(server_ip, server_port)
 
         if not self.roon:
+            self.is_connected = False
             self._report_health_failure("Failed to connect to Roon server")
             raise ConnectionError("Could not connect to Roon server")
 
@@ -137,6 +160,7 @@ class RoonClient:
                     logger.warning(
                         "Connected but couldn't fetch zones - token may be invalid"
                     )
+                    self.is_connected = False
                     self._report_health_failure(
                         "Invalid or expired authentication token"
                     )
@@ -144,6 +168,7 @@ class RoonClient:
             except Exception as zone_error:
                 logger.warning(f"Error validating connection: {zone_error}")
                 api.stop()
+                self.is_connected = False
                 self._report_health_failure(
                     f"Connection validation failed: {zone_error}"
                 )
@@ -151,6 +176,7 @@ class RoonClient:
 
         except Exception as e:
             logger.error(f"Error creating RoonApi: {e}")
+            self.is_connected = False
             self._report_health_failure(f"Roon connection failed: {e}")
             return None
         finally:
@@ -181,6 +207,7 @@ class RoonClient:
                 # Check for timeout
                 if elapsed > timeout_seconds:
                     logger.error("Authorization timeout after 5 minutes")
+                    self.is_connected = False
                     if not health_failure_sent:
                         self._report_health_failure(
                             "Authorization timeout - user did not approve extension"
@@ -190,14 +217,15 @@ class RoonClient:
 
                 # Check if we need authorization by trying to access zones
                 try:
-                    # If we can access zones, authorization is working
+                    # If we can access zones, connection is working
                     if hasattr(self, "roon") and self.roon:
                         zones = self.roon.zones
                         if zones is not None:
-                            # Authorization is working, stop monitoring
-                            logger.info("Authorization successful - zones accessible")
+                            # Connection is working, stop monitoring
+                            logger.info("Connection successful - zones accessible")
+                            self.is_connected = True
                             self._report_health_success(
-                                "Roon authorization successful - extension approved"
+                                "Roon connection successful - extension approved"
                             )
                             break
                 except Exception as e:
@@ -205,7 +233,6 @@ class RoonClient:
 
                 # Still waiting for authorization - show message and send health failure
                 if not auth_displayed.is_set():
-                    logger.info("Displaying authorization message")
                     self._display_authorization_message()
                     auth_displayed.set()
 
@@ -215,9 +242,6 @@ class RoonClient:
                             "Waiting for Roon authorization - extension needs approval"
                         )
                         health_failure_sent = True
-                        logger.info(
-                            "Sent health check failure for authorization needed"
-                        )
 
                 time.sleep(2)
 
@@ -274,17 +298,21 @@ class RoonClient:
     def _zone_event_callback(self, event_type, data):
         """Handle zone change events."""
         try:
-            logger.debug(f"Processing {event_type} event with data: {data}")
+            # Update connection tracking - receiving callbacks means fully connected
+            self.last_callback_time = time.time()
+            if not self.is_connected:
+                logger.info("Received zone callback - connection restored")
+                self.is_connected = True
+                
+                # Clear any overlay errors when connection is restored
+                if self.render_coordinator:
+                    self.render_coordinator.clear_overlay()
 
             if isinstance(data, list):
                 for zone_item in data:
                     if isinstance(zone_item, str):
-                        logger.debug(f"Processing zone item: {zone_item}")
                         zone_data = self.roon.zones.get(zone_item)
                         if zone_data:
-                            logger.debug(
-                                f"Found zone data for {zone_item}, calling _process_zone_data"
-                            )
                             self._process_zone_data(zone_item, zone_data)
                         else:
                             logger.warning(f"No zone data for ID: {zone_item}")
@@ -297,21 +325,13 @@ class RoonClient:
     def _process_zone_data(self, zone_id, zone_data):
         """Process zone data and update display if needed."""
         try:
-            logger.debug(f"_process_zone_data called with zone_id: {zone_id}")
-            logger.debug(
-                f"Zone data keys: {list(zone_data.keys()) if isinstance(zone_data, dict) else 'not dict'}"
-            )
-
             name = zone_data.get("display_name", "")
-            logger.debug(f"Zone name: '{name}'")
 
             # Check zone filters
             if self.forbidden_zones and name in self.forbidden_zones:
-                logger.debug(f"Zone {name} is forbidden")
                 return False
 
             if self.allowed_zones and name not in self.allowed_zones:
-                logger.debug(f"Zone {name} not in allowed list")
                 return False
 
             # Find now_playing data
@@ -356,18 +376,10 @@ class RoonClient:
     def _process_now_playing(self, now_playing):
         """Process now_playing data for image updates."""
         try:
-            logger.debug("_process_now_playing called")
-            logger.debug(
-                f"Current now_playing keys: {list(now_playing.keys()) if isinstance(now_playing, dict) else 'not dict'}"
-            )
-
             # Skip duplicate events
             if now_playing == self.last_event:
-                logger.debug("Ignoring duplicate event - same as last_event")
-                logger.debug(f"Last event was: {self.last_event}")
                 return False
 
-            logger.debug("This is a new event, processing...")
             self.last_event = now_playing
 
             # Extract image key
@@ -380,7 +392,6 @@ class RoonClient:
 
             # Skip if same image
             if image_key == self.last_image_key:
-                logger.debug("Same image already displayed")
                 return False
 
             logger.info(f"New track with image key: {image_key}")
@@ -389,10 +400,6 @@ class RoonClient:
             # Extract track info
             track_info = self._extract_track_info(now_playing)
             logger.info(f"Now Playing: {track_info}")
-
-            # Update anniversary manager with track change
-            if self.anniversary_manager:
-                self.anniversary_manager.update_last_track_time()
 
             # Fetch and display album art
             self._fetch_and_display_album_art(image_key, track_info)
@@ -442,9 +449,18 @@ class RoonClient:
                     logger.error("Failed to download album art")
                     return
 
-            # Update viewer
-            logger.debug("Updating viewer with new image")
-            self.viewer.update(image_key, image_path, img, track_info)
+            # Push art to render coordinator (or fallback to direct viewer update)
+            if self.render_coordinator:
+                self.render_coordinator.set_main_content(
+                    content_type="art",
+                    image_key=image_key,
+                    image_path=image_path,
+                    img=img,
+                    track_info=track_info
+                )
+            else:
+                logger.debug("No coordinator - updating viewer directly")
+                self.viewer.update(image_key, image_path, img, track_info)
 
         except Exception as e:
             logger.error(f"Error fetching/displaying album art: {e}")
@@ -486,23 +502,6 @@ class RoonClient:
             logger.error(f"Error downloading album art: {e}")
             return None
 
-    def _display_anniversary(self, anniversary):
-        """Display anniversary message and image."""
-        try:
-            logger.info(f"Displaying anniversary: {anniversary['name']}")
-
-            # Create anniversary display using shared logic
-            img = self.anniversary_manager.create_anniversary_display(
-                anniversary, self.image_processor
-            )
-
-            # Update viewer with anniversary image
-            self.viewer.update(
-                "anniversary", None, img, f"Anniversary: {anniversary['message']}"
-            )
-
-        except Exception as e:
-            logger.error(f"Error displaying anniversary: {e}")
 
     def run(self):
         """Start the Roon client event loop."""
@@ -527,17 +526,6 @@ class RoonClient:
             logger.info("Roon client event loop started")
 
             while self.running:
-                # Check for anniversaries (only if date changed)
-                if self.anniversary_manager:
-                    anniversary = (
-                        self.anniversary_manager.check_anniversary_if_date_changed()
-                    )
-                    if anniversary:
-                        logger.info(
-                            f"Anniversary triggered: {anniversary['name']} - {anniversary['message']}"
-                        )
-                        self._display_anniversary(anniversary)
-
                 # Check if health script should be re-called (configurable interval)
                 if (
                     self.viewer.health_manager
@@ -589,7 +577,6 @@ class RoonClient:
             and self.viewer.health_manager
         ):
             self.viewer.health_manager.report_render_success(message)
-            logger.info(f"Sent health check success: {message}")
 
     def _report_health_failure(self, message: str):
         """Report failure to health manager."""
@@ -599,12 +586,10 @@ class RoonClient:
             and self.viewer.health_manager
         ):
             self.viewer.health_manager.report_render_failure(message)
-            logger.info(f"Sent health check failure: {message}")
 
     def _display_authorization_message(self):
         """Display authorization waiting message on screen."""
         try:
-            logger.info("Displaying authorization message on screen")
             message = (
                 "Please approve this extension in the Roon app.\n\n"
                 "Look for 'Album Art Display' in:\n"
@@ -618,9 +603,13 @@ class RoonClient:
             )
             img = renderer.create_text_message(message)
 
-            # Display the authorization message
-            self.viewer.update("auth_waiting", None, img, "Authorization Required")
-            logger.info("Authorization message sent to viewer")
+            # Push authorization error to coordinator (or fallback to direct viewer update)
+            if self.render_coordinator:
+                self.render_coordinator.set_overlay(
+                    "Waiting for Roon authorization - extension needs approval"
+                )
+            else:
+                self.viewer.update("auth_waiting", None, img, "Authorization Required")
 
         except Exception as e:
             logger.warning(f"Could not display authorization message: {e}")
@@ -651,20 +640,12 @@ class RoonClient:
                                 logger.warning("WebSocket connection lost")
                                 self._handle_connection_failure("roon_host_down")
 
-                        # Try to test the connection by accessing zones
+                        # Periodic connection health check
                         try:
                             if (
                                 time.time() - self.last_connection_check > 30
                             ):  # Check every 30 seconds
-                                zones = self.roon.zones
-                                if zones is None:
-                                    logger.warning(
-                                        "Cannot access zones - possible auth revocation"
-                                    )
-                                    self._handle_connection_failure("auth_revoked")
-                                else:
-                                    # Connection seems healthy
-                                    self.last_connection_check = time.time()
+                                self.last_connection_check = time.time()
                         except Exception as e:
                             logger.warning(f"Connection test failed: {e}")
                             # Distinguish between network errors and auth errors
@@ -675,6 +656,25 @@ class RoonClient:
                                 self._handle_connection_failure("auth_revoked")
                             else:
                                 self._handle_connection_failure("roon_host_down")
+                
+                # If disconnected, attempt reconnection every minute
+                elif not self.is_connected:
+                    current_time = time.time()
+                    if current_time - self.last_reconnect_attempt >= self.reconnect_interval:
+                        logger.info("Attempting to reconnect to Roon server...")
+                        self.last_reconnect_attempt = current_time
+                        try:
+                            self.connect()
+                            # Connection was established, but we need to wait for callbacks to confirm full connectivity
+                            if hasattr(self, "roon") and self.roon:
+                                logger.info("Reconnection attempt completed - waiting for zone callbacks to confirm connectivity")
+                                # Don't immediately set is_connected = True - wait for callbacks
+                                # The callback handler will set it when we receive zone updates
+                            else:
+                                logger.warning("Reconnection failed - no valid API connection")
+                        except Exception as e:
+                            logger.warning(f"Reconnection failed: {e}")
+                            # Continue showing error and try again next interval
 
                 time.sleep(10)  # Check every 10 seconds
 
@@ -685,6 +685,11 @@ class RoonClient:
     def _handle_connection_failure(self, failure_type: str):
         """Handle different types of connection failures."""
         logger.error(f"Connection failure detected: {failure_type}")
+        
+        # Set disconnected state for reconnection attempts
+        if self.is_connected:
+            self.is_connected = False
+            self.last_reconnect_attempt = time.time()
 
         if failure_type == "auth_revoked":
             # Show re-authorization message
@@ -696,18 +701,23 @@ class RoonClient:
                 "Waiting for re-authorization..."
             )
 
-            try:
-                renderer = MessageRenderer(
-                    self.image_processor.screen_width,
-                    self.image_processor.screen_height,
-                )
-                img = renderer.create_text_message(message)
-                self.viewer.update(
-                    "auth_revoked", None, img, "Re-Authorization Required"
-                )
-                logger.info("Displayed re-authorization message")
-            except Exception as e:
-                logger.error(f"Could not display re-auth message: {e}")
+            # Push authorization revoked error to coordinator
+            if self.render_coordinator:
+                self.render_coordinator.set_overlay(message, timeout=300)  # 5 minute timeout
+            else:
+                # Fallback to direct viewer update
+                try:
+                    renderer = MessageRenderer(
+                        self.image_processor.screen_width,
+                        self.image_processor.screen_height,
+                    )
+                    img = renderer.create_text_message(message)
+                    self.viewer.update(
+                        "auth_revoked", None, img, "Re-Authorization Required"
+                    )
+                    logger.info("Displayed re-authorization message")
+                except Exception as e:
+                    logger.error(f"Could not display re-auth message: {e}")
 
             # Report to health manager
             self._report_health_failure(
@@ -726,18 +736,23 @@ class RoonClient:
                 "Attempting to reconnect..."
             )
 
-            try:
-                renderer = MessageRenderer(
-                    self.image_processor.screen_width,
-                    self.image_processor.screen_height,
-                )
-                img = renderer.create_text_message(message)
-                self.viewer.update(
-                    "roon_host_down", None, img, "Roon Server Unavailable"
-                )
-                logger.info("Displayed Roon server unavailable message")
-            except Exception as e:
-                logger.error(f"Could not display server unavailable message: {e}")
+            # Push host down error to coordinator
+            if self.render_coordinator:
+                self.render_coordinator.set_overlay(message, timeout=120)  # 2 minute timeout
+            else:
+                # Fallback to direct viewer update
+                try:
+                    renderer = MessageRenderer(
+                        self.image_processor.screen_width,
+                        self.image_processor.screen_height,
+                    )
+                    img = renderer.create_text_message(message)
+                    self.viewer.update(
+                        "roon_host_down", None, img, "Roon Server Unavailable"
+                    )
+                    logger.info("Displayed Roon server unavailable message")
+                except Exception as e:
+                    logger.error(f"Could not display server unavailable message: {e}")
 
             # Report to health manager
             self._report_health_failure(
