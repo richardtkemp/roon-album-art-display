@@ -21,6 +21,12 @@ class RenderCoordinator:
         self.image_processor = image_processor
         self.message_renderer = message_renderer
         self.anniversary_manager = anniversary_manager
+        
+        # Get configuration for overlay sizing
+        from .config.config_manager import ConfigManager
+        config_manager = ConfigManager()
+        self.overlay_config = config_manager.get_overlay_config()
+        self.anniversary_config = config_manager.get_anniversaries_config()
 
         # Content slots
         self.main_content = None  # Art or anniversary content (fullscreen)
@@ -75,6 +81,10 @@ class RenderCoordinator:
             "timestamp": time.time(),
             **kwargs
         }
+
+        # Update anniversary timing for new art (not for startup/cached art)
+        if content_type == "art" and self.anniversary_manager:
+            self.anniversary_manager.update_last_track_time()
 
         # Trigger render
         self._render_display()
@@ -148,9 +158,12 @@ class RenderCoordinator:
 
         # If we have overlay content, composite it
         if self.overlay_content:
-            # Create error overlay
+            # Create error overlay with configurable size
             overlay_img = self.message_renderer.create_error_overlay(
-                self.overlay_content["message"], main_img.size
+                self.overlay_content["message"], 
+                main_img.size, 
+                size_x_percent=self.overlay_config["size_x"],
+                size_y_percent=self.overlay_config["size_y"]
             )
 
             # Composite overlay onto main image
@@ -194,22 +207,22 @@ class RenderCoordinator:
         if self.main_content.get("img"):
             return self.main_content["img"]
             
-        # If image path is provided, load it
+        # For anniversary content, create the image (check BEFORE generic image_path)
+        if content_type == "anniversary" and self.anniversary_manager:
+            try:
+                return self.anniversary_manager.create_anniversary_display(
+                    self.main_content, self.image_processor, self.anniversary_config["border"]
+                )
+            except Exception as e:
+                logger.error(f"Failed to create anniversary image: {e}")
+                return None
+                
+        # If image path is provided, load it (for non-anniversary content)
         if self.main_content.get("image_path"):
             try:
                 return Image.open(self.main_content["image_path"])
             except Exception as e:
                 logger.error(f"Failed to load image from {self.main_content['image_path']}: {e}")
-                return None
-                
-        # For anniversary content, create the image
-        if content_type == "anniversary" and self.anniversary_manager:
-            try:
-                return self.anniversary_manager.create_anniversary_display(
-                    self.main_content, self.image_processor
-                )
-            except Exception as e:
-                logger.error(f"Failed to create anniversary image: {e}")
                 return None
         
         return None

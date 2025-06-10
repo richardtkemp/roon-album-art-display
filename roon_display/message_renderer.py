@@ -143,27 +143,29 @@ class MessageRenderer:
         return canvas
 
     def create_error_overlay(
-        self, error_message: str, background_size: tuple
+        self, error_message: str, background_size: tuple, size_x_percent: int = 33, size_y_percent: int = 25
     ) -> Image.Image:
         """Create a small error overlay for bottom-right corner.
 
         Args:
             error_message: Error text to display
             background_size: Size of the background image (width, height)
+            size_x_percent: Width as percentage of background (5-50%)
+            size_y_percent: Height as percentage of background (5-50%)
 
         Returns:
             PIL Image for the error overlay
         """
-        # Calculate overlay size (max 1/3 of background width/height)
-        max_width = background_size[0] // 3
-        max_height = background_size[1] // 4
+        # Calculate overlay size based on percentages
+        overlay_width = int(background_size[0] * size_x_percent / 100)
+        overlay_height = int(background_size[1] * size_y_percent / 100)
 
         # Minimum overlay size for readability
-        min_width = 200
-        min_height = 100
+        min_width = 150
+        min_height = 80
 
-        overlay_width = max(min_width, min(max_width, 400))
-        overlay_height = max(min_height, min(max_height, 150))
+        overlay_width = max(min_width, overlay_width)
+        overlay_height = max(min_height, overlay_height)
 
         # Create overlay with semi-transparent white background
         overlay = Image.new(

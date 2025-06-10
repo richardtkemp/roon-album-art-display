@@ -10,7 +10,7 @@ from PIL import Image
 from roonapi import RoonApi, RoonDiscovery
 
 from ..message_renderer import MessageRenderer
-from ..utils import get_saved_image_dir, log_performance, set_current_image_key
+from ..utils import get_current_image_key, get_saved_image_dir, log_performance, set_current_image_key
 
 logger = logging.getLogger(__name__)
 
@@ -42,7 +42,8 @@ class RoonClient:
         # State tracking
         self.current_image_path = None
         self.last_event = None
-        self.last_image_key = None
+        # Initialize with current image key to prevent startup flash
+        self.last_image_key = get_current_image_key()
         self.running = False
         self.connection_monitor_thread = None
         self.last_connection_check = time.time()

@@ -308,17 +308,23 @@ class AnniversaryManager:
             return None
 
     def create_anniversary_display(
-        self, anniversary: Dict, image_processor
+        self, anniversary: Dict, image_processor, border_percent: int = 10
     ) -> Image.Image:
         """Create anniversary display image (text or custom image)."""
         image_path = anniversary.get("image_path")
         message = anniversary["message"]
+        
 
-        # Use the reusable message renderer
+        # Use the reusable message renderer with custom border
         renderer = MessageRenderer(
             image_processor.screen_width, image_processor.screen_height
         )
-        return renderer.create_text_message(message, image_path)
+        
+        # If there's an image, create image with text using configurable border
+        if image_path and Path(image_path).exists():
+            return self._create_image_with_text_custom_border(image_path, message, image_processor, border_percent)
+        else:
+            return renderer.create_text_message(message, image_path)
 
     def _create_text_only_image(self, message: str, image_processor) -> Image.Image:
         """Create a text-only image with centered text."""
@@ -416,6 +422,94 @@ class AnniversaryManager:
         # Draw image and text
         canvas.paste(anniversary_img, (image_x, image_y))
         draw.text((text_x, text_y), message, fill="black", font=font)
+
+        return canvas
+
+    def _create_image_with_text_custom_border(
+        self, image_path: str, message: str, image_processor, border_percent: int
+    ) -> Image.Image:
+        """Create anniversary display with custom border percentage."""
+        # Use effective screen dimensions that respect scale_x/scale_y from config
+        effective_width = image_processor.image_width
+        effective_height = image_processor.image_height
+        full_screen_width = image_processor.screen_width
+        full_screen_height = image_processor.screen_height
+
+        # Create blank canvas for full screen
+        canvas = Image.new("RGB", (full_screen_width, full_screen_height), "white")
+        
+
+        # Define layout parameters using configurable border
+        border_percent_decimal = border_percent / 100.0  # Convert to decimal
+        text_area_percent = 0.15  # Reserve 15% of height for text area at bottom
+
+        # Calculate areas within effective screen space
+        border_size = int(min(effective_width, effective_height) * border_percent_decimal)
+        text_area_height = int(effective_height * text_area_percent)
+
+        image_area_width = effective_width - 2 * border_size
+        image_area_height = effective_height - border_size - text_area_height
+        
+        # Calculate offset to center effective area on full screen
+        offset_x = (full_screen_width - effective_width) // 2 + image_processor.position_offset_x
+        offset_y = (full_screen_height - effective_height) // 2 + image_processor.position_offset_y
+
+        try:
+            # Load and process image
+            anniversary_img = Image.open(image_path)
+            if anniversary_img.mode != "RGB":
+                anniversary_img = anniversary_img.convert("RGB")
+
+            # Calculate scaling to fit image area while maintaining aspect ratio
+            img_width, img_height = anniversary_img.size
+            img_ratio = img_width / img_height
+
+            # Scale to fit the available image area
+            if img_width > img_height:
+                # Image is wider - fit to width
+                scaled_width = image_area_width
+                scaled_height = int(scaled_width / img_ratio)
+                # If height exceeds area, fit to height instead
+                if scaled_height > image_area_height:
+                    scaled_height = image_area_height
+                    scaled_width = int(scaled_height * img_ratio)
+            else:
+                # Image is taller - fit to height
+                scaled_height = image_area_height
+                scaled_width = int(scaled_height * img_ratio)
+                # If width exceeds area, fit to width instead
+                if scaled_width > image_area_width:
+                    scaled_width = image_area_width
+                    scaled_height = int(scaled_width / img_ratio)
+
+            # Resize image
+            anniversary_img = anniversary_img.resize(
+                (scaled_width, scaled_height), Image.Resampling.LANCZOS
+            )
+
+            # Center image in the image area (within effective screen, then offset to full screen)
+            image_x = offset_x + border_size + (image_area_width - scaled_width) // 2
+            image_y = offset_y + border_size + (image_area_height - scaled_height) // 2
+
+            # Position text in the text area at bottom (within effective screen, then offset)
+            font = self._get_font(effective_width)
+            draw = ImageDraw.Draw(canvas)
+            text_width, text_height = self._get_text_size(draw, message, font)
+
+            text_x = offset_x + (effective_width - text_width) // 2
+            text_y = offset_y + (
+                effective_height - text_area_height + (text_area_height - text_height) // 2
+            )
+
+            # Draw image and text
+            canvas.paste(anniversary_img, (image_x, image_y))
+            draw.text((text_x, text_y), message, fill="black", font=font)
+
+        except Exception as e:
+            logger.warning(f"Could not load anniversary image {image_path}: {e}")
+            # Fall back to text-only
+            renderer = MessageRenderer(screen_width, screen_height)
+            return renderer.create_text_message(message)
 
         return canvas
 
