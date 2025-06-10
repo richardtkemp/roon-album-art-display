@@ -33,7 +33,11 @@ class RoonClient:
 
         # Get configuration
         self.app_info = config_manager.get_app_info()
-        self.allowed_zones, self.forbidden_zones = config_manager.get_zone_config()
+        # Parse zone configuration
+        allowed_zones_str = config_manager.get_allowed_zone_names()
+        forbidden_zones_str = config_manager.get_forbidden_zone_names()
+        self.allowed_zones = [zone.strip() for zone in allowed_zones_str.split(",") if zone.strip()]
+        self.forbidden_zones = [zone.strip() for zone in forbidden_zones_str.split(",") if zone.strip()]
         self.loop_time = config_manager.get_loop_time()
 
         # Token storage in current directory
@@ -110,7 +114,9 @@ class RoonClient:
 
     def _get_server_details(self):
         """Get saved server details if available."""
-        return self.config_manager.get_server_config()
+        ip = self.config_manager.get_roon_server_ip()
+        port = self.config_manager.get_roon_server_port()
+        return ip, port
 
     def _discover_server(self):
         """Discover Roon server on network."""
@@ -447,19 +453,14 @@ class RoonClient:
                     logger.error("Failed to download album art")
                     return
 
-            # Push art to render coordinator (or fallback to direct viewer update)
-            if self.render_coordinator:
-                self.render_coordinator.set_main_content(
-                    content_type="art",
-                    image_key=image_key,
-                    image_path=image_path,
-                    img=img,
-                    track_info=track_info
-                )
-            else:
-                logger.debug("No coordinator - updating viewer directly")
-                self.viewer.update(image_key, image_path, img, track_info)
-
+            # Push art to render coordinator
+            self.render_coordinator.set_main_content(
+                content_type="art",
+                image_key=image_key,
+                image_path=image_path,
+                img=img,
+                track_info=track_info
+            )
         except Exception as e:
             logger.error(f"Error fetching/displaying album art: {e}")
 
@@ -489,9 +490,8 @@ class RoonClient:
             img = Image.open(image_path)
 
             # Apply enhancements if configured
-            if self.image_processor.needs_enhancement():
-                img = self.image_processor.apply_enhancements(img)
-                img.save(image_path)  # Save enhanced version
+            img = self.image_processor.apply_enhancements(img)
+            img.save(image_path)  # Save enhanced version
 
             logger.info(f"Successfully saved album art to {image_path}")
             return img
@@ -596,18 +596,13 @@ class RoonClient:
                 "Timeout in 5:00"
             )
 
-            renderer = MessageRenderer(
-                self.image_processor.screen_width, self.image_processor.screen_height
-            )
+            renderer = MessageRenderer(self.config_manager)
             img = renderer.create_text_message(message)
 
-            # Push authorization error to coordinator (or fallback to direct viewer update)
-            if self.render_coordinator:
-                self.render_coordinator.set_overlay(
-                    "Waiting for Roon authorization - extension needs approval"
-                )
-            else:
-                self.viewer.update("auth_waiting", None, img, "Authorization Required")
+            # Push authorization error to coordinator
+            self.render_coordinator.set_overlay(
+                "Waiting for Roon authorization - extension needs approval"
+            )
 
         except Exception as e:
             logger.warning(f"Could not display authorization message: {e}")
@@ -707,10 +702,7 @@ class RoonClient:
             else:
                 # Fallback to direct viewer update
                 try:
-                    renderer = MessageRenderer(
-                        self.image_processor.screen_width,
-                        self.image_processor.screen_height,
-                    )
+                    renderer = MessageRenderer(self.config_manager)
                     img = renderer.create_text_message(message)
                     self.viewer.update(
                         "auth_revoked", None, img, "Re-Authorization Required"
@@ -742,10 +734,7 @@ class RoonClient:
             else:
                 # Fallback to direct viewer update
                 try:
-                    renderer = MessageRenderer(
-                        self.image_processor.screen_width,
-                        self.image_processor.screen_height,
-                    )
+                    renderer = MessageRenderer(self.config_manager)
                     img = renderer.create_text_message(message)
                     self.viewer.update(
                         "roon_host_down", None, img, "Roon Server Unavailable"

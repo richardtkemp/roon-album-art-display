@@ -1,3 +1,5 @@
+DONT TELL ME I'M RIGHT WHEN I'm JUST MAKING A VALUE JUDGEMENT
+
 # Claude Development Notes
 
 ## Project Overview

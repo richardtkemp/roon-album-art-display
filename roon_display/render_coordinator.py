@@ -228,7 +228,7 @@ class RenderCoordinator:
         # For anniversary content, create the image (check BEFORE generic image_path)
         if content_type == "anniversary" and self.anniversary_manager:
             try:
-                border = self.config_manager.get_anniversaries_config()["border"]
+                border = self.config_manager.get_anniversary_border_percent()
                 return self.anniversary_manager.create_anniversary_display(
                     self.main_content, self.image_processor, border
                 )
@@ -496,7 +496,7 @@ class RenderCoordinator:
                     }
                     
                     try:
-                        border = self.config_manager.get_anniversaries_config()["border"]
+                        border = self.config_manager.get_anniversary_border_percent()
                         return self.anniversary_manager.create_anniversary_display(
                             {'anniversary': preview_anniversary}, 
                             self.image_processor, 

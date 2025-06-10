@@ -4,6 +4,7 @@ roonapi
 configparser
 numpy
 flask
+psutil
 
 # Testing
 pytest

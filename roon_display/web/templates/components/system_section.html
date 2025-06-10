@@ -1,0 +1,7 @@
+<!-- System information display (read-only) -->
+{% for key, field_data in section_data.items() %}
+    <div class="form-group">
+        <label>{{ field_data.label }}:</label>
+        <div class="system-info-value">{{ field_data.value }}</div>
+    </div>
+{% endfor %}

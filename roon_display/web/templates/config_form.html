@@ -52,6 +52,8 @@
 
                     {% if section_name == 'ANNIVERSARIES' %}
                         {% include 'components/anniversaries_section.html' %}
+                    {% elif section_name in ['ROON_SERVER', 'HOST_SYSTEM'] %}
+                        {% include 'components/system_section.html' %}
                     {% else %}
                         {% include 'components/regular_section.html' %}
                     {% endif %}
