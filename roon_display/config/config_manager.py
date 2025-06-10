@@ -10,6 +10,15 @@ from ..utils import get_extra_images_dir
 
 logger = logging.getLogger(__name__)
 
+# Hardcoded app information (moved from config file)
+APP_INFO = {
+    "extension_id": "python_roon_album_display",
+    "display_name": "Album Art Display",
+    "display_version": "1.0.0",
+    "publisher": "Richard Kemp",
+    "email": "richardtkemp@gmail.com",
+}
+
 
 class ConfigManager:
     """Manages configuration loading and default config creation."""
@@ -39,12 +48,47 @@ class ConfigManager:
         """Create a default configuration file."""
         config = configparser.ConfigParser()
 
-        config["APP"] = {
-            "extension_id": "python_roon_album_display",
-            "display_name": "Album Art Display",
-            "display_version": "1.0.0",
-            "publisher": "Richard Kemp",
-            "email": "richardtkemp@gmail.com",
+        config["NETWORK"] = {
+            "internal_server_port": "9090",
+            "web_config_port": "8080",
+            "simulation_server_port": "9999",
+            "internal_server_host": "127.0.0.1",
+            "web_config_host": "0.0.0.0",
+        }
+
+        config["TIMEOUTS"] = {
+            "roon_authorization_timeout": "300",
+            "health_script_timeout": "30",
+            "reconnection_interval": "60",
+            "web_request_timeout": "5",
+        }
+
+        config["IMAGE_QUALITY"] = {
+            "jpeg_quality": "85",
+            "web_image_max_width": "600",
+            "thumbnail_size": "100",
+        }
+
+        config["DISPLAY_TIMING"] = {
+            "web_auto_refresh_seconds": "10",
+            "anniversary_check_interval": "60",
+            "performance_threshold_seconds": "0.5",
+            "eink_success_threshold": "12.0",
+            "eink_warning_threshold": "30",
+            "eink_check_interval": "5",
+            "preview_auto_revert_seconds": "30",
+            "preview_debounce_ms": "500",
+        }
+
+        config["LAYOUT"] = {
+            "overlay_size_x_percent": "33",
+            "overlay_size_y_percent": "25",
+            "overlay_border_size": "20",
+            "overlay_margin": "20",
+            "anniversary_border_percent": "5",
+            "anniversary_text_percent": "15",
+            "font_size_ratio_base": "20",
+            "line_spacing_ratio": "8",
         }
 
         config["DISPLAY"] = {
@@ -110,14 +154,8 @@ class ConfigManager:
         sys.exit(0)
 
     def get_app_info(self):
-        """Get app information for Roon API."""
-        return {
-            "extension_id": self.config.get("APP", "extension_id"),
-            "display_name": self.config.get("APP", "display_name"),
-            "display_version": self.config.get("APP", "display_version"),
-            "publisher": self.config.get("APP", "publisher"),
-            "email": self.config.get("APP", "email"),
-        }
+        """Get app information for Roon API (hardcoded values)."""
+        return APP_INFO.copy()
 
     def get_zone_config(self):
         """Get zone configuration."""
@@ -229,17 +267,16 @@ class ConfigManager:
     def get_anniversaries_config(self):
         """Get anniversary configuration."""
         if "ANNIVERSARIES" not in self.config:
-            return {"enabled": False, "anniversaries": [], "border": 10}
+            return {"enabled": False, "anniversaries": []}
 
         enabled = self.config.getboolean("ANNIVERSARIES", "enabled", fallback=False)
-        border = self.config.getint("ANNIVERSARIES", "border", fallback=10)
         
         if not enabled:
-            return {"enabled": False, "anniversaries": [], "border": border}
+            return {"enabled": False, "anniversaries": []}
 
         anniversaries = []
         for key, value in self.config["ANNIVERSARIES"].items():
-            if key.startswith("#") or key in ["enabled", "border"]:
+            if key.startswith("#") or key in ["enabled"]:
                 continue
 
             try:
@@ -271,21 +308,14 @@ class ConfigManager:
                 logger.warning(f"Error parsing anniversary config for {key}: {e}")
                 continue
 
-        return {"enabled": True, "anniversaries": anniversaries, "border": border}
+        return {"enabled": True, "anniversaries": anniversaries}
 
     def get_overlay_config(self):
         """Get overlay size configuration."""
-        if "OVERLAY" not in self.config:
-            return {"size_x": 33, "size_y": 25}
-
-        size_x = self.config.getint("OVERLAY", "size_x", fallback=33)
-        size_y = self.config.getint("OVERLAY", "size_y", fallback=25)
-        
-        # Clamp values to reasonable ranges (5-50%)
-        size_x = max(5, min(50, size_x))
-        size_y = max(5, min(50, size_y))
-        
-        return {"size_x": size_x, "size_y": size_y}
+        return {
+            "size_x": self.get_overlay_size_x_percent(),
+            "size_y": self.get_overlay_size_y_percent()
+        }
 
     def get_health_script(self):
         """Get health script configuration."""
@@ -312,3 +342,238 @@ class ConfigManager:
                 f"Invalid health_recheck_interval format '{time_str}': {e}. Using default 1800 seconds."
             )
             return 1800
+
+    # Network Configuration Methods
+    def get_internal_server_port(self):
+        """Get internal server port."""
+        return self.config.getint("NETWORK", "internal_server_port", fallback=9090)
+
+    def get_web_config_port(self):
+        """Get web config server port."""
+        return self.config.getint("NETWORK", "web_config_port", fallback=8080)
+
+    def get_simulation_server_port(self):
+        """Get simulation server port."""
+        return self.config.getint("NETWORK", "simulation_server_port", fallback=9999)
+
+    def get_internal_server_host(self):
+        """Get internal server host."""
+        return self.config.get("NETWORK", "internal_server_host", fallback="127.0.0.1")
+
+    def get_web_config_host(self):
+        """Get web config server host."""
+        return self.config.get("NETWORK", "web_config_host", fallback="0.0.0.0")
+
+    # Timeout Configuration Methods
+    def get_roon_authorization_timeout(self):
+        """Get Roon authorization timeout in seconds."""
+        return self.config.getint("TIMEOUTS", "roon_authorization_timeout", fallback=300)
+
+    def get_health_script_timeout(self):
+        """Get health script timeout in seconds."""
+        return self.config.getint("TIMEOUTS", "health_script_timeout", fallback=30)
+
+    def get_reconnection_interval(self):
+        """Get reconnection interval in seconds."""
+        return self.config.getint("TIMEOUTS", "reconnection_interval", fallback=60)
+
+    def get_web_request_timeout(self):
+        """Get web request timeout in seconds."""
+        return self.config.getint("TIMEOUTS", "web_request_timeout", fallback=5)
+
+    # Image Quality Configuration Methods
+    def get_jpeg_quality(self):
+        """Get JPEG quality (0-100)."""
+        quality = self.config.getint("IMAGE_QUALITY", "jpeg_quality", fallback=85)
+        return max(1, min(100, quality))  # Clamp to valid range
+
+    def get_web_image_max_width(self):
+        """Get maximum width for web images in pixels."""
+        return self.config.getint("IMAGE_QUALITY", "web_image_max_width", fallback=600)
+
+    def get_thumbnail_size(self):
+        """Get thumbnail size in pixels (square)."""
+        return self.config.getint("IMAGE_QUALITY", "thumbnail_size", fallback=100)
+
+    # Display Timing Configuration Methods
+    def get_web_auto_refresh_seconds(self):
+        """Get web auto-refresh interval in seconds."""
+        return self.config.getint("DISPLAY_TIMING", "web_auto_refresh_seconds", fallback=10)
+
+    def get_anniversary_check_interval(self):
+        """Get anniversary check interval in seconds."""
+        return self.config.getint("DISPLAY_TIMING", "anniversary_check_interval", fallback=60)
+
+    def get_performance_threshold_seconds(self):
+        """Get performance logging threshold in seconds."""
+        return self.config.getfloat("DISPLAY_TIMING", "performance_threshold_seconds", fallback=0.5)
+
+    def get_eink_success_threshold(self):
+        """Get e-ink success threshold in seconds."""
+        return self.config.getfloat("DISPLAY_TIMING", "eink_success_threshold", fallback=12.0)
+
+    def get_eink_warning_threshold(self):
+        """Get e-ink warning threshold in seconds."""
+        return self.config.getint("DISPLAY_TIMING", "eink_warning_threshold", fallback=30)
+
+    def get_eink_check_interval(self):
+        """Get e-ink check interval in seconds."""
+        return self.config.getint("DISPLAY_TIMING", "eink_check_interval", fallback=5)
+
+    def get_preview_auto_revert_seconds(self):
+        """Get preview auto-revert time in seconds."""
+        return self.config.getint("DISPLAY_TIMING", "preview_auto_revert_seconds", fallback=30)
+
+    def get_preview_debounce_ms(self):
+        """Get preview debounce time in milliseconds."""
+        return self.config.getint("DISPLAY_TIMING", "preview_debounce_ms", fallback=500)
+
+    # Layout Configuration Methods
+    def get_overlay_size_x_percent(self):
+        """Get overlay width percentage."""
+        size = self.config.getint("LAYOUT", "overlay_size_x_percent", fallback=33)
+        return max(5, min(50, size))  # Clamp to reasonable range
+
+    def get_overlay_size_y_percent(self):
+        """Get overlay height percentage."""
+        size = self.config.getint("LAYOUT", "overlay_size_y_percent", fallback=25)
+        return max(5, min(50, size))  # Clamp to reasonable range
+
+    def get_overlay_border_size(self):
+        """Get overlay border size in pixels."""
+        return self.config.getint("LAYOUT", "overlay_border_size", fallback=20)
+
+    def get_overlay_margin(self):
+        """Get overlay margin in pixels."""
+        return self.config.getint("LAYOUT", "overlay_margin", fallback=20)
+
+    def get_anniversary_border_percent(self):
+        """Get anniversary border percentage."""
+        return self.config.getint("LAYOUT", "anniversary_border_percent", fallback=5)
+
+    def get_anniversary_text_percent(self):
+        """Get anniversary text area percentage."""
+        return self.config.getint("LAYOUT", "anniversary_text_percent", fallback=15)
+
+    def get_font_size_ratio_base(self):
+        """Get base font size ratio."""
+        return self.config.getint("LAYOUT", "font_size_ratio_base", fallback=20)
+
+    def get_line_spacing_ratio(self):
+        """Get line spacing ratio."""
+        return self.config.getint("LAYOUT", "line_spacing_ratio", fallback=8)
+
+    # Image Render Configuration Methods
+    def get_colour_balance_adjustment(self):
+        """Get colour balance adjustment."""
+        return self.config.getfloat("IMAGE_RENDER", "colour_balance_adjustment", fallback=1.0)
+
+    def get_contrast_adjustment(self):
+        """Get contrast adjustment."""
+        return self.config.getfloat("IMAGE_RENDER", "contrast_adjustment", fallback=1.0)
+
+    def get_sharpness_adjustment(self):
+        """Get sharpness adjustment."""
+        return self.config.getfloat("IMAGE_RENDER", "sharpness_adjustment", fallback=1.0)
+
+    def get_brightness_adjustment(self):
+        """Get brightness adjustment."""
+        return self.config.getfloat("IMAGE_RENDER", "brightness_adjustment", fallback=1.0)
+
+    # Image Position Configuration Methods
+    def get_position_offset_x(self):
+        """Get position offset X."""
+        return self.config.getint("IMAGE_POSITION", "position_offset_x", fallback=0)
+
+    def get_position_offset_y(self):
+        """Get position offset Y."""
+        return self.config.getint("IMAGE_POSITION", "position_offset_y", fallback=0)
+
+    def get_scale_x(self):
+        """Get scale X factor."""
+        return self.config.getfloat("IMAGE_POSITION", "scale_x", fallback=1.0)
+
+    def get_scale_y(self):
+        """Get scale Y factor."""
+        return self.config.getfloat("IMAGE_POSITION", "scale_y", fallback=1.0)
+
+    def get_rotation(self):
+        """Get rotation in degrees."""
+        return self.config.getint("IMAGE_POSITION", "rotation", fallback=0)
+
+    # Zone Configuration Methods  
+    def get_allowed_zone_names(self):
+        """Get allowed zone names as string."""
+        return self.config.get("ZONES", "allowed_zone_names", fallback="")
+
+    def get_forbidden_zone_names(self):
+        """Get forbidden zone names as string."""
+        return self.config.get("ZONES", "forbidden_zone_names", fallback="")
+
+    # Monitoring Configuration Methods
+    def get_log_level_string(self):
+        """Get log level as string."""
+        return self.config.get("MONITORING", "log_level", fallback="INFO")
+
+    def get_loop_time_string(self):
+        """Get loop time as string."""
+        return self.config.get("MONITORING", "loop_time", fallback="10 minutes")
+
+    def get_performance_logging_string(self):
+        """Get performance logging setting as string."""
+        return self.config.get("MONITORING", "performance_logging", fallback="")
+
+    def get_health_recheck_interval_string(self):
+        """Get health recheck interval as string."""
+        return self.config.get("MONITORING", "health_recheck_interval", fallback="30 minutes")
+
+    # Anniversary Configuration Methods
+    def get_anniversaries_enabled(self):
+        """Get anniversaries enabled setting."""
+        return self.config.getboolean("ANNIVERSARIES", "enabled", fallback=False)
+
+    def update_config_values(self, config_updates: dict) -> bool:
+        """Update configuration values in memory and persist to file.
+        
+        Args:
+            config_updates: Dictionary of config updates in format:
+                {'SECTION.key': 'value', 'OTHER_SECTION.other_key': 'value'}
+                
+        Returns:
+            bool: True if successful, False otherwise
+        """
+        try:
+            # Update in-memory config
+            for key, value in config_updates.items():
+                if '.' not in key:
+                    logger.warning(f"Invalid config key format: {key}")
+                    continue
+                    
+                section_name, config_key = key.split('.', 1)
+                
+                # Ensure section exists
+                if section_name not in self.config:
+                    self.config[section_name] = {}
+                    
+                # Update the value
+                self.config[section_name][config_key] = str(value)
+                logger.debug(f"Updated config: {section_name}.{config_key} = {value}")
+            
+            # Persist to file
+            self._write_config_file()
+            logger.info(f"Updated {len(config_updates)} configuration values")
+            return True
+            
+        except Exception as e:
+            logger.error(f"Error updating configuration: {e}")
+            return False
+    
+    def _write_config_file(self):
+        """Write current configuration to file."""
+        try:
+            with open(self.config_path, 'w') as f:
+                self.config.write(f)
+            logger.debug(f"Configuration written to {self.config_path}")
+        except Exception as e:
+            logger.error(f"Error writing config file: {e}")
+            raise

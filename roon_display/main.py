@@ -109,7 +109,7 @@ def main():
         from .render_coordinator import RenderCoordinator
 
         render_coordinator = RenderCoordinator(
-            viewer, viewer.image_processor, message_renderer, anniversary_manager
+            viewer, viewer.image_processor, message_renderer, config_manager, anniversary_manager
         )
 
         # Set coordinator in viewer for state tracking
@@ -117,7 +117,7 @@ def main():
         
         # Create internal server for web communication
         from .internal_server import InternalServer
-        internal_server = InternalServer(render_coordinator, port=9090)
+        internal_server = InternalServer(render_coordinator, config_manager)
         internal_server.start()
 
         # Create Roon client with coordinator
@@ -149,7 +149,7 @@ def main():
             logger.warning(f"Could not load startup image: {e}")
 
         # Start simulation server for testing
-        simulation_server = SimulationServer(roon_client)
+        simulation_server = SimulationServer(roon_client, config_manager)
         simulation_server.start()
 
         if tk_root:

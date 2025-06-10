@@ -21,9 +21,7 @@ class BaseViewer(ABC):
         self.image_processor = ImageProcessor(self.config)
 
         # Initialize health manager if health script is configured
-        health_script_path = config_manager.get_health_script()
-        health_recheck_interval = config_manager.get_health_recheck_interval()
-        self.health_manager = HealthManager(health_script_path, health_recheck_interval)
+        self.health_manager = HealthManager(config_manager)
 
         # Render coordinator callback for tracking display state
         self.render_coordinator = None

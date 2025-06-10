@@ -7,8 +7,41 @@ Support multiple anniversaries on the same day
 
 Figure out why avif still don't work
 
-Add a config server??
-
 Set up automated git pull
 
 Consider that if the user modifies any files then a git pull will fail. OK?
+
+web server:
+- password
+- updating (git pull)
+- roon connection status
+- change wifi
+/etc/wpa_supplicant/wpa_supplicant.conf, add to:
+network={
+        ssid="Frame"
+        scan_ssid=1
+        key_mgmt=WPA-PSK
+        psk=ca0b019d390026ace9096ea4f2769db96a68820287727a51de7fe8536c5575f8
+}
+network={
+        ssid="8EDB Hyperoptic Fibre Broadband"
+        scan_ssid=1
+        key_mgmt=WPA-PSK
+        psk=44be8f882534e44bbbfc2652a7033e488d225ac73c2456564cbd4ebb68ef9389
+}
+network={
+        ssid="Pretty Fly for a Wi-Fi"
+        scan_ssid=1
+        key_mgmt=WPA-PSK
+        psk=16ececfedc95774853ca34789e625d2bdc1555032e38bda7bfa415b22718667e
+}
+network={
+        ssid="Pretty Fly For A Wi-Fi"
+        scan_ssid=1
+        key_mgmt=WPA-PSK
+        psk=dab3ab8df7965e8152b1db0e1bced0a61e48de610fe0cba75f616352c8a16b9f
+}
+
+- uptime?
+- host stats
+- endpoint in main app to exit 0 (so that systemd restarts it)

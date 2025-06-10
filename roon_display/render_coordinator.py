@@ -15,18 +15,13 @@ logger = logging.getLogger(__name__)
 class RenderCoordinator:
     """Coordinates rendering with main content slot and overlay slot."""
 
-    def __init__(self, viewer, image_processor, message_renderer, anniversary_manager=None):
+    def __init__(self, viewer, image_processor, message_renderer, config_manager, anniversary_manager=None):
         """Initialize render coordinator."""
         self.viewer = viewer
         self.image_processor = image_processor
         self.message_renderer = message_renderer
         self.anniversary_manager = anniversary_manager
-        
-        # Get configuration for overlay sizing
-        from .config.config_manager import ConfigManager
-        config_manager = ConfigManager()
-        self.overlay_config = config_manager.get_overlay_config()
-        self.anniversary_config = config_manager.get_anniversaries_config()
+        self.config_manager = config_manager
 
         # Content slots
         self.main_content = None  # Art or anniversary content (fullscreen)
@@ -43,7 +38,6 @@ class RenderCoordinator:
 
         # Anniversary timing
         self.last_anniversary_check = 0
-        self.anniversary_check_interval = 60  # Check every minute
         
         # Image caching for web access
         self.last_rendered_image = None
@@ -166,15 +160,16 @@ class RenderCoordinator:
             overlay_img = self.message_renderer.create_error_overlay(
                 self.overlay_content["message"], 
                 main_img.size, 
-                size_x_percent=self.overlay_config["size_x"],
-                size_y_percent=self.overlay_config["size_y"]
+                size_x_percent=self.config_manager.get_overlay_size_x_percent(),
+                size_y_percent=self.config_manager.get_overlay_size_y_percent()
             )
 
             # Composite overlay onto main image
             final_img = main_img.copy()
             # Position overlay in bottom-right corner
-            overlay_x = final_img.width - overlay_img.width - 20
-            overlay_y = final_img.height - overlay_img.height - 20
+            margin = self.config_manager.get_overlay_margin()
+            overlay_x = final_img.width - overlay_img.width - margin
+            overlay_y = final_img.height - overlay_img.height - margin
             final_img.paste(overlay_img, (overlay_x, overlay_y))
         else:
             final_img = main_img
@@ -233,8 +228,9 @@ class RenderCoordinator:
         # For anniversary content, create the image (check BEFORE generic image_path)
         if content_type == "anniversary" and self.anniversary_manager:
             try:
+                border = self.config_manager.get_anniversaries_config()["border"]
                 return self.anniversary_manager.create_anniversary_display(
-                    self.main_content, self.image_processor, self.anniversary_config["border"]
+                    self.main_content, self.image_processor, border
                 )
             except Exception as e:
                 logger.error(f"Failed to create anniversary image: {e}")
@@ -256,13 +252,14 @@ class RenderCoordinator:
             while True:
                 try:
                     current_time = time.time()
-                    if current_time - self.last_anniversary_check >= self.anniversary_check_interval:
+                    anniversary_check_interval = self.config_manager.get_anniversary_check_interval()
+                    if current_time - self.last_anniversary_check >= anniversary_check_interval:
                         self.last_anniversary_check = current_time
                         self._check_anniversaries()
                     time.sleep(10)  # Check every 10 seconds for timing
                 except Exception as e:
                     logger.error(f"Error in anniversary monitor: {e}")
-                    time.sleep(60)  # Wait longer on error
+                    time.sleep(self.config_manager.get_reconnection_interval())  # Wait longer on error
 
         anniversary_thread = threading.Thread(target=monitor_anniversaries, daemon=True)
         anniversary_thread.start()
@@ -499,10 +496,11 @@ class RenderCoordinator:
                     }
                     
                     try:
+                        border = self.config_manager.get_anniversaries_config()["border"]
                         return self.anniversary_manager.create_anniversary_display(
                             {'anniversary': preview_anniversary}, 
                             self.image_processor, 
-                            self.anniversary_config.get("border", 10)
+                            border
                         )
                     except Exception as e:
                         logger.warning(f"Could not create anniversary preview: {e}")
@@ -522,8 +520,8 @@ class RenderCoordinator:
             
             if overlay_size_x or overlay_size_y:
                 # Create overlay with new settings
-                size_x = int(overlay_size_x) if overlay_size_x else self.overlay_config["size_x"]
-                size_y = int(overlay_size_y) if overlay_size_y else self.overlay_config["size_y"]
+                size_x = int(overlay_size_x) if overlay_size_x else self.config_manager.get_overlay_size_x_percent()
+                size_y = int(overlay_size_y) if overlay_size_y else self.config_manager.get_overlay_size_y_percent()
                 
                 overlay_img = self.message_renderer.create_error_overlay(
                     self.overlay_content["message"], 
@@ -534,8 +532,9 @@ class RenderCoordinator:
                 
                 # Composite overlay onto image
                 result_img = image.copy()
-                overlay_x = result_img.width - overlay_img.width - 20
-                overlay_y = result_img.height - overlay_img.height - 20
+                margin = self.config_manager.get_overlay_margin()
+                overlay_x = result_img.width - overlay_img.width - margin
+                overlay_y = result_img.height - overlay_img.height - margin
                 result_img.paste(overlay_img, (overlay_x, overlay_y))
                 return result_img
             

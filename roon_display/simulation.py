@@ -35,15 +35,15 @@ SAMPLE_TRACKS = [
     },
 ]
 
-SIMULATION_PORT = 9999
 TRACK_INDEX_FILE = Path("simulation_track_index.txt")
 
 
 class SimulationServer:
     """Simple TCP server to receive simulation triggers."""
 
-    def __init__(self, roon_client):
+    def __init__(self, roon_client, config_manager):
         self.roon_client = roon_client
+        self.config_manager = config_manager
         self.server = None
         self.running = False
 
@@ -52,11 +52,12 @@ class SimulationServer:
         try:
             self.server = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
             self.server.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
-            self.server.bind(("localhost", SIMULATION_PORT))
+            port = self.config_manager.get_simulation_server_port()
+            self.server.bind(("localhost", port))
             self.server.listen(1)
             self.running = True
 
-            logger.info(f"Simulation server started on port {SIMULATION_PORT}")
+            logger.info(f"Simulation server started on port {port}")
 
             # Start server thread
             server_thread = threading.Thread(target=self._server_loop, daemon=True)
@@ -234,9 +235,14 @@ def send_simulation_trigger():
     track_index = get_next_track_index()
 
     try:
+        # Get port from config
+        from .config.config_manager import ConfigManager
+        config_manager = ConfigManager()
+        port = config_manager.get_simulation_server_port()
+        
         sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         sock.settimeout(5.0)  # 5 second timeout
-        sock.connect(("localhost", SIMULATION_PORT))
+        sock.connect(("localhost", port))
         sock.send(str(track_index).encode())
 
         # Try to receive response but don't hang if it fails
