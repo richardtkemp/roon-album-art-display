@@ -1,17 +1,16 @@
 
 don't queue if multiple track changes come in together (or make a queue, but with max depth=1)
 
-Support multiple anniversaries on the same day
-
-
-Save template health script to repo
-
 Rationalise rendering - choose which of art/anniversary to display, and just do that one rather than letting them compete.
+
+Automated restarts?
+
+Support multiple anniversaries on the same day
 
 Figure out why avif still don't work
 
 Add a config server??
 
 Set up automated git pull
-Automated restarts?
+
 Consider that if the user modifies any files then a git pull will fail. OK?

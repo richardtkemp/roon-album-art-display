@@ -6,6 +6,8 @@ from pathlib import Path
 
 from PIL import Image, ImageEnhance
 
+from ..utils import log_performance
+
 logger = logging.getLogger(__name__)
 
 
@@ -49,6 +51,7 @@ class ImageProcessor:
         self.image_height = int(height * self.scale_y)
         self.image_size = min(self.image_width, self.image_height)
 
+    @log_performance(threshold=0.5, description="Image file loading")
     def fetch_image(self, image_path):
         """Load an image from file path."""
         image_path = Path(image_path)
@@ -77,6 +80,7 @@ class ImageProcessor:
             return img.transpose(Image.ROTATE_270)
         return img
 
+    @log_performance(threshold=0.5, description="Image resizing")
     def resize_image(self, img):
         """Resize image to fit screen while maintaining aspect ratio."""
         img_width, img_height = img.size
@@ -115,6 +119,7 @@ class ImageProcessor:
 
         return new_image
 
+    @log_performance(threshold=0.5, description="Image position processing")
     def process_image_position(self, img):
         """Apply position processing: rotation, scaling, and padding."""
         logger.debug("Starting to process image position")
@@ -131,6 +136,7 @@ class ImageProcessor:
 
         return img
 
+    @log_performance(threshold=0.5, description="Image enhancements")
     def apply_enhancements(self, img):
         """Apply color/contrast/brightness/sharpness adjustments."""
         logger.debug("Starting image enhancement")

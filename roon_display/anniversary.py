@@ -15,6 +15,7 @@ from .utils import (
     get_last_track_time,
     set_last_track_time,
 )
+from .message_renderer import MessageRenderer
 
 logger = logging.getLogger(__name__)
 
@@ -313,12 +314,9 @@ class AnniversaryManager:
         image_path = anniversary.get("image_path")
         message = anniversary["message"]
 
-        if image_path and Path(image_path).exists():
-            # Image + text: image at 1/3 height, text below
-            return self._create_image_with_text(image_path, message, image_processor)
-        else:
-            # Text only: centered on screen
-            return self._create_text_only_image(message, image_processor)
+        # Use the reusable message renderer
+        renderer = MessageRenderer(image_processor.screen_width, image_processor.screen_height)
+        return renderer.create_text_message(message, image_path)
 
     def _create_text_only_image(self, message: str, image_processor) -> Image.Image:
         """Create a text-only image with centered text."""

@@ -9,7 +9,7 @@ from .anniversary import AnniversaryManager
 from .config.config_manager import ConfigManager
 from .roon_client.client import RoonClient
 from .simulation import SimulationServer
-from .utils import ensure_extra_images_dir_exists, ensure_image_dir_exists
+from .utils import ensure_extra_images_dir_exists, ensure_image_dir_exists, set_performance_logging
 from .viewers.eink_viewer import EinkViewer
 from .viewers.tk_viewer import TkViewer
 
@@ -82,6 +82,12 @@ def main():
         logging.getLogger().setLevel(log_level)
         logger.info(f"Log level set to: {logging.getLevelName(log_level)}")
 
+        # Set performance logging from config
+        performance_logging = config_manager.get_performance_logging()
+        set_performance_logging(performance_logging)
+        if performance_logging:
+            logger.info(f"Performance logging enabled: {performance_logging}")
+
         # Create anniversary manager
         anniversary_config = config_manager.get_anniversaries_config()
         anniversary_manager = AnniversaryManager(anniversary_config)
@@ -98,19 +104,31 @@ def main():
         simulation_server = SimulationServer(roon_client)
         simulation_server.start()
 
-        # Connect to Roon
-        roon_client.connect()
-
-        # Start Roon client
-        event_thread = roon_client.run()
-
-        # Start UI event loop
         if tk_root:
-            # Tkinter needs to run on main thread
+            # For Tkinter, we need to start connection in background thread
+            # so the GUI can show authorization messages
+            import threading
+            
+            def connect_and_run():
+                """Connect to Roon and start event loop in background."""
+                try:
+                    roon_client.connect()
+                    roon_client.run()
+                except Exception as e:
+                    logger.error(f"Error in Roon client: {e}")
+            
+            # Start Roon connection in background thread
+            roon_thread = threading.Thread(target=connect_and_run, daemon=True)
+            roon_thread.start()
+            
+            # Start Tkinter main loop immediately (blocks here)
             viewer.check_pending_updates()
             tk_root.mainloop()
+            
         else:
-            # For e-ink, just wait for the event thread
+            # For e-ink, connect synchronously (no GUI to show)
+            roon_client.connect()
+            event_thread = roon_client.run()
             try:
                 event_thread.join()
             except KeyboardInterrupt:

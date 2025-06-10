@@ -33,6 +33,8 @@ class TestRoonClient:
                 config_manager, mock_viewer, mock_viewer.image_processor
             )
             client.roon = None  # Prevent actual Roon connection attempts
+            # Ensure token file is created in temp directory, not project directory
+            client.token_file = temp_dir / ".roon_album_display_token_test.txt"
             return client
 
     def test_initialization(self, config_manager, mock_viewer, temp_dir):
@@ -45,13 +47,15 @@ class TestRoonClient:
             client = RoonClient(
                 config_manager, mock_viewer, mock_viewer.image_processor
             )
+            # Override token file to use temp directory for testing
+            client.token_file = temp_dir / ".roon_album_display_token_test.txt"
 
             assert client.config_manager == config_manager
             assert client.viewer == mock_viewer
             assert client.image_processor == mock_viewer.image_processor
             assert client.allowed_zones == ["Living Room", "Kitchen"]
             assert client.forbidden_zones == ["Bedroom"]
-            assert client.token_file == Path(".roon_album_display_token.txt")
+            assert client.token_file == temp_dir / ".roon_album_display_token_test.txt"
             assert client.running is False
 
     @patch("roon_display.roon_client.client.RoonApi")
