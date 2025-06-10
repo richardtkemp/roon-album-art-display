@@ -1,0 +1,91 @@
+<!-- Special handling for anniversaries section -->
+{% for key, config_item in section_data.items() %}
+    {% if key in ['enabled'] %}
+    <div class="form-group">
+        <label for="{{ section_name }}_{{ key }}">{{ key.replace('_', ' ').title() }}:</label>
+
+        {% if config_item.type == 'boolean' %}
+            <input type="checkbox" id="{{ section_name }}_{{ key }}"
+                   name="{{ section_name }}.{{ key }}"
+                   value="true" {{ 'checked' if config_item.value else '' }}>
+        {% else %}
+            <input type="{{ config_item.input_type }}"
+                   id="{{ section_name }}_{{ key }}"
+                   name="{{ section_name }}.{{ key }}"
+                   value="{{ config_item.value }}"
+                   {% if config_item.min %}min="{{ config_item.min }}"{% endif %}
+                   {% if config_item.max %}max="{{ config_item.max }}"{% endif %}
+                   {% if config_item.step %}step="{{ config_item.step }}"{% endif %}>
+        {% endif %}
+
+        {% if config_item.comment %}
+            <div class="comment">{{ config_item.comment }}</div>
+        {% endif %}
+    </div>
+    {% endif %}
+{% endfor %}
+
+<!-- Anniversary entries -->
+<div class="form-group">
+    <h3>Anniversary Entries</h3>
+    <div class="comment">
+        Configure anniversaries with automatic year calculation. Use ${years} in your message for dynamic age.<br>
+        Images will be saved to extra_images/[name]/ directory and used randomly.
+    </div>
+
+    <div id="anniversary-entries">
+        {% for key, config_item in section_data.items() %}
+            {% if key not in ['enabled'] and not key.startswith('#') %}
+            {% set parts = config_item.value.split(',') %}
+            {% set date_part = parts[0] if parts|length > 0 else '' %}
+            {% set message_part = parts[1] if parts|length > 1 else '' %}
+            {% set wait_part = parts[2] if parts|length > 2 else '' %}
+            <div class="anniversary-entry">
+                <div style="display: flex; gap: 10px; align-items: center; margin-bottom: 10px;">
+                    <label style="min-width: 100px; font-weight: bold;">Name:</label>
+                    <input type="text" name="anniversary_name_{{ loop.index0 }}" value="{{ key }}" style="flex: 1;" placeholder="birthday_john">
+                    <button type="button" onclick="removeAnniversary(this)" style="background: #f44336; color: white; border: none; padding: 8px 12px; border-radius: 3px; cursor: pointer;">Remove</button>
+                </div>
+                <div style="display: flex; gap: 10px; align-items: center; margin-bottom: 10px;">
+                    <label style="min-width: 100px; font-weight: bold;">Date:</label>
+                    <input type="text" name="anniversary_date_{{ loop.index0 }}" value="{{ date_part }}" style="width: 120px;" placeholder="15/03/1990">
+                    <span style="color: #666; font-size: 0.9em;">dd/mm/yyyy format</span>
+                </div>
+                <div style="display: flex; gap: 10px; align-items: center; margin-bottom: 10px;">
+                    <label style="min-width: 100px; font-weight: bold;">Message:</label>
+                    <input type="text" name="anniversary_message_{{ loop.index0 }}" value="{{ message_part }}" style="flex: 1;" placeholder="Happy ${years} birthday John!">
+                    <span style="color: #666; font-size: 0.9em;">Use ${years} for age</span>
+                </div>
+                <div style="display: flex; gap: 10px; align-items: center; margin-bottom: 10px;">
+                    <label style="min-width: 100px; font-weight: bold;">Wait Time:</label>
+                    <input type="text" name="anniversary_wait_{{ loop.index0 }}" value="{{ wait_part }}" style="width: 150px;" placeholder="30 minutes">
+                    <span style="color: #666; font-size: 0.9em;">e.g., "30 minutes", "2 hours"</span>
+                </div>
+                <div style="display: flex; gap: 10px; align-items: center;">
+                    <label style="min-width: 100px; font-weight: bold;">Images:</label>
+                    <input type="file" name="anniversary_images_{{ loop.index0 }}" multiple accept="image/*" style="flex: 1;">
+                    <span style="color: #666; font-size: 0.9em;">Upload images (JPG, PNG, etc.)</span>
+                </div>
+                {% if anniversary_images and key in anniversary_images %}
+                <div style="margin-top: 10px;">
+                    <strong>Current Images ({{ anniversary_images[key]|length }}):</strong>
+                    <div class="thumbnail-container">
+                        {% for img in anniversary_images[key] %}
+                        <div class="thumbnail-item">
+                            <img src="/thumbnail/{{ key }}/{{ img }}" alt="{{ img }}" title="{{ img }}">
+                            <button type="button" class="thumbnail-delete"
+                                    onclick="deleteImage('{{ key }}', '{{ img }}')"
+                                    title="Delete {{ img }}">×</button>
+                            <div class="thumbnail-filename">{{ img }}</div>
+                        </div>
+                        {% endfor %}
+                    </div>
+                </div>
+                {% endif %}
+            </div>
+            {% endif %}
+        {% endfor %}
+    </div>
+
+    <button type="button" onclick="addAnniversary()" style="background: #4CAF50; color: white; border: none; padding: 10px 20px; border-radius: 3px; cursor: pointer; margin-top: 15px;">Add Anniversary</button>
+</div>

@@ -50,6 +50,8 @@ class ImageProcessor:
         self.image_width = int(width * self.scale_x)
         self.image_height = int(height * self.scale_y)
         self.image_size = min(self.image_width, self.image_height)
+        logger.info(f"IMAGESIZE: Screen size set to {width}x{height}, scale={self.scale_x}x{self.scale_y}")
+        logger.info(f"IMAGESIZE: Calculated image size: {self.image_width}x{self.image_height}, min={self.image_size}")
 
     @log_performance(threshold=0.5, description="Image file loading")
     def fetch_image(self, image_path):
@@ -61,6 +63,7 @@ class ImageProcessor:
 
         try:
             img = Image.open(image_path)
+            logger.info(f"IMAGESIZE: Loaded image {image_path} with size {img.size}")
             return img
         except Exception as e:
             logger.error(f"Couldn't read image file {image_path}, error: {e}")
@@ -72,18 +75,24 @@ class ImageProcessor:
 
     def apply_rotation(self, img):
         """Apply rotation to image based on config."""
+        logger.info(f"IMAGESIZE: Before rotation: {img.size}, rotation={self.rotation}")
         if self.rotation == 90:
-            return img.transpose(Image.ROTATE_90)
+            result = img.transpose(Image.ROTATE_90)
         elif self.rotation == 180:
-            return img.transpose(Image.ROTATE_180)
+            result = img.transpose(Image.ROTATE_180)
         elif self.rotation == 270:
-            return img.transpose(Image.ROTATE_270)
-        return img
+            result = img.transpose(Image.ROTATE_270)
+        else:
+            result = img
+        logger.info(f"IMAGESIZE: After rotation: {result.size}")
+        return result
 
     @log_performance(threshold=0.5, description="Image resizing")
     def resize_image(self, img):
         """Resize image to fit screen while maintaining aspect ratio."""
         img_width, img_height = img.size
+        logger.info(f"IMAGESIZE: Before resize: {img.size}, target screen: {self.screen_width}x{self.screen_height}")
+        logger.info(f"IMAGESIZE: Target image size: {self.image_width}x{self.image_height}")
 
         # Check if we need to resize
         if (
@@ -91,11 +100,15 @@ class ImageProcessor:
             or img_height != self.screen_height
             or self.scale_x != self.scale_y
         ):
-            logger.debug("Resizing image")
+            logger.info("IMAGESIZE: Resizing image")
             scale_ratio = max(self.scale_x, self.scale_y)
             new_width = int(img_width * self.scale_x * scale_ratio)
             new_height = int(img_height * self.scale_y * scale_ratio)
+            logger.info(f"IMAGESIZE: Calculated resize to: {new_width}x{new_height}, scale_ratio={scale_ratio}")
             img = img.resize((new_width, new_height), Image.LANCZOS)
+            logger.info(f"IMAGESIZE: After resize: {img.size}")
+        else:
+            logger.info("IMAGESIZE: No resize needed")
 
         return img
 

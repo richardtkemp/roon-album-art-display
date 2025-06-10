@@ -1,0 +1,94 @@
+{% extends "base.html" %}
+
+{% block content %}
+    <!-- Current Display Preview -->
+    <div class="display-preview-section">
+        <div class="display-header">
+            <span>Current Display</span>
+            <div class="display-controls">
+                <button id="refresh-display" class="control-btn">↻ Refresh</button>
+                <span id="display-connection-status" class="status-indicator">●</span>
+            </div>
+        </div>
+        <div class="display-container">
+            <img id="current-display-image" src="/current-display-image" alt="Current Display">
+            <div id="display-overlay" class="display-overlay hidden">
+                <span class="overlay-text">PREVIEW</span>
+            </div>
+        </div>
+        <div class="display-info">
+            <span id="display-metadata">Loading display info...</span>
+        </div>
+    </div>
+
+    <!-- Flash messages for traditional form submission (fallback) -->
+    <div id="legacy-flash-messages" class="flash-messages">
+        {% with messages = get_flashed_messages(with_categories=true) %}
+            {% if messages %}
+                {% for category, message in messages %}
+                    <div class="flash-{{ category }}">{{ message }}</div>
+                {% endfor %}
+            {% endif %}
+        {% endwith %}
+    </div>
+
+    <form method="POST" enctype="multipart/form-data" onsubmit="submitForm(event); return false;">
+        
+        <div class="tab-container">
+            <div class="tab-buttons">
+                {% for tab_name in tab_sections.keys() %}
+                <button type="button" class="tab-button {{ 'active' if loop.first else '' }}" onclick="switchTab('{{ tab_name }}')" id="tab-{{ tab_name }}">
+                    {{ tab_name }}
+                </button>
+                {% endfor %}
+            </div>
+
+            {% for tab_name, tab_sections_data in tab_sections.items() %}
+            <div class="tab-content {{ 'active' if loop.first else '' }}" id="content-{{ tab_name }}">
+                {% for section_name, section_data in tab_sections_data.items() %}
+                {% if section_data %}
+                <div class="section">
+                    <h2>{{ section_name.replace('_', ' ').title() }}</h2>
+
+                    {% if section_name == 'ANNIVERSARIES' %}
+                        {% include 'components/anniversaries_section.html' %}
+                    {% else %}
+                        {% include 'components/regular_section.html' %}
+                    {% endif %}
+                </div>
+                {% endif %}
+                {% endfor %}
+            </div>
+            {% endfor %}
+        </div>
+
+        <div class="button-group">
+            <button type="submit" name="action" value="apply" class="apply-btn" id="apply-btn">Apply Changes</button>
+            <div id="message-area" style="margin-top: 15px; display: none;">
+                <div id="message-content" class="flash-success"></div>
+            </div>
+        </div>
+    </form>
+{% endblock %}
+
+{% block scripts %}
+<script>
+    document.addEventListener('DOMContentLoaded', function() {
+        // Hide legacy flash messages since we have AJAX enabled
+        const legacyFlash = document.getElementById('legacy-flash-messages');
+        if (legacyFlash) {
+            legacyFlash.style.display = 'none';
+        }
+
+        // Set anniversary counter from server
+        setAnniversaryCounter({{ anniversary_count }});
+
+        // Initialize preview functionality
+        initializePreview({
+            debounceMs: {{ preview_debounce_ms }},
+            autoRevertMs: {{ preview_auto_revert_ms }},
+            refreshInterval: {{ web_refresh_interval }}
+        });
+    });
+</script>
+{% endblock %}
