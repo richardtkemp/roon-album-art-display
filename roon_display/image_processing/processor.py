@@ -14,44 +14,17 @@ logger = logging.getLogger(__name__)
 class ImageProcessor:
     """Handles image processing operations."""
 
-    def __init__(self, config):
-        """Initialize with configuration."""
-        self.config = config
-        self._load_image_settings()
+    def __init__(self, config_manager):
+        """Initialize with configuration manager."""
+        self.config_manager = config_manager
 
-    def _load_image_settings(self):
-        """Load image processing settings from config."""
-        for name in ["colour_balance", "contrast", "sharpness", "brightness"]:
-            attr_name = f"{name}_adjustment"
-            setattr(
-                self,
-                attr_name,
-                float(self.config.get("IMAGE_RENDER", f"{name}_adjustment")),
-            )
-
-        self.position_offset_x = int(
-            self.config.get("IMAGE_POSITION", "position_offset_x")
-        )
-        self.position_offset_y = int(
-            self.config.get("IMAGE_POSITION", "position_offset_y")
-        )
-        self.scale_x = float(self.config.get("IMAGE_POSITION", "scale_x"))
-        self.scale_y = float(self.config.get("IMAGE_POSITION", "scale_y"))
-        self.rotation = float(self.config.get("IMAGE_POSITION", "rotation"))
-
-        if self.scale_x == 0 or self.scale_y == 0:
+        # Validate scale values at initialization
+        scale_x = self.config_manager.get_scale_x()
+        scale_y = self.config_manager.get_scale_y()
+        if scale_x == 0 or scale_y == 0:
             logger.error("Scale must not be set to zero! Check config file")
             raise ValueError("Scale values cannot be zero")
 
-    def set_screen_size(self, width, height):
-        """Set the target screen dimensions."""
-        self.screen_width = int(width)
-        self.screen_height = int(height)
-        self.image_width = int(width * self.scale_x)
-        self.image_height = int(height * self.scale_y)
-        self.image_size = min(self.image_width, self.image_height)
-        logger.info(f"IMAGESIZE: Screen size set to {width}x{height}, scale={self.scale_x}x{self.scale_y}")
-        logger.info(f"IMAGESIZE: Calculated image size: {self.image_width}x{self.image_height}, min={self.image_size}")
 
     @log_performance(threshold=0.5, description="Image file loading")
     def fetch_image(self, image_path):
@@ -75,12 +48,13 @@ class ImageProcessor:
 
     def apply_rotation(self, img):
         """Apply rotation to image based on config."""
-        logger.info(f"IMAGESIZE: Before rotation: {img.size}, rotation={self.rotation}")
-        if self.rotation == 90:
+        rotation = self.config_manager.get_rotation()
+        logger.info(f"IMAGESIZE: Before rotation: {img.size}, rotation={rotation}")
+        if rotation == 90:
             result = img.transpose(Image.ROTATE_90)
-        elif self.rotation == 180:
+        elif rotation == 180:
             result = img.transpose(Image.ROTATE_180)
-        elif self.rotation == 270:
+        elif rotation == 270:
             result = img.transpose(Image.ROTATE_270)
         else:
             result = img
@@ -91,20 +65,27 @@ class ImageProcessor:
     def resize_image(self, img):
         """Resize image to fit screen while maintaining aspect ratio."""
         img_width, img_height = img.size
-        logger.info(f"IMAGESIZE: Before resize: {img.size}, target screen: {self.screen_width}x{self.screen_height}")
-        logger.info(f"IMAGESIZE: Target image size: {self.image_width}x{self.image_height}")
+        screen_width = self.config_manager.get_screen_width()
+        screen_height = self.config_manager.get_screen_height()
+        scale_x = self.config_manager.get_scale_x()
+        scale_y = self.config_manager.get_scale_y()
+        
+        target_width = int(screen_width * scale_x)
+        target_height = int(screen_height * scale_y)
+        
+        logger.info(f"IMAGESIZE: Before resize: {img.size}, target screen: {screen_width}x{screen_height}")
+        logger.info(f"IMAGESIZE: Target image size: {target_width}x{target_height}")
 
         # Check if we need to resize
         if (
-            img_width != self.image_width
-            or img_height != self.screen_height
-            or self.scale_x != self.scale_y
+            img_width != target_width
+            or img_height != target_height
+            or scale_x != scale_y
         ):
             logger.info("IMAGESIZE: Resizing image")
-            scale_ratio = max(self.scale_x, self.scale_y)
-            new_width = int(img_width * self.scale_x * scale_ratio)
-            new_height = int(img_height * self.scale_y * scale_ratio)
-            logger.info(f"IMAGESIZE: Calculated resize to: {new_width}x{new_height}, scale_ratio={scale_ratio}")
+            new_width = int(img_width * scale_x)
+            new_height = int(img_height * scale_y)
+            logger.info(f"IMAGESIZE: Calculated resize to: {new_width}x{new_height}")
             img = img.resize((new_width, new_height), Image.LANCZOS)
             logger.info(f"IMAGESIZE: After resize: {img.size}")
         else:
@@ -118,14 +99,20 @@ class ImageProcessor:
 
         original_width, original_height = img.size
 
+        # Get live config values
+        screen_width = self.config_manager.get_screen_width()
+        screen_height = self.config_manager.get_screen_height()
+        offset_x = self.config_manager.get_position_offset_x()
+        offset_y = self.config_manager.get_position_offset_y()
+
         # Create new white background
         new_image = Image.new(
-            "RGB", (self.screen_width, self.screen_height), color="white"
+            "RGB", (screen_width, screen_height), color="white"
         )
 
         # Calculate paste position (centered with offset)
-        paste_x = self.position_offset_x + (self.screen_width - original_width) // 2
-        paste_y = self.position_offset_y + (self.screen_height - original_height) // 2
+        paste_x = offset_x + (screen_width - original_width) // 2
+        paste_y = offset_y + (screen_height - original_height) // 2
 
         # Paste original image onto background
         new_image.paste(img, (paste_x, paste_y))
@@ -144,7 +131,9 @@ class ImageProcessor:
         img = self.resize_image(img)
 
         # Pad to screen size if needed
-        if img.size != (self.screen_width, self.screen_height):
+        screen_width = self.config_manager.get_screen_width()
+        screen_height = self.config_manager.get_screen_height()
+        if img.size != (screen_width, screen_height):
             img = self.pad_image_to_size(img)
 
         return img
@@ -164,22 +153,26 @@ class ImageProcessor:
             # Consider removing after testing - would improve performance and memory usage
             img = img.copy()
 
-            # Apply enhancements
-            if self.colour_balance_adjustment != 1:
+            # Apply enhancements using live config values
+            colour_balance = self.config_manager.get_colour_balance_adjustment()
+            if colour_balance != 1:
                 enhancer = ImageEnhance.Color(img)
-                img = enhancer.enhance(self.colour_balance_adjustment)
+                img = enhancer.enhance(colour_balance)
 
-            if self.contrast_adjustment != 1:
+            contrast = self.config_manager.get_contrast_adjustment()
+            if contrast != 1:
                 enhancer = ImageEnhance.Contrast(img)
-                img = enhancer.enhance(self.contrast_adjustment)
+                img = enhancer.enhance(contrast)
 
-            if self.brightness_adjustment != 1:
+            brightness = self.config_manager.get_brightness_adjustment()
+            if brightness != 1:
                 enhancer = ImageEnhance.Brightness(img)
-                img = enhancer.enhance(self.brightness_adjustment)
+                img = enhancer.enhance(brightness)
 
-            if self.sharpness_adjustment != 1:
+            sharpness = self.config_manager.get_sharpness_adjustment()
+            if sharpness != 1:
                 enhancer = ImageEnhance.Sharpness(img)
-                img = enhancer.enhance(self.sharpness_adjustment)
+                img = enhancer.enhance(sharpness)
 
             logger.debug("Image enhancement completed successfully")
             return img
@@ -188,11 +181,3 @@ class ImageProcessor:
             logger.error(f"Error during image enhancement: {str(e)}")
             return img
 
-    def needs_enhancement(self):
-        """Check if any image enhancements are configured."""
-        return not (
-            self.contrast_adjustment == 1
-            and self.colour_balance_adjustment == 1
-            and self.brightness_adjustment == 1
-            and self.sharpness_adjustment == 1
-        )

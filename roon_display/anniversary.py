@@ -23,10 +23,9 @@ logger = logging.getLogger(__name__)
 class AnniversaryManager:
     """Manages anniversary messages and displays."""
 
-    def __init__(self, anniversaries_config: Dict):
+    def __init__(self, config_manager):
         """Initialize anniversary manager with configuration."""
-        self.enabled = anniversaries_config.get("enabled", False)
-        self.anniversaries = anniversaries_config.get("anniversaries", [])
+        self.config_manager = config_manager
 
         # Load last track time from file, default to 1 hour ago if not found
         saved_time = get_last_track_time()
@@ -38,7 +37,7 @@ class AnniversaryManager:
             logger.info("No saved track time found, defaulting to 1 hour ago")
 
         # Create directories for all configured anniversaries
-        for anniversary in self.anniversaries:
+        for anniversary in self.config_manager.get_anniversaries_list():
             ensure_anniversary_dir_exists(anniversary["name"])
 
         # Track when we last checked for anniversaries
@@ -109,7 +108,7 @@ class AnniversaryManager:
 
     def check_anniversary_if_date_changed(self) -> Optional[Dict]:
         """Only check for anniversaries if the date has changed since last check."""
-        if not self.enabled:
+        if not self.config_manager.get_anniversaries_enabled():
             return None
 
         today = datetime.now().date()
@@ -134,7 +133,8 @@ class AnniversaryManager:
 
     def _get_anniversary_info_for_today(self) -> Optional[Dict]:
         """Get anniversary info for today (without image path, for caching)."""
-        if not self.anniversaries:
+        anniversaries_list = self.config_manager.get_anniversaries_list()
+        if not anniversaries_list:
             return None
 
         today = datetime.now()
@@ -142,7 +142,7 @@ class AnniversaryManager:
         current_month = today.month
         current_year = today.year
 
-        for anniversary in self.anniversaries:
+        for anniversary in anniversaries_list:
             try:
                 # Parse date (dd/mm/yyyy format)
                 date_parts = anniversary["date"].split("/")
@@ -219,7 +219,7 @@ class AnniversaryManager:
             return None
 
     def create_anniversary_display(
-        self, anniversary: Dict, image_processor, border_percent: int = 10
+        self, anniversary: Dict, image_processor, config_manager
     ) -> Image.Image:
         """Create anniversary display image (text or custom image)."""
         image_path = anniversary.get("image_path")
@@ -227,27 +227,25 @@ class AnniversaryManager:
         
 
         # Use the reusable message renderer with custom border
-        renderer = MessageRenderer(
-            image_processor.screen_width, image_processor.screen_height
-        )
+        renderer = MessageRenderer(config_manager)
         
         # If there's an image, create image with text using configurable border
         if image_path and Path(image_path).exists():
-            return self._create_image_with_text_custom_border(image_path, message, image_processor, border_percent)
+            return self._create_image_with_text_custom_border(image_path, message, image_processor, config_manager)
         else:
             return renderer.create_text_message(message, image_path)
 
-    def _create_text_only_image(self, message: str, image_processor) -> Image.Image:
+    def _create_text_only_image(self, message: str, image_processor, config_manager) -> Image.Image:
         """Create a text-only image with centered text."""
-        width = image_processor.screen_width
-        height = image_processor.screen_height
+        width = config_manager.get_screen_width()
+        height = config_manager.get_screen_height()
 
         # Create blank image
         img = Image.new("RGB", (width, height), "white")
         draw = ImageDraw.Draw(img)
 
         # Get font
-        font = self._get_font(width)
+        font = ImageFont.truetype(config_manager.get_font(), config_manager.get_font_size())
 
         # Calculate text position (centered)
         text_width, text_height = self._get_text_size(draw, message, font)
@@ -260,22 +258,22 @@ class AnniversaryManager:
         return img
 
     def _create_image_with_text(
-        self, image_path: str, message: str, image_processor
+        self, image_path: str, message: str, image_processor, config_manager
     ) -> Image.Image:
         """Create anniversary display with natural image scaling and text below."""
-        screen_width = image_processor.screen_width
-        screen_height = image_processor.screen_height
+        screen_width = config_manager.get_screen_width()
+        screen_height = config_manager.get_screen_height()
 
         # Create blank canvas
         canvas = Image.new("RGB", (screen_width, screen_height), "white")
 
-        # Define layout parameters
-        border_percent = 0.05  # 5% border on top and sides
-        text_area_percent = 0.15  # Reserve 15% of height for text area at bottom
+        # Define layout parameters from config
+        border_fraction = self.config_manager.get_anniversary_border_percent() / 100.0  # Convert to decimal
+        text_area_fraction = self.config_manager.get_anniversary_text_percent() / 100.0  # Convert to decimal
 
         # Calculate areas
-        border_size = int(screen_width * border_percent)
-        text_area_height = int(screen_height * text_area_percent)
+        border_size = int(screen_width * border_fraction)
+        text_area_height = int(screen_height * text_area_fraction)
 
         # Image area: screen minus borders and text area
         image_area_width = screen_width - (2 * border_size)
@@ -321,7 +319,7 @@ class AnniversaryManager:
         logger.debug(f"Image position: ({image_x}, {image_y})")
 
         # Position text in the text area at bottom
-        font = self._get_font(screen_width)
+        font = ImageFont.truetype(config_manager.get_font(), config_manager.get_font_size())
         draw = ImageDraw.Draw(canvas)
         text_width, text_height = self._get_text_size(draw, message, font)
 
@@ -337,7 +335,7 @@ class AnniversaryManager:
         return canvas
 
     def _create_image_with_text_custom_border(
-        self, image_path: str, message: str, image_processor, border_percent: int
+        self, image_path: str, message: str, image_processor, config_manager
     ) -> Image.Image:
         """Create anniversary display with custom border percentage."""
         # Use effective screen dimensions that respect scale_x/scale_y from config
@@ -351,12 +349,12 @@ class AnniversaryManager:
         
 
         # Define layout parameters using configurable border
-        border_percent_decimal = border_percent / 100.0  # Convert to decimal
-        text_area_percent = 0.15  # Reserve 15% of height for text area at bottom
+        border_fraction = config_manager.get_anniversary_border_percent() / 100.0  # Convert to decimal
+        text_area_fraction = self.config_manager.get_anniversary_text_percent() / 100.0  # Convert to decimal
 
         # Calculate areas within effective screen space
-        border_size = int(min(effective_width, effective_height) * border_percent_decimal)
-        text_area_height = int(effective_height * text_area_percent)
+        border_size = int(min(effective_width, effective_height) * border_fraction)
+        text_area_height = int(effective_height * text_area_fraction)
 
         image_area_width = effective_width - 2 * border_size
         image_area_height = effective_height - border_size - text_area_height
@@ -403,7 +401,7 @@ class AnniversaryManager:
             image_y = offset_y + border_size + (image_area_height - scaled_height) // 2
 
             # Position text in the text area at bottom (within effective screen, then offset)
-            font = self._get_font(effective_width)
+            font = ImageFont.truetype(config_manager.get_font(), config_manager.get_font_size())
             draw = ImageDraw.Draw(canvas)
             text_width, text_height = self._get_text_size(draw, message, font)
 
@@ -419,22 +417,11 @@ class AnniversaryManager:
         except Exception as e:
             logger.warning(f"Could not load anniversary image {image_path}: {e}")
             # Fall back to text-only
-            renderer = MessageRenderer(screen_width, screen_height)
+            renderer = MessageRenderer(config_manager)
             return renderer.create_text_message(message)
 
         return canvas
 
-    def _get_font(self, screen_width: int):
-        """Get appropriate font for the screen size."""
-        try:
-            font_size = max(24, screen_width // 20)
-            font = ImageFont.truetype("/System/Library/Fonts/Arial.ttf", font_size)
-        except (OSError, IOError):
-            try:
-                font = ImageFont.load_default()
-            except:
-                font = None
-        return font
 
     def _get_text_size(self, draw, text: str, font):
         """Get text dimensions with fallback for different Pillow versions."""

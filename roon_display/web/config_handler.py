@@ -2,6 +2,11 @@
 
 import configparser
 import logging
+import os
+import platform
+import psutil
+import socket
+import subprocess
 from pathlib import Path
 from typing import Any, Dict, List, Tuple
 from werkzeug.utils import secure_filename
@@ -104,27 +109,11 @@ class WebConfigHandler:
                     "input_type": "number",
                     "comment": "Anniversary check interval in seconds (default: 60)",
                 },
-                "performance_threshold_seconds": {
-                    "type": "number",
-                    "input_type": "number",
-                    "step": "0.1",
-                    "comment": "Performance logging threshold in seconds (default: 0.5)",
-                },
                 "eink_success_threshold": {
                     "type": "number",
                     "input_type": "number",
                     "step": "0.1",
                     "comment": "E-ink success threshold in seconds (default: 12.0)",
-                },
-                "eink_warning_threshold": {
-                    "type": "number",
-                    "input_type": "number",
-                    "comment": "E-ink warning threshold in seconds (default: 30)",
-                },
-                "eink_check_interval": {
-                    "type": "number",
-                    "input_type": "number",
-                    "comment": "E-ink check interval in seconds (default: 5)",
                 },
                 "preview_auto_revert_seconds": {
                     "type": "number",
@@ -171,11 +160,6 @@ class WebConfigHandler:
                     "type": "number",
                     "input_type": "number",
                     "comment": "Anniversary text area percentage (default: 15%)",
-                },
-                "font_size_ratio_base": {
-                    "type": "number",
-                    "input_type": "number",
-                    "comment": "Base font size ratio for text rendering (default: 20)",
                 },
                 "line_spacing_ratio": {
                     "type": "number",
@@ -314,10 +298,7 @@ class WebConfigHandler:
             "DISPLAY_TIMING": {
                 "web_auto_refresh_seconds": self.config_manager.get_web_auto_refresh_seconds,
                 "anniversary_check_interval": self.config_manager.get_anniversary_check_interval,
-                "performance_threshold_seconds": self.config_manager.get_performance_threshold_seconds,
                 "eink_success_threshold": self.config_manager.get_eink_success_threshold,
-                "eink_warning_threshold": self.config_manager.get_eink_warning_threshold,
-                "eink_check_interval": self.config_manager.get_eink_check_interval,
                 "preview_auto_revert_seconds": self.config_manager.get_preview_auto_revert_seconds,
                 "preview_debounce_ms": self.config_manager.get_preview_debounce_ms,
             },
@@ -328,7 +309,6 @@ class WebConfigHandler:
                 "overlay_margin": self.config_manager.get_overlay_margin,
                 "anniversary_border_percent": self.config_manager.get_anniversary_border_percent,
                 "anniversary_text_percent": self.config_manager.get_anniversary_text_percent,
-                "font_size_ratio_base": self.config_manager.get_font_size_ratio_base,
                 "line_spacing_ratio": self.config_manager.get_line_spacing_ratio,
             },
             "IMAGE_RENDER": {
@@ -343,6 +323,10 @@ class WebConfigHandler:
                 "scale_x": self.config_manager.get_scale_x,
                 "scale_y": self.config_manager.get_scale_y,
                 "rotation": self.config_manager.get_rotation,
+            },
+            "DISPLAY": {
+                "type": self.config_manager.get_display_type,
+                "tkinter_fullscreen": self.config_manager.get_tkinter_fullscreen,
             },
             "ZONES": {
                 "allowed_zone_names": self.config_manager.get_allowed_zone_names,
@@ -382,15 +366,12 @@ class WebConfigHandler:
                         )
                         metadata["value"] = ""
                 elif section_name == "DISPLAY":
-                    # Special handling for DISPLAY section using existing method
+                    # Special handling for DISPLAY section using individual getters
                     try:
-                        display_config = self.config_manager.get_display_config()
                         if field_name == "type":
-                            metadata["value"] = display_config.get("type", "epd13in3E")
+                            metadata["value"] = self.config_manager.get_display_type()
                         elif field_name == "tkinter_fullscreen":
-                            metadata["value"] = display_config.get(
-                                "tkinter_fullscreen", False
-                            )
+                            metadata["value"] = self.config_manager.get_tkinter_fullscreen()
                         else:
                             metadata["value"] = ""
                     except Exception as e:
@@ -453,6 +434,118 @@ class WebConfigHandler:
                     }
 
         return sections
+
+    def get_system_info(self) -> Dict[str, Dict[str, Any]]:
+        """Get read-only system information for display."""
+        
+        def get_host_ip():
+            """Get the primary host IP address."""
+            try:
+                # Connect to a remote address to determine local IP
+                with socket.socket(socket.AF_INET, socket.SOCK_DGRAM) as s:
+                    s.connect(("8.8.8.8", 80))
+                    return s.getsockname()[0]
+            except Exception:
+                return "Unknown"
+        
+        def get_wifi_ssid():
+            """Get the current WiFi SSID."""
+            try:
+                if platform.system() == "Darwin":  # macOS
+                    result = subprocess.run(['iwgetid', '-r'], capture_output=True, text=True)
+                    if result.returncode == 0:
+                        return result.stdout.strip()
+                elif platform.system() == "Linux":
+                    # Try nmcli first
+                    result = subprocess.run(['nmcli', '-t', '-f', 'active,ssid', 'dev', 'wifi'], 
+                                          capture_output=True, text=True)
+                    if result.returncode == 0:
+                        for line in result.stdout.strip().split('\n'):
+                            if line.startswith('yes:'):
+                                return line.split(':', 1)[1]
+                    
+                    # Fallback to iwgetid
+                    result = subprocess.run(['iwgetid', '-r'], capture_output=True, text=True)
+                    if result.returncode == 0:
+                        return result.stdout.strip()
+                
+                return "Not connected to WiFi"
+            except Exception:
+                return "Unknown"
+        
+        def get_uptime():
+            """Get system uptime."""
+            try:
+                uptime_seconds = psutil.boot_time()
+                import time
+                uptime_duration = time.time() - uptime_seconds
+                days = int(uptime_duration // 86400)
+                hours = int((uptime_duration % 86400) // 3600)
+                minutes = int((uptime_duration % 3600) // 60)
+                return f"{days}d {hours}h {minutes}m"
+            except Exception:
+                return "Unknown"
+        
+        def get_memory_usage():
+            """Get memory usage percentage."""
+            try:
+                memory = psutil.virtual_memory()
+                free_percent = round((memory.available / memory.total) * 100, 1)
+                return f"{free_percent}% free"
+            except Exception:
+                return "Unknown"
+        
+        def get_disk_usage():
+            """Get root disk usage percentage."""
+            try:
+                disk = psutil.disk_usage('/')
+                free_percent = round((disk.free / disk.total) * 100, 1)
+                return f"{free_percent}% free"
+            except Exception:
+                return "Unknown"
+        
+        system_info = {
+            "ROON_SERVER": {
+                "roon_server_ip": {
+                    "label": "Roon Server IP",
+                    "value": self.config_manager.get_roon_server_ip() or "Not configured",
+                    "type": "info"
+                },
+                "roon_server_port": {
+                    "label": "Roon Server Port", 
+                    "value": self.config_manager.get_roon_server_port() or "Not configured",
+                    "type": "info"
+                }
+            },
+            "HOST_SYSTEM": {
+                "host_ip": {
+                    "label": "Host IP Address",
+                    "value": get_host_ip(),
+                    "type": "info"
+                },
+                "wifi_ssid": {
+                    "label": "WiFi Network",
+                    "value": get_wifi_ssid(),
+                    "type": "info"
+                },
+                "uptime": {
+                    "label": "System Uptime",
+                    "value": get_uptime(),
+                    "type": "info"
+                },
+                "memory": {
+                    "label": "Free Memory",
+                    "value": get_memory_usage(),
+                    "type": "info"
+                },
+                "disk": {
+                    "label": "Free Disk Space",
+                    "value": get_disk_usage(),
+                    "type": "info"
+                }
+            }
+        }
+        return system_info
 
     def save_config(
         self, form_data: Dict[str, str], files: Dict[str, Any]

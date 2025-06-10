@@ -17,8 +17,7 @@ class BaseViewer(ABC):
     def __init__(self, config_manager):
         """Initialize viewer with configuration manager."""
         self.config_manager = config_manager
-        self.config = config_manager.config
-        self.image_processor = ImageProcessor(self.config)
+        self.image_processor = ImageProcessor(config_manager)
 
         # Initialize health manager if health script is configured
         self.health_manager = HealthManager(config_manager)
@@ -71,10 +70,9 @@ class BaseViewer(ABC):
         logger.error(f"Error displaying image{duration_str} for {title}: {error}")
 
     def set_screen_size(self, width, height):
-        """Set screen dimensions and update image processor."""
-        self.image_processor.set_screen_size(width, height)
-        self.screen_width = width
-        self.screen_height = height
+        """Set screen dimensions and update config manager."""
+        self.config_manager.set_screen_width(width)
+        self.config_manager.set_screen_height(height)
 
     def startup(self):
         """Startup hook for viewers - now handled by coordinator."""

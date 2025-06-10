@@ -39,8 +39,6 @@ import logging
 import threading
 import time
 
-from timing_config import timing_config
-
 from ..utils import log_performance, set_current_image_key
 from .base import BaseViewer
 
@@ -78,7 +76,7 @@ class EinkViewer(BaseViewer):
         elapsed_time = time.time() - start_time
 
         # Check for render timing issues
-        if elapsed_time < timing_config.render_success_threshold:
+        if elapsed_time < self.config_manager.get_eink_success_threshold():
             logger.error("=" * 80)
             logger.error("🚨 CRITICAL: FAST DISPLAY RENDER DETECTED! 🚨")
             logger.error(f"Display took {elapsed_time:.2f} seconds (expected ~25s)")
@@ -149,14 +147,14 @@ class EinkViewer(BaseViewer):
             while self.update_thread.is_alive():
                 time.sleep(0.1)
                 wait_elapsed = time.time() - wait_start
-                # Log warning every 5 seconds after 30 seconds
+                # Log warning every minute after first minute
                 if (
-                    wait_elapsed > 30
-                    and int(wait_elapsed) % 5 == 0
+                    wait_elapsed > 60
+                    and int(wait_elapsed) % 60 == 0
                     and (wait_elapsed - int(wait_elapsed)) < 0.1
                 ):
                     logger.warning(
-                        f"Still waiting for thread {previous_thread_id} after {wait_elapsed:.1f}s"
+                        f"Still waiting for thread {previous_thread_id} after {wait_elapsed:.0f}s"
                     )
 
             wait_elapsed = time.time() - wait_start

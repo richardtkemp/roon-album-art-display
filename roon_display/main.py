@@ -36,8 +36,7 @@ pil_logger.setLevel(logging.WARNING)
 
 def create_viewer(config_manager):
     """Create appropriate viewer based on configuration."""
-    display_config = config_manager.get_display_config()
-    display_type = display_config["type"]
+    display_type = config_manager.get_display_type()
 
     if display_type == "system_display":
         logger.info("Creating Tkinter system display viewer")
@@ -92,8 +91,7 @@ def main():
             logger.info(f"Performance logging enabled: {performance_logging}")
 
         # Create anniversary manager
-        anniversary_config = config_manager.get_anniversaries_config()
-        anniversary_manager = AnniversaryManager(anniversary_config)
+        anniversary_manager = AnniversaryManager(config_manager)
 
         # Create viewer
         viewer, tk_root = create_viewer(config_manager)
@@ -101,9 +99,7 @@ def main():
         # Create message renderer for coordinator
         from .message_renderer import MessageRenderer
 
-        message_renderer = MessageRenderer(
-            viewer.image_processor.screen_width, viewer.image_processor.screen_height
-        )
+        message_renderer = MessageRenderer(config_manager)
 
         # Create render coordinator
         from .render_coordinator import RenderCoordinator

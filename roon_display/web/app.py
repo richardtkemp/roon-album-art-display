@@ -198,6 +198,9 @@ def create_app(config_path=None, port=None):
 
         # GET request - show form
         sections = config_handler.get_config_sections()
+        
+        # Get system information for read-only display
+        system_info = config_handler.get_system_info()
 
         # Organize sections into tabs
         tab_sections = {
@@ -210,6 +213,10 @@ def create_app(config_path=None, port=None):
             "Features": {
                 "ZONES": sections.get("ZONES", {}),
                 "ANNIVERSARIES": sections.get("ANNIVERSARIES", {}),
+            },
+            "System": {
+                "ROON_SERVER": system_info.get("ROON_SERVER", {}),
+                "HOST_SYSTEM": system_info.get("HOST_SYSTEM", {}),
             },
             "Advanced": {
                 "DISPLAY": sections.get("DISPLAY", {}),

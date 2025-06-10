@@ -43,7 +43,13 @@ class TestConfigManager:
 
     def test_get_zone_config(self, config_manager):
         """Test getting zone configuration."""
-        allowed, forbidden = config_manager.get_zone_config()
+        # Test individual getters
+        allowed_str = config_manager.get_allowed_zone_names()
+        forbidden_str = config_manager.get_forbidden_zone_names()
+        
+        # Parse like the client does
+        allowed = [zone.strip() for zone in allowed_str.split(",") if zone.strip()]
+        forbidden = [zone.strip() for zone in forbidden_str.split(",") if zone.strip()]
 
         assert isinstance(allowed, list)
         assert isinstance(forbidden, list)
@@ -61,7 +67,13 @@ class TestConfigManager:
             sample_config.write(f)
 
         config_manager = ConfigManager(config_path)
-        allowed, forbidden = config_manager.get_zone_config()
+        # Test individual getters with empty values
+        allowed_str = config_manager.get_allowed_zone_names()
+        forbidden_str = config_manager.get_forbidden_zone_names()
+        
+        # Parse like the client does
+        allowed = [zone.strip() for zone in allowed_str.split(",") if zone.strip()]
+        forbidden = [zone.strip() for zone in forbidden_str.split(",") if zone.strip()]
 
         assert allowed == []
         assert forbidden == []

@@ -12,10 +12,9 @@ logger = logging.getLogger(__name__)
 class MessageRenderer:
     """Handles creation of message display images with text and optional images."""
 
-    def __init__(self, screen_width: int, screen_height: int):
-        """Initialize with screen dimensions."""
-        self.screen_width = screen_width
-        self.screen_height = screen_height
+    def __init__(self, config_manager):
+        """Initialize with config manager."""
+        self.config_manager = config_manager
 
     def create_text_message(
         self, message: str, image_path: Optional[str] = None
@@ -37,11 +36,13 @@ class MessageRenderer:
     def _create_text_only_image(self, message: str) -> Image.Image:
         """Create a text-only image with centered text."""
         # Create blank white image
-        img = Image.new("RGB", (self.screen_width, self.screen_height), "white")
+        screen_width = self.config_manager.get_screen_width()
+        screen_height = self.config_manager.get_screen_height()
+        img = Image.new("RGB", (screen_width, screen_height), "white")
         draw = ImageDraw.Draw(img)
 
         # Get font and wrap text to fit screen
-        font = self._get_font_for_text(message)
+        font = ImageFont.truetype(self.config_manager.get_font(), 3 * self.config_manager.get_font_size())
         wrapped_message = self._wrap_text_for_screen(message, font)
 
         # Split wrapped message into lines and calculate total height
@@ -55,17 +56,17 @@ class MessageRenderer:
             max_line_width = max(max_line_width, line_width)
 
         # Calculate total text block height (including line spacing)
-        line_spacing = max(4, font.size // 8) if font else 4
+        line_spacing = self.config_manager.get_line_spacing_ratio() if font else self.config_manager.get_line_spacing_ratio()
         total_height = sum(line_heights) + (len(lines) - 1) * line_spacing
 
         # Center the text block
-        start_y = (self.screen_height - total_height) // 2
+        start_y = (screen_height - total_height) // 2
 
         # Draw each line centered
         current_y = start_y
         for i, line in enumerate(lines):
             line_width, line_height = self._get_text_size(draw, line, font)
-            x = (self.screen_width - line_width) // 2
+            x = (screen_width - line_width) // 2
             draw.text((x, current_y), line, fill="black", font=font)
             current_y += line_height + line_spacing
 
@@ -74,14 +75,16 @@ class MessageRenderer:
     def _create_image_with_text(self, image_path: str, message: str) -> Image.Image:
         """Create display with image above and text below."""
         # Create blank canvas
-        canvas = Image.new("RGB", (self.screen_width, self.screen_height), "white")
+        screen_width = self.config_manager.get_screen_width()
+        screen_height = self.config_manager.get_screen_height()
+        canvas = Image.new("RGB", (screen_width, screen_height), "white")
 
         # Define layout areas
-        border_size = max(20, self.screen_width // 40)
-        text_area_height = max(100, self.screen_height // 6)
+        border_size = self.config_manager.get_overlay_border_size()
+        text_area_height = screen_height // 6
 
-        image_area_width = self.screen_width - 2 * border_size
-        image_area_height = self.screen_height - text_area_height - 2 * border_size
+        image_area_width = screen_width - 2 * border_size
+        image_area_height = screen_height - text_area_height - 2 * border_size
 
         try:
             # Load and process image
@@ -127,13 +130,13 @@ class MessageRenderer:
             # Fall back to text-only if image fails
 
         # Add text at bottom
-        font = self._get_font()
+        font = ImageFont.truetype(self.config_manager.get_font(), self.config_manager.get_font_size())
         draw = ImageDraw.Draw(canvas)
         text_width, text_height = self._get_text_size(draw, message, font)
 
-        text_x = (self.screen_width - text_width) // 2
+        text_x = (screen_width - text_width) // 2
         text_y = (
-            self.screen_height
+            screen_height
             - text_area_height
             + (text_area_height - text_height) // 2
         )
@@ -182,11 +185,11 @@ class MessageRenderer:
         )
 
         # Get smaller font for overlay
-        font = self._get_overlay_font(overlay_width)
+        font = ImageFont.truetype(self.config_manager.get_font(), self.config_manager.get_font_size() // 3)
 
         # Wrap text to fit overlay
         wrapped_text = self._wrap_text_for_overlay(
-            error_message, font, overlay_width - 20
+            error_message, font, overlay_width - self.config_manager.get_overlay_border_size()
         )
 
         # Calculate text position (centered)
@@ -212,25 +215,12 @@ class MessageRenderer:
 
         return rgb_overlay
 
-    def _get_overlay_font(self, overlay_width: int):
-        """Get appropriately sized font for error overlay."""
-        # Scale font size based on overlay width
-        base_size = max(12, overlay_width // 20)
-
-        try:
-            font = ImageFont.truetype("/System/Library/Fonts/Arial.ttf", base_size)
-        except (OSError, IOError):
-            try:
-                font = ImageFont.load_default()
-            except:
-                font = None
-        return font
 
     def _wrap_text_for_overlay(self, text: str, font, max_width: int) -> str:
         """Wrap text to fit within overlay width."""
         if not font:
             # Simple character-based wrapping fallback
-            chars_per_line = max_width // 8  # Estimate
+            chars_per_line = max_width // self.config_manager.get_line_spacing_ratio()
             words = text.split()
             lines = []
             current_line = ""
@@ -288,58 +278,6 @@ class MessageRenderer:
             # Estimate text width without font
             return len(text) * 8
 
-    def _get_font(self):
-        """Get appropriate font for the screen size."""
-        try:
-            font_size = max(24, self.screen_width // 20)
-            font = ImageFont.truetype("/System/Library/Fonts/Arial.ttf", font_size)
-        except (OSError, IOError):
-            try:
-                font = ImageFont.load_default()
-            except:
-                font = None
-        return font
-
-    def _get_font_for_text(self, message: str):
-        """Get appropriately sized font that fits the message on screen."""
-        lines = message.split("\n")
-        max_lines = len(lines)
-        
-        # Calculate available space (with margins)
-        margin = max(20, self.screen_width // 40)
-        available_width = self.screen_width - 2 * margin
-        available_height = self.screen_height - 2 * margin
-        
-        # Start with a reasonable font size based on screen size
-        if max_lines > 5:
-            start_size = max(12, self.screen_width // 40)
-        elif max_lines > 3:
-            start_size = max(16, self.screen_width // 35)
-        else:
-            start_size = max(20, self.screen_width // 30)
-        
-        # Find the largest font size that fits
-        for font_size in range(start_size, 8, -2):  # Try smaller sizes until it fits
-            try:
-                font = ImageFont.truetype("/System/Library/Fonts/Arial.ttf", font_size)
-            except (OSError, IOError):
-                try:
-                    font = ImageFont.load_default()
-                except:
-                    font = None
-                    break
-            
-            if self._text_fits_in_bounds(message, font, available_width, available_height):
-                return font
-        
-        # Fallback - use smallest font or None
-        try:
-            return ImageFont.truetype("/System/Library/Fonts/Arial.ttf", 10)
-        except (OSError, IOError):
-            try:
-                return ImageFont.load_default()
-            except:
-                return None
     
     def _text_fits_in_bounds(self, message: str, font, available_width: int, available_height: int) -> bool:
         """Check if text with given font fits within the available space."""
@@ -366,7 +304,7 @@ class MessageRenderer:
             return False
         
         # Check if height fits (including line spacing)
-        line_spacing = max(4, font.size // 8) if hasattr(font, 'size') else 4
+        line_spacing = self.config_manager.get_line_spacing_ratio() if hasattr(font, 'size') else self.config_manager.get_line_spacing_ratio()
         total_height = sum(line_heights) + (len(lines) - 1) * line_spacing
         
         return total_height <= available_height
@@ -375,13 +313,15 @@ class MessageRenderer:
         """Wrap text to fit screen width, respecting existing line breaks."""
         if not font:
             # Simple character-based wrapping fallback
-            margin = max(20, self.screen_width // 40)
-            chars_per_line = (self.screen_width - 2 * margin) // 8  # Estimate
+            screen_width = self.config_manager.get_screen_width()
+            margin = self.config_manager.get_overlay_border_size()
+            chars_per_line = (screen_width - 2 * margin) // self.config_manager.get_line_spacing_ratio()
             return self._simple_wrap_text(message, chars_per_line)
         
         # Calculate available width
-        margin = max(20, self.screen_width // 40)
-        available_width = self.screen_width - 2 * margin
+        screen_width = self.config_manager.get_screen_width()
+        margin = self.config_manager.get_overlay_border_size()
+        available_width = screen_width - 2 * margin
         
         # Process each paragraph (separated by existing newlines) separately
         paragraphs = message.split("\n")
