@@ -15,10 +15,10 @@ logger = logging.getLogger(__name__)
 class InternalServer:
     """Internal HTTP server for render coordinator communication."""
     
-    def __init__(self, render_coordinator, port=9090):
+    def __init__(self, render_coordinator, config_manager):
         """Initialize internal server."""
         self.render_coordinator = render_coordinator
-        self.port = port
+        self.config_manager = config_manager
         self.app = Flask(__name__)
         self.app.logger.setLevel(logging.WARNING)  # Reduce Flask logging
         self.setup_routes()
@@ -36,7 +36,8 @@ class InternalServer:
                     img_io = io.BytesIO()
                     # Resize for web if needed
                     web_image = self._resize_for_web(image)
-                    web_image.save(img_io, 'JPEG', quality=85)
+                    jpeg_quality = self.config_manager.get_jpeg_quality()
+                    web_image.save(img_io, 'JPEG', quality=jpeg_quality)
                     img_io.seek(0)
                     return send_file(img_io, mimetype='image/jpeg')
                 else:
@@ -76,7 +77,8 @@ class InternalServer:
                 if preview_image:
                     img_io = io.BytesIO()
                     web_image = self._resize_for_web(preview_image)
-                    web_image.save(img_io, 'JPEG', quality=85)
+                    jpeg_quality = self.config_manager.get_jpeg_quality()
+                    web_image.save(img_io, 'JPEG', quality=jpeg_quality)
                     img_io.seek(0)
                     return send_file(img_io, mimetype='image/jpeg')
                 else:
@@ -93,9 +95,34 @@ class InternalServer:
                 'timestamp': time.time(),
                 'has_coordinator': self.render_coordinator is not None
             })
+        
+        @self.app.route('/update-config', methods=['POST'])
+        def update_config():
+            """Update configuration values in real-time."""
+            try:
+                config_updates = request.get_json()
+                if not config_updates:
+                    return jsonify({'success': False, 'error': 'No config data provided'}), 400
+                
+                # Update configuration
+                success = self.config_manager.update_config_values(config_updates)
+                
+                if success:
+                    return jsonify({
+                        'success': True, 
+                        'message': f'Updated {len(config_updates)} configuration values',
+                        'updated_keys': list(config_updates.keys())
+                    })
+                else:
+                    return jsonify({'success': False, 'error': 'Failed to update configuration'}), 500
+                    
+            except Exception as e:
+                logger.error(f"Error updating config via API: {e}")
+                return jsonify({'success': False, 'error': str(e)}), 500
     
-    def _resize_for_web(self, image: Image.Image, max_width: int = 600) -> Image.Image:
+    def _resize_for_web(self, image: Image.Image) -> Image.Image:
         """Resize image for web display while maintaining aspect ratio."""
+        max_width = self.config_manager.get_web_image_max_width()
         if image.width <= max_width:
             return image.copy()
         
@@ -112,7 +139,8 @@ class InternalServer:
             # Add simple text (basic approach without fonts)
             # For now, just return gray placeholder
             img_io = io.BytesIO()
-            placeholder.save(img_io, 'JPEG', quality=85)
+            jpeg_quality = self.config_manager.get_jpeg_quality()
+            placeholder.save(img_io, 'JPEG', quality=jpeg_quality)
             img_io.seek(0)
             return send_file(img_io, mimetype='image/jpeg')
         except Exception as e:
@@ -124,7 +152,8 @@ class InternalServer:
         try:
             error_img = Image.new('RGB', (400, 300), color=(200, 100, 100))
             img_io = io.BytesIO()
-            error_img.save(img_io, 'JPEG', quality=85)
+            jpeg_quality = self.config_manager.get_jpeg_quality()
+            error_img.save(img_io, 'JPEG', quality=jpeg_quality)
             img_io.seek(0)
             return send_file(img_io, mimetype='image/jpeg')
         except Exception:
@@ -139,19 +168,24 @@ class InternalServer:
                 werkzeug_logger = logging.getLogger('werkzeug')
                 werkzeug_logger.setLevel(logging.WARNING)
                 
+                host = self.config_manager.get_internal_server_host()
+                port = self.config_manager.get_internal_server_port()
                 self.app.run(
-                    host='127.0.0.1', 
-                    port=self.port, 
+                    host=host, 
+                    port=port, 
                     debug=False, 
                     use_reloader=False,
                     threaded=True
                 )
             except Exception as e:
-                logger.error(f"Internal server failed to start: {e}")
+                port = self.config_manager.get_internal_server_port()
+                logger.error(f"Internal server failed to start on port {port}: {e}")
         
         server_thread = threading.Thread(target=run_server, daemon=True)
         server_thread.start()
-        logger.info(f"Internal server started on http://127.0.0.1:{self.port}")
+        host = self.config_manager.get_internal_server_host()
+        port = self.config_manager.get_internal_server_port()
+        logger.info(f"Internal server started on http://{host}:{port}")
         
         # Give server a moment to start
         time.sleep(0.5)

@@ -4,9 +4,11 @@ After=network.target
 
 [Service]
 Type=simple
+WorkingDirectory=/mnt/dietpi_userdata/roon-album-art-display
+Environment=PATH=/mnt/dietpi_userdata/roon-album-art-display/bin:/usr/local/bin:/usr/bin:/bin
 ExecStart=/mnt/dietpi_userdata/roon-album-art-display/start_display.sh
-Restart=on-failure
-RestartSec=15s
+Restart=always
+RestartSec=1s
 
 [Install]
 WantedBy=multi-user.target

@@ -49,11 +49,14 @@ CONFIG_TEMPLATE = """
             border: none; border-radius: 4px; cursor: pointer; margin: 0 10px;
         }
         button:hover { background-color: #45a049; }
-        .restart-btn { background-color: #ff9800; }
-        .restart-btn:hover { background-color: #e68900; }
+        .apply-btn { background-color: #4CAF50; }
+        .apply-btn:hover { background-color: #45a049; }
         .flash-messages { margin-bottom: 20px; }
         .flash-success { background-color: #d4edda; color: #155724; padding: 10px; border-radius: 4px; }
         .flash-error { background-color: #f8d7da; color: #721c24; padding: 10px; border-radius: 4px; }
+        .form-message { margin-top: 15px; padding: 10px; border-radius: 4px; }
+        .form-message.success { background-color: #d4edda; color: #155724; }
+        .form-message.error { background-color: #f8d7da; color: #721c24; }
         .textarea-large { height: 120px; }
         .thumbnail-container { 
             display: flex; flex-wrap: wrap; gap: 10px; margin-top: 10px; 
@@ -65,11 +68,15 @@ CONFIG_TEMPLATE = """
         }
         .thumbnail-item img { 
             width: 100px; height: 100px; object-fit: cover; display: block; 
+            margin: 0; padding: 0;
         }
         .thumbnail-delete { 
             position: absolute; top: 2px; right: 2px; background: rgba(244, 67, 54, 0.9); 
-            color: white; border: none; border-radius: 50%; width: 20px; height: 20px; 
-            cursor: pointer; font-size: 12px; line-height: 1; font-weight: bold;
+            color: white; border: none; border-radius: 50%; width: 16px; height: 16px; 
+            cursor: pointer; font-size: 10px; line-height: 1; font-weight: bold;
+            display: flex; align-items: center; justify-content: center;
+            min-width: 16px; max-width: 16px; min-height: 16px; max-height: 16px;
+            padding: 0; margin: 0; box-sizing: border-box;
         }
         .thumbnail-delete:hover { background: rgba(244, 67, 54, 1); }
         .thumbnail-filename { 
@@ -77,24 +84,6 @@ CONFIG_TEMPLATE = """
             background: rgba(0,0,0,0.7); color: white; font-size: 10px; 
             padding: 2px 4px; text-overflow: ellipsis; overflow: hidden; white-space: nowrap;
         }
-        .status-section {
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-            color: white; padding: 20px; margin-bottom: 30px; border-radius: 8px;
-            box-shadow: 0 4px 8px rgba(0,0,0,0.1);
-        }
-        .status-header { font-size: 1.5em; font-weight: bold; margin-bottom: 15px; }
-        .status-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 15px; }
-        .status-item { background: rgba(255,255,255,0.1); padding: 12px; border-radius: 6px; }
-        .status-label { font-weight: bold; font-size: 0.9em; opacity: 0.8; margin-bottom: 5px; }
-        .status-value { font-size: 1.1em; word-break: break-word; }
-        .status-indicator { 
-            display: inline-block; width: 10px; height: 10px; border-radius: 50%; 
-            margin-right: 8px; animation: pulse 2s infinite;
-        }
-        .status-active { background-color: #4CAF50; }
-        .status-error { background-color: #f44336; }
-        .status-unknown { background-color: #ff9800; }
-        @keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.5; } }
         .display-preview-section {
             background: #ffffff; border: 1px solid #ddd; border-radius: 8px;
             padding: 20px; margin-bottom: 30px; box-shadow: 0 2px 4px rgba(0,0,0,0.1);
@@ -133,6 +122,27 @@ CONFIG_TEMPLATE = """
             box-shadow: 0 0 20px rgba(255, 152, 0, 0.6) !important;
             transition: box-shadow 0.3s ease;
         }
+        
+        /* Tab styling */
+        .tab-container { margin-top: 20px; }
+        .tab-buttons { 
+            display: flex; border-bottom: 2px solid #ddd; background: #f8f8f8; 
+            border-radius: 8px 8px 0 0; overflow: hidden;
+        }
+        .tab-button { 
+            background: #f0f0f0; border: none; padding: 12px 24px; cursor: pointer; 
+            font-size: 1em; font-weight: bold; color: #666; transition: all 0.3s ease;
+            flex: 1; text-align: center;
+        }
+        .tab-button:hover { background: #e0e0e0; color: #333; }
+        .tab-button.active { 
+            background: #4CAF50; color: white; border-bottom: 3px solid #45a049; 
+        }
+        .tab-content { 
+            display: none; background: white; border: 1px solid #ddd; 
+            border-top: none; padding: 20px; border-radius: 0 0 8px 8px;
+        }
+        .tab-content.active { display: block; }
     </style>
 </head>
 <body>
@@ -158,51 +168,30 @@ CONFIG_TEMPLATE = """
         </div>
     </div>
     
-    <!-- Current Display Status -->
-    <div class="status-section" id="status-section">
-        <div class="status-header">
-            <span class="status-indicator status-unknown" id="status-indicator"></span>
-            Current Display Status
-        </div>
-        <div class="status-grid" id="status-grid">
-            <div class="status-item">
-                <div class="status-label">Display Type</div>
-                <div class="status-value" id="status-display-type">Loading...</div>
-            </div>
-            <div class="status-item">
-                <div class="status-label">Current Status</div>
-                <div class="status-value" id="status-current">Loading...</div>
-            </div>
-            <div class="status-item">
-                <div class="status-label">Last Track</div>
-                <div class="status-value" id="status-last-track">Loading...</div>
-            </div>
-            <div class="status-item">
-                <div class="status-label">Image Key</div>
-                <div class="status-value" id="status-image-key">Loading...</div>
-            </div>
-        </div>
-    </div>
-    
-    <div class="flash-messages">
-        {% with messages = get_flashed_messages(with_categories=true) %}
-            {% if messages %}
-                {% for category, message in messages %}
-                    <div class="flash-{{ category }}">{{ message }}</div>
-                {% endfor %}
-            {% endif %}
-        {% endwith %}
-    </div>
+    <!-- Flash messages for traditional form submission (fallback) -->
 
-    <form method="POST" enctype="multipart/form-data">
-        {% for section_name, section_data in sections.items() %}
-        <div class="section">
-            <h2>{{ section_name.replace('_', ' ').title() }}</h2>
+    <form method="POST" enctype="multipart/form-data" onsubmit="submitForm(event); return false;">
+        
+        <div class="tab-container">
+            <div class="tab-buttons">
+                {% for tab_name in tab_sections.keys() %}
+                <button type="button" class="tab-button {{ 'active' if loop.first else '' }}" onclick="switchTab('{{ tab_name }}')" id="tab-{{ tab_name }}">
+                    {{ tab_name }}
+                </button>
+                {% endfor %}
+            </div>
+            
+            {% for tab_name, tab_sections_data in tab_sections.items() %}
+            <div class="tab-content {{ 'active' if loop.first else '' }}" id="content-{{ tab_name }}">
+                {% for section_name, section_data in tab_sections_data.items() %}
+                {% if section_data %}
+                <div class="section">
+                    <h2>{{ section_name.replace('_', ' ').title() }}</h2>
             
             {% if section_name == 'ANNIVERSARIES' %}
                 <!-- Special handling for anniversaries section -->
                 {% for key, config_item in section_data.items() %}
-                    {% if key in ['enabled', 'border'] %}
+                    {% if key in ['enabled'] %}
                     <div class="form-group">
                         <label for="{{ section_name }}_{{ key }}">{{ key.replace('_', ' ').title() }}:</label>
                         
@@ -214,7 +203,10 @@ CONFIG_TEMPLATE = """
                             <input type="{{ config_item.input_type }}" 
                                    id="{{ section_name }}_{{ key }}" 
                                    name="{{ section_name }}.{{ key }}" 
-                                   value="{{ config_item.value }}">
+                                   value="{{ config_item.value }}"
+                                   {% if config_item.min %}min="{{ config_item.min }}"{% endif %}
+                                   {% if config_item.max %}max="{{ config_item.max }}"{% endif %}
+                                   {% if config_item.step %}step="{{ config_item.step }}"{% endif %}>
                         {% endif %}
                         
                         {% if config_item.comment %}
@@ -234,7 +226,7 @@ CONFIG_TEMPLATE = """
                     
                     <div id="anniversary-entries">
                         {% for key, config_item in section_data.items() %}
-                            {% if key not in ['enabled', 'border'] and not key.startswith('#') %}
+                            {% if key not in ['enabled'] and not key.startswith('#') %}
                             {% set parts = config_item.value.split(',') %}
                             {% set date_part = parts[0] if parts|length > 0 else '' %}
                             {% set message_part = parts[1] if parts|length > 1 else '' %}
@@ -315,7 +307,10 @@ CONFIG_TEMPLATE = """
                             <input type="{{ config_item.input_type }}" 
                                    id="{{ section_name }}_{{ key }}" 
                                    name="{{ section_name }}.{{ key }}" 
-                                   value="{{ config_item.value }}">
+                                   value="{{ config_item.value }}"
+                                   {% if config_item.min %}min="{{ config_item.min }}"{% endif %}
+                                   {% if config_item.max %}max="{{ config_item.max }}"{% endif %}
+                                   {% if config_item.step %}step="{{ config_item.step }}"{% endif %}>
                         {% endif %}
                         
                         {% if config_item.comment %}
@@ -326,15 +321,99 @@ CONFIG_TEMPLATE = """
                 {% endfor %}
             {% endif %}
         </div>
+        {% endif %}
         {% endfor %}
+            </div>
+            {% endfor %}
+        </div>
         
         <div class="button-group">
-            <button type="submit" name="action" value="restart" class="restart-btn">Save</button>
+            <button type="submit" name="action" value="apply" class="apply-btn" id="apply-btn">Apply Changes</button>
+            <div id="message-area" style="margin-top: 15px; display: none;">
+                <div id="message-content" class="flash-success"></div>
+            </div>
         </div>
     </form>
 
     <script>
         let anniversaryCounter = {{ anniversary_count }};
+        
+        // Tab switching functionality
+        function switchTab(tabName) {
+            // Hide all tab contents
+            const tabContents = document.querySelectorAll('.tab-content');
+            tabContents.forEach(content => content.classList.remove('active'));
+            
+            // Remove active class from all tab buttons
+            const tabButtons = document.querySelectorAll('.tab-button');
+            tabButtons.forEach(button => button.classList.remove('active'));
+            
+            // Show selected tab content
+            document.getElementById('content-' + tabName).classList.add('active');
+            
+            // Add active class to selected tab button
+            document.getElementById('tab-' + tabName).classList.add('active');
+        }
+        
+        // AJAX form submission
+        function submitForm(event) {
+            event.preventDefault();
+            
+            const form = event.target;
+            const submitButton = document.getElementById('apply-btn');
+            const messageArea = document.getElementById('message-area');
+            const messageContent = document.getElementById('message-content');
+            
+            // Show loading state
+            const originalText = submitButton.textContent;
+            submitButton.textContent = 'Applying...';
+            submitButton.disabled = true;
+            
+            // Hide any previous messages
+            messageArea.style.display = 'none';
+            
+            // Create FormData from form
+            const formData = new FormData(form);
+            
+            // Send AJAX request
+            fetch(form.action || window.location.pathname, {
+                method: 'POST',
+                headers: {
+                    'X-Requested-With': 'XMLHttpRequest'
+                },
+                body: formData
+            })
+            .then(response => {
+                if (!response.ok) {
+                    throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+                }
+                return response.json();
+            })
+            .then(data => {
+                // Show success/error message
+                messageContent.textContent = data.message;
+                messageContent.className = data.success ? 'flash-success' : 'flash-error';
+                messageArea.style.display = 'block';
+                
+                // Auto-hide success messages after 3 seconds
+                if (data.success) {
+                    setTimeout(() => {
+                        messageArea.style.display = 'none';
+                    }, 3000);
+                }
+            })
+            .catch(error => {
+                console.error('Form submission error:', error);
+                messageContent.textContent = `Error: ${error.message}`;
+                messageContent.className = 'flash-error';
+                messageArea.style.display = 'block';
+            })
+            .finally(() => {
+                // Restore button state
+                submitButton.textContent = originalText;
+                submitButton.disabled = false;
+            });
+        }
         
         function addAnniversary() {
             const container = document.getElementById('anniversary-entries');
@@ -354,8 +433,8 @@ CONFIG_TEMPLATE = """
                 </div>
                 <div style="display: flex; gap: 10px; align-items: center; margin-bottom: 10px;">
                     <label style="min-width: 100px; font-weight: bold;">Message:</label>
-                    <input type="text" name="anniversary_message_${anniversaryCounter}" value="" style="flex: 1;" placeholder="Happy \${years} birthday John!">
-                    <span style="color: #666; font-size: 0.9em;">Use \${years} for age</span>
+                    <input type="text" name="anniversary_message_${anniversaryCounter}" value="" style="flex: 1;" placeholder="Happy $${years} birthday John!">
+                    <span style="color: #666; font-size: 0.9em;">Use $${years} for age</span>
                 </div>
                 <div style="display: flex; gap: 10px; align-items: center; margin-bottom: 10px;">
                     <label style="min-width: 100px; font-weight: bold;">Wait Time:</label>
@@ -498,10 +577,10 @@ CONFIG_TEMPLATE = """
                     
                     console.log('Preview generated successfully');
                     
-                    // Auto-revert after 30 seconds
+                    // Auto-revert after configured time
                     setTimeout(() => {
                         revertToLiveDisplay();
-                    }, 30000);
+                    }, {{ preview_auto_revert_ms }});
                 })
                 .catch(error => {
                     console.error('Preview failed:', error);
@@ -516,73 +595,16 @@ CONFIG_TEMPLATE = """
                         revertToLiveDisplay();
                     }, 2000);
                 });
-            }, 500); // 500ms debounce
+            }, {{ preview_debounce_ms }}); // Configurable debounce from server
         }
 
-        // Status update functionality
-        function updateStatus() {
-            fetch('/display-status')
-                .then(response => response.json())
-                .then(data => {
-                    // Update status indicator
-                    const indicator = document.getElementById('status-indicator');
-                    indicator.className = 'status-indicator';
-                    
-                    if (data.error || !data.internal_app_connected) {
-                        indicator.classList.add('status-error');
-                    } else if (data.current_image_key || data.has_image) {
-                        indicator.classList.add('status-active');
-                    } else {
-                        indicator.classList.add('status-unknown');
-                    }
-                    
-                    // Update status fields
-                    document.getElementById('status-display-type').textContent = 
-                        data.content_type || data.display_type || 'Unknown';
-                    document.getElementById('status-current').textContent = 
-                        data.track_info || data.status || 'No status available';
-                    
-                    // Format last track time
-                    const lastTrackElement = document.getElementById('status-last-track');
-                    if (data.time_since_last_track) {
-                        lastTrackElement.textContent = data.time_since_last_track;
-                    } else if (data.timestamp) {
-                        const date = new Date(data.timestamp * 1000);
-                        lastTrackElement.textContent = date.toLocaleString();
-                    } else {
-                        lastTrackElement.textContent = 'No track data';
-                    }
-                    
-                    // Update image key
-                    const imageKeyElement = document.getElementById('status-image-key');
-                    if (data.image_key) {
-                        imageKeyElement.textContent = data.image_key;
-                        imageKeyElement.style.fontFamily = 'monospace';
-                        imageKeyElement.style.fontSize = '0.9em';
-                    } else {
-                        imageKeyElement.textContent = 'No image key';
-                    }
-                })
-                .catch(error => {
-                    console.error('Error fetching status:', error);
-                    
-                    // Update to error state
-                    const indicator = document.getElementById('status-indicator');
-                    indicator.className = 'status-indicator status-error';
-                    
-                    document.getElementById('status-display-type').textContent = 'Error';
-                    document.getElementById('status-current').textContent = 'Failed to fetch status';
-                    document.getElementById('status-last-track').textContent = 'Error';
-                    document.getElementById('status-image-key').textContent = 'Error';
-                });
-        }
 
         function shouldTriggerPreview(section, fieldName) {
             // Define which sections should trigger preview
-            const previewSections = ['ANNIVERSARIES', 'IMAGE_RENDER', 'IMAGE_POSITION', 'DISPLAY'];
+            const previewSections = ['ANNIVERSARIES', 'IMAGE_RENDER', 'IMAGE_POSITION', 'DISPLAY', 'LAYOUT', 'IMAGE_QUALITY'];
             
             // Skip non-visual fields
-            const skipFields = ['APP', 'ZONES', 'MONITORING'];
+            const skipFields = ['ZONES', 'MONITORING', 'NETWORK', 'TIMEOUTS'];
             if (skipFields.includes(section)) {
                 return false;
             }
@@ -591,7 +613,11 @@ CONFIG_TEMPLATE = """
             const skipSpecificFields = [
                 'loop_time', 'log_level', 'performance_logging', 
                 'health_script', 'health_recheck_interval',
-                'allowed_zone_names', 'forbidden_zone_names'
+                'allowed_zone_names', 'forbidden_zone_names',
+                'web_auto_refresh_seconds', 'anniversary_check_interval',
+                'performance_threshold_seconds', 'eink_success_threshold',
+                'eink_warning_threshold', 'eink_check_interval',
+                'preview_auto_revert_seconds', 'preview_debounce_ms'
             ];
             if (skipSpecificFields.some(field => fieldName.includes(field))) {
                 return false;
@@ -653,19 +679,24 @@ CONFIG_TEMPLATE = """
         
         // Initial load and periodic updates
         document.addEventListener('DOMContentLoaded', function() {
+            // Hide legacy flash messages since we have AJAX enabled
+            const legacyFlash = document.getElementById('legacy-flash-messages');
+            if (legacyFlash) {
+                legacyFlash.style.display = 'none';
+            }
+            
             updateDisplayImage();
             updateDisplayMetadata();
-            updateStatus();
             setupFormChangeDetection();
             
-            // Auto-refresh every 10 seconds
+            // Auto-refresh at configured interval
+            const refreshInterval = {{ web_refresh_interval }};  // From server config
             setInterval(() => {
                 if (!previewMode) {
                     updateDisplayImage();
                     updateDisplayMetadata();
                 }
-                updateStatus();
-            }, 10000);
+            }, refreshInterval);
             
             // Refresh button
             document.getElementById('refresh-display').addEventListener('click', () => {
@@ -682,14 +713,18 @@ CONFIG_TEMPLATE = """
 class InternalAppClient:
     """HTTP client for communication with the main Roon display app."""
     
-    def __init__(self, base_url="http://127.0.0.1:9090"):
-        """Initialize client with base URL of internal server."""
-        self.base_url = base_url
+    def __init__(self, config_manager):
+        """Initialize client with config manager."""
+        self.config_manager = config_manager
+        host = config_manager.get_internal_server_host()
+        port = config_manager.get_internal_server_port()
+        self.base_url = f"http://{host}:{port}"
         
     def get_current_image(self) -> Optional[bytes]:
         """Get current display image from main app."""
         try:
-            response = requests.get(f"{self.base_url}/current-image", timeout=5)
+            timeout = self.config_manager.get_web_request_timeout()
+            response = requests.get(f"{self.base_url}/current-image", timeout=timeout)
             if response.status_code == 200:
                 return response.content
             else:
@@ -702,7 +737,8 @@ class InternalAppClient:
     def get_current_status(self) -> Dict[str, Any]:
         """Get current display status from main app."""
         try:
-            response = requests.get(f"{self.base_url}/current-status", timeout=5)
+            timeout = self.config_manager.get_web_request_timeout()
+            response = requests.get(f"{self.base_url}/current-status", timeout=timeout)
             if response.status_code == 200:
                 return response.json()
             else:
@@ -718,7 +754,7 @@ class InternalAppClient:
             response = requests.post(
                 f"{self.base_url}/preview", 
                 json=config_data, 
-                timeout=10
+                timeout=self.config_manager.get_web_request_timeout() * 2  # Longer timeout for preview generation
             )
             if response.status_code == 200:
                 return response.content
@@ -732,14 +768,33 @@ class InternalAppClient:
     def check_health(self) -> bool:
         """Check if main app is responsive."""
         try:
-            response = requests.get(f"{self.base_url}/health", timeout=2)
+            timeout = max(2, self.config_manager.get_web_request_timeout() // 2)
+            response = requests.get(f"{self.base_url}/health", timeout=timeout)
             return response.status_code == 200
         except requests.RequestException:
             return False
+    
+    def update_config(self, config_updates: dict) -> dict:
+        """Send configuration updates to main app."""
+        try:
+            timeout = self.config_manager.get_web_request_timeout()
+            response = requests.post(
+                f"{self.base_url}/update-config",
+                json=config_updates,
+                timeout=timeout
+            )
+            if response.status_code == 200:
+                return response.json()
+            else:
+                logger.warning(f"Failed to update config: HTTP {response.status_code}")
+                return {"success": False, "error": f"HTTP {response.status_code}"}
+        except requests.RequestException as e:
+            logger.debug(f"Failed to update config: {e}")
+            return {"success": False, "error": str(e)}
 
 
-# Global client instance
-internal_client = InternalAppClient()
+# Global client instance (initialized in main)
+internal_client = None
 
 
 def validate_image_format(file_data: bytes, filename: str) -> bool:
@@ -785,7 +840,7 @@ def get_anniversary_images() -> Dict[str, List[str]]:
     return anniversary_images
 
 
-def create_thumbnail(image_path: Path, max_size: Tuple[int, int] = (150, 150)) -> Optional[bytes]:
+def create_thumbnail(image_path: Path, max_size: Tuple[int, int] = (150, 150), jpeg_quality: int = 85) -> Optional[bytes]:
     """Create a thumbnail from an image file."""
     try:
         with Image.open(image_path) as img:
@@ -803,7 +858,7 @@ def create_thumbnail(image_path: Path, max_size: Tuple[int, int] = (150, 150)) -
             # Save to bytes
             import io
             thumb_io = io.BytesIO()
-            img.save(thumb_io, format='JPEG', quality=85)
+            img.save(thumb_io, format='JPEG', quality=jpeg_quality)
             thumb_io.seek(0)
             return thumb_io.getvalue()
             
@@ -812,81 +867,6 @@ def create_thumbnail(image_path: Path, max_size: Tuple[int, int] = (150, 150)) -
         return None
 
 
-def get_current_display_status() -> Dict[str, Any]:
-    """Get current display status information."""
-    try:
-        status = {
-            "timestamp": time.time(),
-            "current_image_key": None,
-            "last_track_time": None,
-            "display_type": "Unknown",
-            "status": "No data available",
-            "image_path": None,
-            "time_since_last_track": None
-        }
-        
-        # Get current image key
-        current_key = get_current_image_key()
-        if current_key:
-            status["current_image_key"] = current_key
-            
-            # Try to determine what's being displayed
-            if "anniversary" in current_key.lower():
-                status["display_type"] = "Anniversary"
-                status["status"] = f"Showing anniversary content: {current_key}"
-            elif current_key == "overlay_fullscreen":
-                status["display_type"] = "Message"
-                status["status"] = "Showing fullscreen message"
-            elif current_key.startswith("album_art_"):
-                status["display_type"] = "Album Art"
-                status["status"] = f"Showing album art: {current_key}"
-            else:
-                status["display_type"] = "Content"
-                status["status"] = f"Showing: {current_key}"
-            
-            # Check if image file exists
-            image_dir = get_saved_image_dir()
-            possible_paths = [
-                image_dir / f"album_art_{current_key}.jpg",
-                image_dir / f"{current_key}.jpg",
-                image_dir / current_key
-            ]
-            
-            for path in possible_paths:
-                if path.exists():
-                    status["image_path"] = str(path)
-                    break
-        else:
-            status["status"] = "No current display information"
-        
-        # Get last track time
-        last_track_time = get_last_track_time()
-        if last_track_time:
-            status["last_track_time"] = last_track_time
-            time_diff = time.time() - last_track_time
-            
-            if time_diff < 60:
-                status["time_since_last_track"] = f"{int(time_diff)} seconds ago"
-            elif time_diff < 3600:
-                status["time_since_last_track"] = f"{int(time_diff // 60)} minutes ago"
-            else:
-                hours = int(time_diff // 3600)
-                minutes = int((time_diff % 3600) // 60)
-                status["time_since_last_track"] = f"{hours}h {minutes}m ago"
-        
-        return status
-        
-    except Exception as e:
-        logger.error(f"Error getting display status: {e}")
-        return {
-            "timestamp": time.time(),
-            "status": f"Error getting status: {e}",
-            "display_type": "Error",
-            "current_image_key": None,
-            "last_track_time": None,
-            "image_path": None,
-            "time_since_last_track": None
-        }
 
 
 def delete_anniversary_image(anniversary_name: str, filename: str) -> bool:
@@ -917,28 +897,139 @@ def delete_anniversary_image(anniversary_name: str, filename: str) -> bool:
 class WebConfigServer:
     """Web configuration server for Roon display."""
     
-    def __init__(self, config_path=None, port=8080):
+    def __init__(self, config_path=None, port=None):
         """Initialize web config server."""
         self.config_path = config_path or Path("roon.cfg")
-        self.port = port
         self.config_manager = ConfigManager(self.config_path)
+        self.port = port or self.config_manager.get_web_config_port()
         
     def _get_config_sections(self) -> Dict[str, Dict[str, Any]]:
         """Get configuration sections with metadata for dynamic rendering."""
         sections = {}
         
-        # Read the current config file
-        config = configparser.ConfigParser()
-        config.read(self.config_path)
-        
         # Define metadata for each section and field
         field_metadata = {
-            'APP': {
-                'extension_id': {'type': 'text', 'comment': 'Unique identifier for Roon extension'},
-                'display_name': {'type': 'text', 'comment': 'Display name shown in Roon'},
-                'display_version': {'type': 'text', 'comment': 'Version number'},
-                'publisher': {'type': 'text', 'comment': 'Publisher name'},
-                'email': {'type': 'text', 'comment': 'Contact email'},
+            'NETWORK': {
+                'internal_server_port': {
+                    'type': 'number', 'input_type': 'number',
+                    'comment': 'Port for internal HTTP server (default: 9090)'
+                },
+                'web_config_port': {
+                    'type': 'number', 'input_type': 'number',
+                    'comment': 'Port for web configuration server (default: 8080)'
+                },
+                'simulation_server_port': {
+                    'type': 'number', 'input_type': 'number',
+                    'comment': 'Port for simulation server (default: 9999)'
+                },
+                'internal_server_host': {
+                    'type': 'text',
+                    'comment': 'Host address for internal server (default: 127.0.0.1)'
+                },
+                'web_config_host': {
+                    'type': 'text',
+                    'comment': 'Host address for web config server (default: 0.0.0.0)'
+                },
+            },
+            'TIMEOUTS': {
+                'roon_authorization_timeout': {
+                    'type': 'number', 'input_type': 'number',
+                    'comment': 'Roon authorization timeout in seconds (default: 300)'
+                },
+                'health_script_timeout': {
+                    'type': 'number', 'input_type': 'number',
+                    'comment': 'Health script execution timeout in seconds (default: 30)'
+                },
+                'reconnection_interval': {
+                    'type': 'number', 'input_type': 'number',
+                    'comment': 'Time between reconnection attempts in seconds (default: 60)'
+                },
+                'web_request_timeout': {
+                    'type': 'number', 'input_type': 'number',
+                    'comment': 'Web request timeout in seconds (default: 5)'
+                },
+            },
+            'IMAGE_QUALITY': {
+                'jpeg_quality': {
+                    'type': 'number', 'input_type': 'number', 'min': '1', 'max': '100',
+                    'comment': 'JPEG quality for web images (1-100, default: 85)'
+                },
+                'web_image_max_width': {
+                    'type': 'number', 'input_type': 'number',
+                    'comment': 'Maximum width for web images in pixels (default: 600)'
+                },
+                'thumbnail_size': {
+                    'type': 'number', 'input_type': 'number',
+                    'comment': 'Thumbnail size in pixels (square, default: 100)'
+                },
+            },
+            'DISPLAY_TIMING': {
+                'web_auto_refresh_seconds': {
+                    'type': 'number', 'input_type': 'number',
+                    'comment': 'Web interface auto-refresh interval in seconds (default: 10)'
+                },
+                'anniversary_check_interval': {
+                    'type': 'number', 'input_type': 'number',
+                    'comment': 'Anniversary check interval in seconds (default: 60)'
+                },
+                'performance_threshold_seconds': {
+                    'type': 'number', 'input_type': 'number', 'step': '0.1',
+                    'comment': 'Performance logging threshold in seconds (default: 0.5)'
+                },
+                'eink_success_threshold': {
+                    'type': 'number', 'input_type': 'number', 'step': '0.1',
+                    'comment': 'E-ink success threshold in seconds (default: 12.0)'
+                },
+                'eink_warning_threshold': {
+                    'type': 'number', 'input_type': 'number',
+                    'comment': 'E-ink warning threshold in seconds (default: 30)'
+                },
+                'eink_check_interval': {
+                    'type': 'number', 'input_type': 'number',
+                    'comment': 'E-ink check interval in seconds (default: 5)'
+                },
+                'preview_auto_revert_seconds': {
+                    'type': 'number', 'input_type': 'number',
+                    'comment': 'Preview auto-revert time in seconds (default: 30)'
+                },
+                'preview_debounce_ms': {
+                    'type': 'number', 'input_type': 'number',
+                    'comment': 'Preview debounce time in milliseconds (default: 500)'
+                },
+            },
+            'LAYOUT': {
+                'overlay_size_x_percent': {
+                    'type': 'number', 'input_type': 'number', 'min': '5', 'max': '50',
+                    'comment': 'Overlay width percentage (5-50%, default: 33%)'
+                },
+                'overlay_size_y_percent': {
+                    'type': 'number', 'input_type': 'number', 'min': '5', 'max': '50',
+                    'comment': 'Overlay height percentage (5-50%, default: 25%)'
+                },
+                'overlay_border_size': {
+                    'type': 'number', 'input_type': 'number',
+                    'comment': 'Overlay border size in pixels (default: 20)'
+                },
+                'overlay_margin': {
+                    'type': 'number', 'input_type': 'number',
+                    'comment': 'Overlay margin from screen edge in pixels (default: 20)'
+                },
+                'anniversary_border_percent': {
+                    'type': 'number', 'input_type': 'number',
+                    'comment': 'Anniversary border percentage (default: 5%)'
+                },
+                'anniversary_text_percent': {
+                    'type': 'number', 'input_type': 'number',
+                    'comment': 'Anniversary text area percentage (default: 15%)'
+                },
+                'font_size_ratio_base': {
+                    'type': 'number', 'input_type': 'number',
+                    'comment': 'Base font size ratio for text rendering (default: 20)'
+                },
+                'line_spacing_ratio': {
+                    'type': 'number', 'input_type': 'number',
+                    'comment': 'Line spacing ratio for text rendering (default: 8)'
+                },
             },
             'DISPLAY': {
                 'type': {
@@ -1007,10 +1098,6 @@ class WebConfigServer:
                     'type': 'boolean',
                     'comment': 'Enable anniversary notifications'
                 },
-                'border': {
-                    'type': 'number', 'input_type': 'number',
-                    'comment': 'Border size for anniversary messages in pixels'
-                },
             },
             'MONITORING': {
                 'log_level': {
@@ -1038,45 +1125,157 @@ class WebConfigServer:
             }
         }
         
-        # Build sections with current values and metadata
-        for section_name in config.sections():
-            if section_name not in field_metadata:
-                continue
-                
+        # Define mapping from fields to config_manager getter methods
+        field_getters = {
+            'NETWORK': {
+                'internal_server_port': self.config_manager.get_internal_server_port,
+                'web_config_port': self.config_manager.get_web_config_port,
+                'simulation_server_port': self.config_manager.get_simulation_server_port,
+                'internal_server_host': self.config_manager.get_internal_server_host,
+                'web_config_host': self.config_manager.get_web_config_host,
+            },
+            'TIMEOUTS': {
+                'roon_authorization_timeout': self.config_manager.get_roon_authorization_timeout,
+                'health_script_timeout': self.config_manager.get_health_script_timeout,
+                'reconnection_interval': self.config_manager.get_reconnection_interval,
+                'web_request_timeout': self.config_manager.get_web_request_timeout,
+            },
+            'IMAGE_QUALITY': {
+                'jpeg_quality': self.config_manager.get_jpeg_quality,
+                'web_image_max_width': self.config_manager.get_web_image_max_width,
+                'thumbnail_size': self.config_manager.get_thumbnail_size,
+            },
+            'DISPLAY_TIMING': {
+                'web_auto_refresh_seconds': self.config_manager.get_web_auto_refresh_seconds,
+                'anniversary_check_interval': self.config_manager.get_anniversary_check_interval,
+                'performance_threshold_seconds': self.config_manager.get_performance_threshold_seconds,
+                'eink_success_threshold': self.config_manager.get_eink_success_threshold,
+                'eink_warning_threshold': self.config_manager.get_eink_warning_threshold,
+                'eink_check_interval': self.config_manager.get_eink_check_interval,
+                'preview_auto_revert_seconds': self.config_manager.get_preview_auto_revert_seconds,
+                'preview_debounce_ms': self.config_manager.get_preview_debounce_ms,
+            },
+            'LAYOUT': {
+                'overlay_size_x_percent': self.config_manager.get_overlay_size_x_percent,
+                'overlay_size_y_percent': self.config_manager.get_overlay_size_y_percent,
+                'overlay_border_size': self.config_manager.get_overlay_border_size,
+                'overlay_margin': self.config_manager.get_overlay_margin,
+                'anniversary_border_percent': self.config_manager.get_anniversary_border_percent,
+                'anniversary_text_percent': self.config_manager.get_anniversary_text_percent,
+                'font_size_ratio_base': self.config_manager.get_font_size_ratio_base,
+                'line_spacing_ratio': self.config_manager.get_line_spacing_ratio,
+            },
+            'IMAGE_RENDER': {
+                'colour_balance_adjustment': self.config_manager.get_colour_balance_adjustment,
+                'contrast_adjustment': self.config_manager.get_contrast_adjustment,
+                'sharpness_adjustment': self.config_manager.get_sharpness_adjustment,
+                'brightness_adjustment': self.config_manager.get_brightness_adjustment,
+            },
+            'IMAGE_POSITION': {
+                'position_offset_x': self.config_manager.get_position_offset_x,
+                'position_offset_y': self.config_manager.get_position_offset_y,
+                'scale_x': self.config_manager.get_scale_x,
+                'scale_y': self.config_manager.get_scale_y,
+                'rotation': self.config_manager.get_rotation,
+            },
+            'ZONES': {
+                'allowed_zone_names': self.config_manager.get_allowed_zone_names,
+                'forbidden_zone_names': self.config_manager.get_forbidden_zone_names,
+            },
+            'MONITORING': {
+                'log_level': self.config_manager.get_log_level_string,
+                'loop_time': self.config_manager.get_loop_time_string,
+                'performance_logging': self.config_manager.get_performance_logging_string,
+                'health_script': self.config_manager.get_health_script,
+                'health_recheck_interval': self.config_manager.get_health_recheck_interval_string,
+            },
+            'ANNIVERSARIES': {
+                'enabled': self.config_manager.get_anniversaries_enabled,
+            }
+        }
+        
+        # Build sections with current values from config_manager
+        for section_name, section_fields in field_metadata.items():
             sections[section_name] = {}
-            section_config = config[section_name]
             
-            for key, value in section_config.items():
-                if key in field_metadata[section_name]:
-                    metadata = field_metadata[section_name][key].copy()
-                    metadata['value'] = value
+            # Process all fields defined in metadata
+            for field_name, field_metadata_item in section_fields.items():
+                metadata = field_metadata_item.copy()
+                
+                # Get current value using config_manager getter method
+                if section_name in field_getters and field_name in field_getters[section_name]:
+                    try:
+                        current_value = field_getters[section_name][field_name]()
+                        metadata['value'] = current_value
+                    except Exception as e:
+                        logger.warning(f"Error getting value for {section_name}.{field_name}: {e}")
+                        metadata['value'] = ''
+                elif section_name == 'DISPLAY':
+                    # Special handling for DISPLAY section using existing method
+                    try:
+                        display_config = self.config_manager.get_display_config()
+                        if field_name == 'type':
+                            metadata['value'] = display_config.get('type', 'epd13in3E')
+                        elif field_name == 'tkinter_fullscreen':
+                            metadata['value'] = display_config.get('tkinter_fullscreen', False)
+                        else:
+                            metadata['value'] = ''
+                    except Exception as e:
+                        logger.warning(f"Error getting display config for {field_name}: {e}")
+                        metadata['value'] = ''
+                else:
+                    # This shouldn't happen now that all sections have getters
+                    logger.warning(f"No getter method found for {section_name}.{field_name}")
+                    metadata['value'] = ''
+                
+                # Set default input type if not specified
+                if 'input_type' not in metadata:
+                    metadata['input_type'] = 'text'
                     
-                    # Set default input type if not specified
-                    if 'input_type' not in metadata:
-                        metadata['input_type'] = 'text'
+                # Handle boolean conversion
+                if metadata['type'] == 'boolean':
+                    if isinstance(metadata['value'], bool):
+                        # Already a boolean
+                        pass
+                    else:
+                        # Convert string to boolean
+                        metadata['value'] = str(metadata['value']).lower() in ('true', '1', 'yes', 'on')
                         
-                    # Handle boolean conversion
-                    if metadata['type'] == 'boolean':
-                        metadata['value'] = value.lower() in ('true', '1', 'yes', 'on')
-                        
-                    sections[section_name][key] = metadata
-                elif section_name == 'ANNIVERSARIES' and not key.startswith('#'):
-                    # Handle anniversary entries
-                    sections[section_name][key] = {
+                sections[section_name][field_name] = metadata
+            
+            # Handle anniversary entries separately (existing logic)
+            if section_name == 'ANNIVERSARIES':
+                anniversaries_config = self.config_manager.get_anniversaries_config()
+                for anniversary in anniversaries_config.get('anniversaries', []):
+                    name = anniversary['name']
+                    date = anniversary['date']
+                    message = anniversary['message']
+                    wait_minutes = anniversary['wait_minutes']
+                    
+                    # Convert wait minutes back to string format
+                    if wait_minutes >= 60:
+                        wait_str = f"{wait_minutes // 60} hours" if wait_minutes >= 120 else f"{wait_minutes // 60} hour"
+                        if wait_minutes % 60 > 0:
+                            wait_str += f" {wait_minutes % 60} minutes"
+                    else:
+                        wait_str = f"{wait_minutes} minutes"
+                    
+                    sections[section_name][name] = {
                         'type': 'anniversary',
-                        'value': value,
+                        'value': f"{date},{message},{wait_str}",
                         'input_type': 'text'
                     }
                     
         return sections
     
-    def _save_config(self, form_data: Dict[str, str], files: Dict[str, Any]) -> Tuple[bool, List[str]]:
+    def _save_config(self, form_data: Dict[str, str], files: Dict[str, Any]) -> Tuple[bool, List[str], Dict[str, str]]:
         """Save configuration from form data and handle image uploads.
         
         Returns:
-            Tuple of (success: bool, error_messages: List[str])
+            Tuple of (success: bool, error_messages: List[str], config_updates: Dict[str, str])
         """
         error_messages = []
+        config_updates = {}  # Track changes for live update
         
         try:
             config = configparser.ConfigParser()
@@ -1089,6 +1288,11 @@ class WebConfigServer:
                     
                     if section_name not in config:
                         config[section_name] = {}
+                    
+                    # Track what's changing for live update
+                    old_value = config[section_name].get(key, '')
+                    if old_value != value:
+                        config_updates[field_name] = value
                         
                     config[section_name][key] = value
             
@@ -1112,11 +1316,11 @@ class WebConfigServer:
                     index = field_name.split('_')[-1]
                     anniversary_waits[index] = value
             
-            # Clear existing anniversary entries (except enabled/border/comments)
+            # Clear existing anniversary entries (except enabled/comments)
             if 'ANNIVERSARIES' in config:
                 keys_to_remove = []
                 for key in config['ANNIVERSARIES']:
-                    if key not in ['enabled', 'border'] and not key.startswith('#'):
+                    if key not in ['enabled'] and not key.startswith('#'):
                         keys_to_remove.append(key)
                 for key in keys_to_remove:
                     del config['ANNIVERSARIES'][key]
@@ -1136,6 +1340,12 @@ class WebConfigServer:
                     if name and date and message and wait:
                         # Combine into the expected format
                         config_value = f"{date},{message},{wait}"
+                        
+                        # Track anniversary changes for live update
+                        old_value = config['ANNIVERSARIES'].get(name, '')
+                        if old_value != config_value:
+                            config_updates[f"ANNIVERSARIES.{name}"] = config_value
+                        
                         config['ANNIVERSARIES'][name] = config_value
                         
                         # Handle image uploads for this anniversary
@@ -1174,6 +1384,12 @@ class WebConfigServer:
                         if field_name not in form_data:
                             if section_name not in config:
                                 config[section_name] = {}
+                            
+                            # Track checkbox changes for live update
+                            old_value = config[section_name].get(key, 'true')  # Default might be true
+                            if old_value != 'false':
+                                config_updates[field_name] = 'false'
+                            
                             config[section_name][key] = 'false'
             
             # Save config file
@@ -1181,12 +1397,12 @@ class WebConfigServer:
                 config.write(f)
                 
             logger.info("Configuration saved successfully")
-            return True, error_messages
+            return True, error_messages, config_updates
             
         except Exception as e:
             logger.error(f"Error saving configuration: {e}")
             error_messages.append(f"Error saving configuration: {e}")
-            return False, error_messages
+            return False, error_messages, {}
 
 
 # Flask routes
@@ -1198,45 +1414,113 @@ def config_interface():
     if request.method == 'POST':
         action = request.form.get('action')
         
-        success, error_messages = web_server._save_config(request.form, request.files)
+        # Check if this is an AJAX request
+        is_ajax = request.headers.get('X-Requested-With') == 'XMLHttpRequest'
         
-        if success:
-            flash('Configuration saved successfully! Restarting service...', 'success')
-            
-            # Show any image upload warnings
-            for error_msg in error_messages:
-                flash(error_msg, 'error')
-            
-            # Import here to avoid circular imports
-            import subprocess
-            try:
-                subprocess.run(['sudo', 'systemctl', 'restart', 'roon-album-art-display'], check=True)
-                flash('Service restarted successfully!', 'success')
-            except subprocess.CalledProcessError as e:
-                flash(f'Error restarting service: {e}', 'error')
+        success, error_messages, config_updates = web_server._save_config(request.form, request.files)
+        
+        if is_ajax:
+            # Return JSON response for AJAX requests
+            if success:
+                message = 'Configuration updated successfully!'
+                
+                # Send config updates to main process for immediate effect
+                if config_updates:
+                    update_result = internal_client.update_config(config_updates)
+                    if not update_result.get('success'):
+                        message = f'Configuration saved but live update failed: {update_result.get("error", "Unknown error")}'
+                        logger.warning(f"Live config update failed: {update_result}")
+                    else:
+                        logger.info(f"Live config update successful: {update_result.get('updated_keys', [])}")
+                
+                # Include any image upload warnings in the message
+                if error_messages:
+                    warnings_text = '; '.join(error_messages)
+                    message = f'{message} (Warnings: {warnings_text})'
+                
+                return jsonify({'success': True, 'message': message})
+            else:
+                error_text = 'Error saving configuration!'
+                if error_messages:
+                    error_text = '; '.join([error_text] + error_messages)
+                
+                return jsonify({'success': False, 'message': error_text})
         else:
-            flash('Error saving configuration!', 'error')
-            for error_msg in error_messages:
-                flash(error_msg, 'error')
-            
-        return redirect(url_for('config_interface'))
+            # Traditional form submission - keep existing redirect behavior
+            if success:
+                # Send config updates to main process for immediate effect
+                if config_updates:
+                    update_result = internal_client.update_config(config_updates)
+                    if update_result.get('success'):
+                        flash('Configuration updated successfully!', 'success')
+                        logger.info(f"Live config update successful: {update_result.get('updated_keys', [])}")
+                    else:
+                        flash(f'Configuration saved but live update failed: {update_result.get("error", "Unknown error")}', 'error')
+                        logger.warning(f"Live config update failed: {update_result}")
+                else:
+                    flash('Configuration saved successfully!', 'success')
+                
+                # Show any image upload warnings
+                for error_msg in error_messages:
+                    flash(error_msg, 'error')
+                    
+            else:
+                flash('Error saving configuration!', 'error')
+                for error_msg in error_messages:
+                    flash(error_msg, 'error')
+                
+            # Store current tab and scroll position for redirect
+            current_tab = request.form.get('current_tab', 'Image')
+            scroll_position = request.form.get('scroll_position', '0')
+            return redirect(url_for('config_interface', tab=current_tab, scroll=scroll_position))
     
     # GET request - show form
     sections = web_server._get_config_sections()
+    
+    # Organize sections into tabs
+    tab_sections = {
+        'Image': {
+            'IMAGE_RENDER': sections.get('IMAGE_RENDER', {}),
+            'IMAGE_POSITION': sections.get('IMAGE_POSITION', {}),
+            'LAYOUT': sections.get('LAYOUT', {}),
+            'IMAGE_QUALITY': sections.get('IMAGE_QUALITY', {}),
+        },
+        'Features': {
+            'ZONES': sections.get('ZONES', {}),
+            'ANNIVERSARIES': sections.get('ANNIVERSARIES', {}),
+        },
+        'Advanced': {
+            'DISPLAY': sections.get('DISPLAY', {}),
+            'NETWORK': sections.get('NETWORK', {}),
+            'TIMEOUTS': sections.get('TIMEOUTS', {}),
+            'DISPLAY_TIMING': sections.get('DISPLAY_TIMING', {}),
+            'MONITORING': sections.get('MONITORING', {}),
+        }
+    }
     
     # Count anniversary entries for JavaScript counter
     anniversary_count = 0
     if 'ANNIVERSARIES' in sections:
         anniversary_count = len([k for k in sections['ANNIVERSARIES'].keys() 
-                               if k not in ['enabled', 'border'] and not k.startswith('#')])
+                               if k not in ['enabled'] and not k.startswith('#')])
     
     # Get existing anniversary images
     anniversary_images = get_anniversary_images()
     
+    # Get web timing values from config
+    web_server = app.config['web_server']
+    refresh_interval_seconds = web_server.config_manager.get_web_auto_refresh_seconds()
+    debounce_ms = web_server.config_manager.get_preview_debounce_ms()
+    auto_revert_seconds = web_server.config_manager.get_preview_auto_revert_seconds()
+    
     return render_template_string(CONFIG_TEMPLATE, 
+                                tab_sections=tab_sections,
                                 sections=sections, 
                                 anniversary_count=anniversary_count,
-                                anniversary_images=anniversary_images)
+                                anniversary_images=anniversary_images,
+                                web_refresh_interval=refresh_interval_seconds * 1000,  # Convert to milliseconds
+                                preview_debounce_ms=debounce_ms,
+                                preview_auto_revert_ms=auto_revert_seconds * 1000)  # Convert to milliseconds
 
 
 @app.route('/thumbnail/<anniversary_name>/<filename>')
@@ -1257,7 +1541,10 @@ def serve_thumbnail(anniversary_name, filename):
             return "Image not found", 404
         
         # Create and return thumbnail
-        thumbnail_data = create_thumbnail(image_path)
+        web_server = app.config['web_server']
+        thumbnail_size = web_server.config_manager.get_thumbnail_size()
+        jpeg_quality = web_server.config_manager.get_jpeg_quality()
+        thumbnail_data = create_thumbnail(image_path, max_size=(thumbnail_size, thumbnail_size), jpeg_quality=jpeg_quality)
         if thumbnail_data:
             import io
             return send_file(
@@ -1305,6 +1592,25 @@ def delete_image():
         return jsonify({'success': False, 'error': str(e)})
 
 
+@app.route('/display-status')
+def display_status():
+    """Get current display status from main app."""
+    try:
+        status_data = internal_client.get_current_status()
+        
+        # Add connection status
+        status_data['internal_app_connected'] = internal_client.check_health()
+        
+        return jsonify(status_data)
+    except Exception as e:
+        logger.error(f"Error getting display status: {e}")
+        return jsonify({
+            'internal_app_connected': False,
+            'track_info': 'Connection error',
+            'timestamp': None
+        })
+
+
 @app.route('/current-display-image')
 def serve_current_display_image():
     """Proxy current display image from main app."""
@@ -1318,38 +1624,16 @@ def serve_current_display_image():
             )
         else:
             # Return placeholder image when no image available
-            return _create_placeholder_response()
+            web_server = app.config['web_server']
+            jpeg_quality = web_server.config_manager.get_jpeg_quality()
+            return _create_placeholder_response(jpeg_quality)
     except Exception as e:
         logger.error(f"Error serving current display image: {e}")
-        return _create_placeholder_response()
+        web_server = app.config['web_server']
+        jpeg_quality = web_server.config_manager.get_jpeg_quality()
+        return _create_placeholder_response(jpeg_quality)
 
 
-@app.route('/display-status')
-def get_display_status():
-    """Get enhanced status including internal app data."""
-    try:
-        # Get status from internal app
-        internal_status = internal_client.get_current_status()
-        
-        # Combine with existing file-based status
-        file_status = get_current_display_status()
-        
-        # Check connection health
-        is_connected = internal_client.check_health()
-        
-        return jsonify({
-            **file_status,
-            **internal_status,
-            'internal_app_connected': is_connected,
-            'internal_app_responsive': is_connected
-        })
-    except Exception as e:
-        logger.error(f"Error getting display status: {e}")
-        return jsonify({
-            'error': str(e),
-            'internal_app_connected': False,
-            'internal_app_responsive': False
-        })
 
 
 @app.route('/preview-image', methods=['POST'])
@@ -1375,7 +1659,7 @@ def generate_preview_image():
         return jsonify({'error': str(e)}), 500
 
 
-def _create_placeholder_response():
+def _create_placeholder_response(jpeg_quality: int = 85):
     """Create placeholder image response when main app not available."""
     try:
         # Create simple placeholder image
@@ -1383,7 +1667,7 @@ def _create_placeholder_response():
         
         # Convert to bytes
         img_io = io.BytesIO()
-        placeholder.save(img_io, 'JPEG', quality=85)
+        placeholder.save(img_io, 'JPEG', quality=jpeg_quality)
         img_io.seek(0)
         
         return send_file(img_io, mimetype='image/jpeg')
@@ -1479,32 +1763,16 @@ def _parse_form_to_config_for_preview(form_data, files) -> Dict[str, Any]:
         return {}
 
 
-@app.route('/status')
-def get_status():
-    """Get current display status as JSON."""
-    try:
-        status = get_current_display_status()
-        return jsonify(status)
-    except Exception as e:
-        logger.error(f"Error in status endpoint: {e}")
-        return jsonify({
-            "timestamp": time.time(),
-            "status": f"Error: {e}",
-            "display_type": "Error",
-            "current_image_key": None,
-            "last_track_time": None,
-            "image_path": None,
-            "time_since_last_track": None
-        })
 
 
 def main():
     """Main entry point for web config server."""
     import argparse
+    global internal_client
     
     parser = argparse.ArgumentParser(description='Roon Display Web Configuration Server')
-    parser.add_argument('--port', type=int, default=8080, help='Port to run server on')
-    parser.add_argument('--host', default='0.0.0.0', help='Host to bind to')
+    parser.add_argument('--port', type=int, help='Port to run server on (overrides config)')
+    parser.add_argument('--host', help='Host to bind to (overrides config)')
     parser.add_argument('--config', help='Path to configuration file')
     parser.add_argument('--debug', action='store_true', help='Enable debug mode')
     
@@ -1519,13 +1787,20 @@ def main():
     # Create web server instance
     web_server = WebConfigServer(config_path=args.config, port=args.port)
     
+    # Initialize global internal client with config
+    internal_client = InternalAppClient(web_server.config_manager)
+    
     # Store in Flask app config for route access
     app.config['web_server'] = web_server
     
-    logger.info(f"Starting Roon Display web configuration server on {args.host}:{args.port}")
+    # Get host and port from config or command line
+    host = args.host or web_server.config_manager.get_web_config_host()
+    port = web_server.port  # Already set from config or args in WebConfigServer.__init__
+    
+    logger.info(f"Starting Roon Display web configuration server on {host}:{port}")
     
     try:
-        app.run(host=args.host, port=args.port, debug=args.debug)
+        app.run(host=host, port=port, debug=args.debug)
     except KeyboardInterrupt:
         logger.info("Web configuration server stopped")
 

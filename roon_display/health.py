@@ -17,17 +17,26 @@ class HealthManager:
 
     def __init__(
         self,
+        config_manager,
         health_script_path: Optional[str] = None,
-        recheck_interval_seconds: int = 1800,
+        recheck_interval_seconds: Optional[int] = None,
     ):
-        """Initialize health manager with optional health script path and recheck interval."""
-        self.health_script_path = self._resolve_script_path(health_script_path)
+        """Initialize health manager with config manager and optional overrides."""
+        self.config_manager = config_manager
+        
+        # Use provided path or get from config
+        script_path = health_script_path or config_manager.get_health_script()
+        self.health_script_path = self._resolve_script_path(script_path)
+        
+        # Use provided interval or get from config
+        interval_seconds = recheck_interval_seconds or config_manager.get_health_recheck_interval()
+        self.recheck_interval = timedelta(seconds=interval_seconds)
+        
         self.last_timestamp = None
         self.last_params = None
-        self.recheck_interval = timedelta(seconds=recheck_interval_seconds)
 
         logger.info(
-            f"HealthManager initialized with script: {self.health_script_path}, recheck interval: {recheck_interval_seconds}s"
+            f"HealthManager initialized with script: {self.health_script_path}, recheck interval: {interval_seconds}s"
         )
 
     def _resolve_script_path(self, script_path: Optional[str]) -> Optional[str]:
@@ -91,8 +100,9 @@ class HealthManager:
             # Execute the health script with the parameters
             cmd = [self.health_script_path, status, additional_info]
 
+            timeout = self.config_manager.get_health_script_timeout()
             result = subprocess.run(
-                cmd, capture_output=True, text=True, timeout=30  # 30 second timeout
+                cmd, capture_output=True, text=True, timeout=timeout
             )
 
             if result.returncode == 0:
@@ -107,7 +117,8 @@ class HealthManager:
                 return False
 
         except subprocess.TimeoutExpired:
-            logger.error("Health script timed out after 30 seconds")
+            timeout = self.config_manager.get_health_script_timeout()
+            logger.error(f"Health script timed out after {timeout} seconds")
             return False
         except Exception as e:
             logger.error(f"Error executing health script: {e}")

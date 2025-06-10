@@ -47,7 +47,7 @@ class RoonClient:
         self.connection_monitor_thread = None
         self.last_connection_check = time.time()
         self.last_reconnect_attempt = 0
-        self.reconnect_interval = 60  # 1 minute between reconnect attempts
+        # Reconnect interval will be read from config when needed
         
         # Connection state tracking (combines auth + connection)
         self._is_connected = False
@@ -196,7 +196,7 @@ class RoonClient:
             # Wait a bit for websocket to connect
             time.sleep(2)
 
-            timeout_seconds = 300  # 5 minutes timeout
+            timeout_seconds = self.config_manager.get_roon_authorization_timeout()
             start_time = time.time()
             health_failure_sent = False
 
@@ -658,7 +658,8 @@ class RoonClient:
                 # If disconnected, attempt reconnection every minute
                 elif not self.is_connected:
                     current_time = time.time()
-                    if current_time - self.last_reconnect_attempt >= self.reconnect_interval:
+                    reconnect_interval = self.config_manager.get_reconnection_interval()
+                    if current_time - self.last_reconnect_attempt >= reconnect_interval:
                         logger.info("Attempting to reconnect to Roon server...")
                         self.last_reconnect_attempt = current_time
                         try:
@@ -701,7 +702,8 @@ class RoonClient:
 
             # Push authorization revoked error to coordinator
             if self.render_coordinator:
-                self.render_coordinator.set_overlay(message, timeout=300)  # 5 minute timeout
+                timeout = self.config_manager.get_roon_authorization_timeout()
+                self.render_coordinator.set_overlay(message, timeout=timeout)
             else:
                 # Fallback to direct viewer update
                 try:
