@@ -15,7 +15,6 @@ SAFE CANCELLATION DESIGN:
 
 The e-ink library (libs/epd13in3E.py) has been modified to support safe cancellation:
 - should_stop flag is checked at multiple safe points during display()
-- returnFunc() method raises EarlyExit when should_stop=True
 - Hardware is left in a safe state when cancelling
 
 THREADING IMPLEMENTATION:
@@ -74,66 +73,44 @@ class EinkViewer(BaseViewer):
 
         start_time = time.time()
 
-        try:
-            # Send to e-ink display - don't reset should_stop flag here!
-            self.epd.display(self.epd.getbuffer(img), title)
+        # Send to e-ink display - don't reset should_stop flag here!
+        self.epd.display(self.epd.getbuffer(img), title)
 
-            elapsed_time = time.time() - start_time
+        elapsed_time = time.time() - start_time
 
-            # Check for render timing issues
-            if elapsed_time < timing_config.render_success_threshold:
-                logger.error("=" * 80)
-                logger.error("🚨 CRITICAL: FAST DISPLAY RENDER DETECTED! 🚨")
-                logger.error(f"Display took {elapsed_time:.2f} seconds (expected ~25s)")
-                logger.error(f"Thread ID: {thread_id}")
-                logger.error(f"Image: {title} (key: {image_key})")
-                logger.error("This indicates a FAILED render, likely due to:")
-                logger.error("- Hardware not connected or malfunctioning")
-                logger.error("- E-ink display driver issues")
-                logger.error("- Concurrent display() calls (HARDWARE UNSAFE!)")
-                logger.error("=" * 80)
+        # Check for render timing issues
+        if elapsed_time < timing_config.render_success_threshold:
+            logger.error("=" * 80)
+            logger.error("🚨 CRITICAL: FAST DISPLAY RENDER DETECTED! 🚨")
+            logger.error(f"Display took {elapsed_time:.2f} seconds (expected ~25s)")
+            logger.error(f"Thread ID: {thread_id}")
+            logger.error(f"Image: {title} (key: {image_key})")
+            logger.error("This indicates a FAILED render, likely due to:")
+            logger.error("- Hardware not connected or malfunctioning")
+            logger.error("- E-ink display driver issues")
+            logger.error("- Concurrent display() calls (HARDWARE UNSAFE!)")
+            logger.error("=" * 80)
 
-                # Call health script for render failure
-                if self.health_manager:
-                    additional_info = (
-                        f"Fast render detected: {elapsed_time:.2f}s for {title}"
-                    )
-                    self.health_manager.report_render_failure(additional_info)
-            else:
-                logger.info(
-                    f"Finished displaying image for {title} ({elapsed_time:.1f}s, thread: {thread_id})"
-                )
-
-                # Call health script for successful render
-                if self.health_manager:
-                    additional_info = (
-                        f"Successful render: {elapsed_time:.1f}s for {title}"
-                    )
-                    self.health_manager.report_render_success(additional_info)
-
-            # Finalize successful render (update tracking and notify coordinator)
-            self._finalize_successful_render(image_key)
-
-        except Exception as e:
-            # Check if this is an intentional early exit
-            if isinstance(e, EarlyExit):
-                elapsed_time = time.time() - start_time
-                logger.info(
-                    f"Display interrupted by early exit for {title} after {elapsed_time:.2f}s (thread: {thread_id})"
-                )
-                return  # Early exit is expected when canceling renders
-
-            # Handle all other exceptions
-            elapsed_time = time.time() - start_time
-            thread_id = threading.current_thread().ident
-            self._log_render_error(e, title, elapsed_time)
-
-            # Call health script for render error
+            # Call health script for render failure
             if self.health_manager:
                 additional_info = (
-                    f"Display error after {elapsed_time:.2f}s for {title}: {str(e)}"
+                    f"Fast render detected: {elapsed_time:.2f}s for {title}"
                 )
                 self.health_manager.report_render_failure(additional_info)
+        else:
+            logger.info(
+                f"Finished displaying image for {title} ({elapsed_time:.1f}s, thread: {thread_id})"
+            )
+
+            # Call health script for successful render
+            if self.health_manager:
+                additional_info = (
+                    f"Successful render: {elapsed_time:.1f}s for {title}"
+                )
+                self.health_manager.report_render_success(additional_info)
+
+        # Finalize successful render (update tracking and notify coordinator)
+        self._finalize_successful_render(image_key)
 
     @log_performance(threshold=0.5, description="E-ink display update")
     def update(self, image_key, image_path, img, title):
