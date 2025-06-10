@@ -22,7 +22,6 @@ class HealthManager:
     ):
         """Initialize health manager with optional health script path and recheck interval."""
         self.health_script_path = self._resolve_script_path(health_script_path)
-        self.last_status = None
         self.last_timestamp = None
         self.last_params = None
         self.recheck_interval = timedelta(seconds=recheck_interval_seconds)
@@ -62,7 +61,6 @@ class HealthManager:
             return False
 
         # Update tracked status
-        self.last_status = status
         self.last_timestamp = datetime.now()
         self.last_params = (status, additional_info)
 

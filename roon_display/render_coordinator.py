@@ -265,17 +265,6 @@ class RenderCoordinator:
         except Exception as e:
             logger.error(f"Error checking anniversaries: {e}")
 
-    def get_current_state(self) -> Dict[str, Any]:
-        """Get current render coordinator state for debugging."""
-        return {
-            "main_content": bool(self.main_content),
-            "main_content_type": self.main_content.get("content_type") if self.main_content else None,
-            "overlay_content": bool(self.overlay_content),
-            "overlay_timeout": self.overlay_timeout,
-            "currently_rendering": self.currently_rendering,
-            "current_display_image_key": self.current_display_image_key,
-        }
-
     def _initialize_current_display_state(self):
         """Initialize coordinator with current display state (e-ink persistence)."""
         if self.eink_display_persistent:

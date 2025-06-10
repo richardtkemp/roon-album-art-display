@@ -1,6 +1,5 @@
 """Simulation support for testing track changes."""
 
-import json
 import logging
 import socket
 import threading

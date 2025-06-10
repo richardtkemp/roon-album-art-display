@@ -66,15 +66,6 @@ class BaseViewer(ABC):
         # If img was provided, assume it's already processed (e.g., anniversaries, errors)
         return img
 
-    def _log_render_attempt(self, image_key, title, viewer_type=""):
-        """Common logging for render attempts."""
-        logger.debug(
-            f"Starting {viewer_type} display update for {title} (key: {image_key})"
-        )
-
-    def _log_render_warning(self, message, title):
-        """Common warning logging for render issues."""
-        logger.warning(f"{message} for {title}")
 
     def _log_render_error(self, error, title, duration=None):
         """Common error logging for render failures."""
@@ -103,7 +94,3 @@ class BaseViewer(ABC):
         """Display an image on the device."""
         pass
 
-    @abstractmethod
-    def update_anniversary(self, message, image_path=None):
-        """Display anniversary message and optional image."""
-        pass

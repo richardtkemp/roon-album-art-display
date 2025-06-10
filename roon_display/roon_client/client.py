@@ -40,7 +40,6 @@ class RoonClient:
         self.token_file = Path(".roon_album_display_token.txt")
 
         # State tracking
-        self.current_image_path = None
         self.last_event = None
         # Initialize with current image key to prevent startup flash
         self.last_image_key = get_current_image_key()
@@ -51,7 +50,6 @@ class RoonClient:
         self.reconnect_interval = 60  # 1 minute between reconnect attempts
         
         # Connection state tracking (combines auth + connection)
-        self.last_callback_time = 0
         self._is_connected = False
 
         logger.info(f"Allowed zones: {self.allowed_zones}")
@@ -300,7 +298,6 @@ class RoonClient:
         """Handle zone change events."""
         try:
             # Update connection tracking - receiving callbacks means fully connected
-            self.last_callback_time = time.time()
             if not self.is_connected:
                 logger.info("Received zone callback - connection restored")
                 self.is_connected = True
