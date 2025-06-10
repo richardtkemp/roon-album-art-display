@@ -8,7 +8,7 @@
 #130 python3
 
 apt install neovim python3-pil python3-requests python3-numpy libavif-dev
-pip install roonapi
+pip install roonapi flask
 
 #wpa_passphrase ssid pass >> /etc/wpa_supplicant/wpa_supplicant.conf
 #dropbearkey -t rsa -f ~/.ssh/id_dropbear
@@ -23,11 +23,14 @@ GIT_SSH=dbclient git clone git@github.com:richardtkemp/roon-album-art-display.gi
 
 cp $FRAME/space-cleaner.{service,timer}  /etc/systemd/system/
 cp $FRAME/roon-album-art-display.service /etc/systemd/system/
+cp $FRAME/roon-web-config.service /etc/systemd/system/
 systemctl daemon-reload
 systemctl enable space-cleaner.timer
 systemctl enable roon-album-art-display.service
+systemctl enable roon-web-config.service
 systemctl start  space-cleaner.timer
 systemctl start  roon-album-art-display.service
+systemctl start  roon-web-config.service
 
 echo 'export GIT_SSH=dbclient' >> /root/.bashrc
 ## TODO

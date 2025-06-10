@@ -3,6 +3,7 @@ pillow
 roonapi
 configparser
 numpy
+flask
 
 # Testing
 pytest
