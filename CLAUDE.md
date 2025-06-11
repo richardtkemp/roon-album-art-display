@@ -1,4 +1,5 @@
 DONT TELL ME I'M RIGHT WHEN I'm JUST MAKING A VALUE JUDGEMENT
+ALWAYS think about whether what I suggest or you choose to do is best practice. If I suggest bad practice, tell me and offer some other options.
 
 # Claude Development Notes
 

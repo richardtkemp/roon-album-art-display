@@ -422,6 +422,14 @@ class ConfigManager:
         """Get preview debounce time in milliseconds."""
         return self._config.getint("DISPLAY_TIMING", "preview_debounce_ms", fallback=500)
 
+    def get_font(self):
+        """Get font path."""
+        return self._config.get("LAYOUT", "font", fallback="arial")
+
+    def get_font_size(self):
+        """Get font size."""
+        return self._config.getint("LAYOUT", "font_size", fallback=16)
+
     # Layout Configuration Methods
     def get_overlay_size_x_percent(self):
         """Get overlay width percentage."""
