@@ -292,7 +292,10 @@ button:hover { background-color: #45a049; }
     border-bottom: 2px solid #ddd;
     background: #f8f8f8;
     border-radius: 8px 8px 0 0;
-    overflow: hidden;
+    overflow-x: auto;
+    overflow-y: hidden;
+    white-space: nowrap;
+    -webkit-overflow-scrolling: touch;
 }
 
 .tab-button {
@@ -306,6 +309,25 @@ button:hover { background-color: #45a049; }
     transition: all 0.3s ease;
     flex: 1;
     text-align: center;
+    min-width: fit-content;
+    white-space: nowrap;
+}
+
+/* Responsive tab button sizing */
+@media (max-width: 768px) {
+    .tab-button {
+        padding: 10px 16px;
+        font-size: 0.9em;
+        flex: 0 0 auto;
+    }
+}
+
+@media (max-width: 480px) {
+    .tab-button {
+        padding: 8px 12px;
+        font-size: 0.8em;
+        flex: 0 0 auto;
+    }
 }
 
 .tab-button:hover {

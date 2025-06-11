@@ -176,16 +176,16 @@ function setupFormChangeDetection() {
                 // Handle web_image_max_width changes for layout updates
                 if (fieldName === 'IMAGE_QUALITY.web_image_max_width') {
                     const newConfigWidth = parseInt(e.target.value) || 600;
-                    
+
                     // Update global config width
                     window.configImageWidth = newConfigWidth;
-                    
+
                     // Calculate responsive width for height (width is handled by JavaScript)
-                    const responsiveWidth = window.calculateResponsiveWidth ? 
+                    const responsiveWidth = window.calculateResponsiveWidth ?
                         window.calculateResponsiveWidth(newConfigWidth) : newConfigWidth;
-                    
+
                     document.documentElement.style.setProperty('--display-height', `${responsiveWidth}px`);
-                    
+
                     // Update scroll effect with new config dimensions
                     if (window.scrollShrinkEffect) {
                         window.scrollShrinkEffect.updateDimensions(newConfigWidth, newConfigWidth);
@@ -225,78 +225,78 @@ function setupStickyImageShrinking() {
         constructor(containerSelector) {
             this.container = document.querySelector(containerSelector);
             this.positioningContainer = this.container.parentElement;
-            
+
             // Track config width (original user setting) vs responsive width (viewport-constrained)
             this.configWidth = window.configImageWidth || 600;
             this.configHeight = this.configWidth; // Assume square
             this.responsiveWidth = parseInt(getComputedStyle(document.documentElement).getPropertyValue('--display-width')) || 600;
             this.responsiveHeight = parseInt(getComputedStyle(document.documentElement).getPropertyValue('--display-height')) || 600;
-            
+
             this.minScale = 0.4; // 40% of original size
-            
+
             this.isFixed = false;
             this.shrinkStartY = 0;
             this.shrinkEndY = 0;
             this.containerRightEdge = 0;
-            
+
             this.init();
         }
-        
+
         init() {
             // Capture the container's actual rendered width before any scroll effects
             this.actualContainerWidth = this.container.getBoundingClientRect().width;
-            
+
             // Calculate scroll positions
             this.calculateScrollPositions();
-            
+
             // Set initial position
             this.updateContainerPosition();
-            
+
             // Bind scroll event with throttling
             this.boundScrollHandler = this.throttle(this.handleScroll.bind(this), 16);
             window.addEventListener('scroll', this.boundScrollHandler);
             window.addEventListener('resize', this.handleResize.bind(this));
         }
-        
+
         calculateScrollPositions() {
             const positioningRect = this.positioningContainer.getBoundingClientRect();
             const positioningTop = positioningRect.top + window.pageYOffset;
-            
+
             // Calculate where the container's right edge is on the page
             this.containerRightEdge = positioningRect.right;
-            
+
             // When positioning container top hits viewport top
             this.shrinkStartY = positioningTop;
-            
+
             // Calculate how much scroll distance we need to shrink to minimum
             // Use responsive height for scroll distance calculation
             const maxShrinkDistance = this.responsiveHeight * (1 - this.minScale);
             this.shrinkEndY = this.shrinkStartY + maxShrinkDistance;
         }
-        
+
         handleScroll() {
             this.updateContainerPosition();
         }
-        
+
         handleResize() {
             // Recapture the container's actual rendered width after resize
             if (!this.isFixed) {
                 this.actualContainerWidth = this.container.getBoundingClientRect().width;
             }
-            
+
             // Recalculate responsive width on viewport changes using config width as base
             if (window.calculateResponsiveWidth) {
                 const newResponsiveWidth = window.calculateResponsiveWidth(this.configWidth);
                 const newResponsiveHeight = newResponsiveWidth; // Assume square
-                
+
                 if (newResponsiveWidth !== this.responsiveWidth) {
                     // Update dimensions if responsive width changed
                     document.documentElement.style.setProperty('--display-height', `${newResponsiveHeight}px`);
-                    
+
                     // Update responsive dimensions but keep config dimensions unchanged
                     this.responsiveWidth = newResponsiveWidth;
                     this.responsiveHeight = newResponsiveHeight;
-                    
+
                     this.calculateScrollPositions();
                     this.updateContainerPosition();
                 } else {
@@ -309,10 +309,10 @@ function setupStickyImageShrinking() {
                 this.updateContainerPosition();
             }
         }
-        
+
         updateContainerPosition() {
             const scrollY = window.pageYOffset;
-            
+
             if (scrollY < this.shrinkStartY) {
                 // Before shrinking starts - normal position
                 this.container.classList.remove('fixed');
@@ -333,7 +333,7 @@ function setupStickyImageShrinking() {
                     this.container.style.left = 'auto';
                     this.isFixed = true;
                 }
-                
+
                 const progress = (scrollY - this.shrinkStartY) / (this.shrinkEndY - this.shrinkStartY);
                 const scale = 1 - (progress * (1 - this.minScale));
                 this.container.style.transform = `scale(${scale})`;
@@ -351,17 +351,17 @@ function setupStickyImageShrinking() {
                 this.isFixed = true;
             }
         }
-        
+
         updateDimensions(newConfigWidth, newConfigHeight) {
             // Update config dimensions (user's original setting)
             this.configWidth = newConfigWidth;
             this.configHeight = newConfigHeight;
-            
+
             // Recalculate responsive dimensions from new config
             if (window.calculateResponsiveWidth) {
                 this.responsiveWidth = window.calculateResponsiveWidth(this.configWidth);
                 this.responsiveHeight = this.responsiveWidth; // Assume square
-                
+
                 // Update CSS custom properties for height only (width handled by JavaScript)
                 document.documentElement.style.setProperty('--display-height', `${this.responsiveHeight}px`);
             } else {
@@ -369,16 +369,16 @@ function setupStickyImageShrinking() {
                 this.responsiveWidth = newConfigWidth;
                 this.responsiveHeight = newConfigHeight;
             }
-            
+
             // Recapture actual container width after config change
             if (!this.isFixed) {
                 this.actualContainerWidth = this.container.getBoundingClientRect().width;
             }
-            
+
             this.calculateScrollPositions();
             this.updateContainerPosition();
         }
-        
+
         throttle(func, limit) {
             let inThrottle;
             return function() {
@@ -391,20 +391,20 @@ function setupStickyImageShrinking() {
                 }
             }
         }
-        
+
         destroy() {
             window.removeEventListener('scroll', this.boundScrollHandler);
             window.removeEventListener('resize', this.handleResize);
         }
     }
-    
+
     // Initialize the effect
     window.scrollShrinkEffect = new ScrollShrinkEffect('.display-container');
 }
 
 function initializePreview(config) {
     previewConfig = { ...previewConfig, ...config };
-    
+
     // Initial load and periodic updates
     updateDisplayImage();
     updateDisplayMetadata();
