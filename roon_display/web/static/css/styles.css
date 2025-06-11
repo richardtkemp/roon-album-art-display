@@ -191,15 +191,6 @@ button:hover { background-color: #45a049; }
 }
 
 /* Display preview styles */
-.display-preview-section {
-    background: #ffffff; 
-    border: 1px solid #ddd; 
-    border-radius: 8px;
-    padding: 20px; 
-    margin-bottom: 30px; 
-    box-shadow: 0 2px 4px rgba(0,0,0,0.1);
-}
-
 .display-header {
     display: flex; 
     justify-content: space-between; 
@@ -207,6 +198,11 @@ button:hover { background-color: #45a049; }
     margin-bottom: 15px; 
     font-size: 1.3em; 
     font-weight: bold;
+    background: #ffffff; 
+    border: 1px solid #ddd; 
+    border-radius: 8px;
+    padding: 20px; 
+    box-shadow: 0 2px 4px rgba(0,0,0,0.1);
 }
 
 .display-controls { 
@@ -218,9 +214,12 @@ button:hover { background-color: #45a049; }
 .display-container {
     position: relative; 
     text-align: center; 
-    background: #f8f8f8; 
-    border-radius: 6px; 
-    padding: 10px;
+    background: #ffffff; 
+    border: 1px solid #ddd; 
+    border-radius: 8px; 
+    padding: 20px; 
+    margin-bottom: 15px;
+    box-shadow: 0 2px 4px rgba(0,0,0,0.1);
 }
 
 .sticky-image {
@@ -261,6 +260,7 @@ button:hover { background-color: #45a049; }
     padding: 8px; 
     background: #f0f0f0; 
     border-radius: 4px;
+    margin-bottom: 30px;
 }
 
 .status-indicator.connected { color: #4CAF50; }

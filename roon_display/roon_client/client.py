@@ -10,7 +10,12 @@ from PIL import Image
 from roonapi import RoonApi, RoonDiscovery
 
 from ..message_renderer import MessageRenderer
-from ..utils import get_current_image_key, get_saved_image_dir, log_performance, set_current_image_key
+from ..utils import (
+    get_current_image_key,
+    get_saved_image_dir,
+    log_performance,
+    set_current_image_key,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -36,8 +41,12 @@ class RoonClient:
         # Parse zone configuration
         allowed_zones_str = config_manager.get_allowed_zone_names()
         forbidden_zones_str = config_manager.get_forbidden_zone_names()
-        self.allowed_zones = [zone.strip() for zone in allowed_zones_str.split(",") if zone.strip()]
-        self.forbidden_zones = [zone.strip() for zone in forbidden_zones_str.split(",") if zone.strip()]
+        self.allowed_zones = [
+            zone.strip() for zone in allowed_zones_str.split(",") if zone.strip()
+        ]
+        self.forbidden_zones = [
+            zone.strip() for zone in forbidden_zones_str.split(",") if zone.strip()
+        ]
         self.loop_time = config_manager.get_loop_time()
 
         # Token storage in current directory
@@ -52,7 +61,7 @@ class RoonClient:
         self.last_connection_check = time.time()
         self.last_reconnect_attempt = 0
         # Reconnect interval will be read from config when needed
-        
+
         # Connection state tracking (combines auth + connection)
         self._is_connected = False
 
@@ -64,7 +73,7 @@ class RoonClient:
     def is_connected(self):
         """Get connection status (combines auth + connection state)."""
         return self._is_connected
-    
+
     @is_connected.setter
     def is_connected(self, value):
         """Set connection status with state change logging."""
@@ -138,12 +147,15 @@ class RoonClient:
     def _test_connectivity(self, server_ip, server_port):
         """Test if server port is reachable."""
         import socket
+
         try:
             sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
             sock.settimeout(3)  # 3 second timeout
             result = sock.connect_ex((server_ip, int(server_port)))
             sock.close()
-            logger.info(f"Connectivity test to {server_ip}:{server_port} returned code: {result}")
+            logger.info(
+                f"Connectivity test to {server_ip}:{server_port} returned code: {result}"
+            )
             return result == 0
         except Exception as e:
             logger.warning(f"Connectivity test exception: {e}")
@@ -183,13 +195,17 @@ class RoonClient:
                     api.stop()
                     logger.warning("Connected but couldn't fetch zones")
                     self.is_connected = False
-                    self._report_health_failure("Could not fetch zones from Roon server")
+                    self._report_health_failure(
+                        "Could not fetch zones from Roon server"
+                    )
                     return None
             except Exception as zone_error:
                 logger.warning(f"Error validating connection: {zone_error}")
                 api.stop()
                 self.is_connected = False
-                self._report_health_failure(f"Connection validation failed: {zone_error}")
+                self._report_health_failure(
+                    f"Connection validation failed: {zone_error}"
+                )
                 return None
 
         except Exception as e:
@@ -197,7 +213,6 @@ class RoonClient:
             self.is_connected = False
             self._report_health_failure(f"Roon connection failed: {e}")
             return None
-
 
     def _get_token(self):
         """Get saved authentication token."""
@@ -251,7 +266,7 @@ class RoonClient:
             if not self.is_connected:
                 logger.info("Received zone callback - connection restored")
                 self.is_connected = True
-                
+
                 # Clear any overlay errors when connection is restored
                 if self.render_coordinator:
                     self.render_coordinator.clear_overlay()
@@ -403,7 +418,7 @@ class RoonClient:
                 image_key=image_key,
                 image_path=image_path,
                 img=img,
-                track_info=track_info
+                track_info=track_info,
             )
         except Exception as e:
             logger.error(f"Error fetching/displaying album art: {e}")
@@ -447,7 +462,6 @@ class RoonClient:
         except Exception as e:
             logger.error(f"Error downloading album art: {e}")
             return None
-
 
     def run(self):
         """Start the Roon client event loop."""
@@ -533,7 +547,6 @@ class RoonClient:
         ):
             self.viewer.health_manager.report_render_failure(message)
 
-
     def _monitor_connection(self):
         """Monitor connection status and detect different failure types."""
         logger.info("Starting connection monitoring")
@@ -576,7 +589,7 @@ class RoonClient:
                                 self._handle_connection_failure("auth_revoked")
                             else:
                                 self._handle_connection_failure("roon_host_down")
-                
+
                 # If disconnected, attempt reconnection every minute
                 elif not self.is_connected:
                     current_time = time.time()
@@ -588,11 +601,15 @@ class RoonClient:
                             self.connect()
                             # Connection was established, but we need to wait for callbacks to confirm full connectivity
                             if hasattr(self, "roon") and self.roon:
-                                logger.info("Reconnection attempt completed - waiting for zone callbacks to confirm connectivity")
+                                logger.info(
+                                    "Reconnection attempt completed - waiting for zone callbacks to confirm connectivity"
+                                )
                                 # Don't immediately set is_connected = True - wait for callbacks
                                 # The callback handler will set it when we receive zone updates
                             else:
-                                logger.warning("Reconnection failed - no valid API connection")
+                                logger.warning(
+                                    "Reconnection failed - no valid API connection"
+                                )
                         except Exception as e:
                             logger.warning(f"Reconnection failed: {e}")
                             # Continue showing error and try again next interval
@@ -606,7 +623,7 @@ class RoonClient:
     def _handle_connection_failure(self, failure_type: str):
         """Handle different types of connection failures."""
         logger.error(f"Connection failure detected: {failure_type}")
-        
+
         # Set disconnected state for reconnection attempts
         if self.is_connected:
             self.is_connected = False
@@ -657,7 +674,9 @@ class RoonClient:
 
             # Push host down error to coordinator
             if self.render_coordinator:
-                self.render_coordinator.set_overlay(message, timeout=120)  # 2 minute timeout
+                self.render_coordinator.set_overlay(
+                    message, timeout=120
+                )  # 2 minute timeout
             else:
                 # Fallback to direct viewer update
                 try:
