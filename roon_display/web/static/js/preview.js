@@ -173,6 +173,18 @@ function setupFormChangeDetection() {
                 const section = getFormSection(e.target);
                 const fieldName = e.target.name || '';
 
+                // Handle web_image_max_width changes for layout updates
+                if (fieldName === 'IMAGE_QUALITY.web_image_max_width') {
+                    const newWidth = parseInt(e.target.value) || 600;
+                    document.documentElement.style.setProperty('--display-width', `${newWidth}px`);
+                    document.documentElement.style.setProperty('--display-height', `${newWidth}px`);
+                    
+                    // Update scroll effect dimensions
+                    if (window.scrollShrinkEffect) {
+                        window.scrollShrinkEffect.updateDimensions(newWidth, newWidth);
+                    }
+                }
+
                 if (shouldTriggerPreview(section, fieldName)) {
                     // Add visual feedback
                     if (!previewMode) {
@@ -202,7 +214,126 @@ function setupFormChangeDetection() {
 }
 
 function setupStickyImageShrinking() {
-    // Functionality removed
+    class ScrollShrinkEffect {
+        constructor(containerSelector) {
+            this.container = document.querySelector(containerSelector);
+            this.positioningContainer = this.container.parentElement;
+            this.originalWidth = parseInt(getComputedStyle(document.documentElement).getPropertyValue('--display-width')) || 600;
+            this.originalHeight = parseInt(getComputedStyle(document.documentElement).getPropertyValue('--display-height')) || 600;
+            this.minScale = 0.4; // 40% of original size
+            
+            this.isFixed = false;
+            this.shrinkStartY = 0;
+            this.shrinkEndY = 0;
+            this.containerRightEdge = 0;
+            
+            this.init();
+        }
+        
+        init() {
+            // Calculate scroll positions
+            this.calculateScrollPositions();
+            
+            // Set initial position
+            this.updateContainerPosition();
+            
+            // Bind scroll event with throttling
+            this.boundScrollHandler = this.throttle(this.handleScroll.bind(this), 16);
+            window.addEventListener('scroll', this.boundScrollHandler);
+            window.addEventListener('resize', this.handleResize.bind(this));
+        }
+        
+        calculateScrollPositions() {
+            const positioningRect = this.positioningContainer.getBoundingClientRect();
+            const positioningTop = positioningRect.top + window.pageYOffset;
+            
+            // Calculate where the container's right edge is on the page
+            this.containerRightEdge = positioningRect.right;
+            
+            // When positioning container top hits viewport top
+            this.shrinkStartY = positioningTop;
+            
+            // Calculate how much scroll distance we need to shrink to minimum
+            const maxShrinkDistance = this.originalHeight * (1 - this.minScale);
+            this.shrinkEndY = this.shrinkStartY + maxShrinkDistance;
+        }
+        
+        handleScroll() {
+            this.updateContainerPosition();
+        }
+        
+        handleResize() {
+            this.calculateScrollPositions();
+            this.updateContainerPosition();
+        }
+        
+        updateContainerPosition() {
+            const scrollY = window.pageYOffset;
+            
+            if (scrollY < this.shrinkStartY) {
+                // Before shrinking starts - normal position
+                this.container.classList.remove('fixed');
+                this.container.style.transform = 'scale(1)';
+                this.container.style.right = 'auto';
+                this.container.style.left = '0';
+                this.isFixed = false;
+            } else if (scrollY >= this.shrinkStartY && scrollY <= this.shrinkEndY) {
+                // During shrinking phase
+                if (!this.isFixed) {
+                    this.container.classList.add('fixed');
+                    // Position container so its right edge stays in the same place
+                    const rightDistance = window.innerWidth - this.containerRightEdge;
+                    this.container.style.right = `${rightDistance}px`;
+                    this.container.style.left = 'auto';
+                    this.isFixed = true;
+                }
+                
+                const progress = (scrollY - this.shrinkStartY) / (this.shrinkEndY - this.shrinkStartY);
+                const scale = 1 - (progress * (1 - this.minScale));
+                this.container.style.transform = `scale(${scale})`;
+            } else {
+                // After shrinking is complete - stay at minimum size
+                this.container.classList.add('fixed');
+                if (!this.isFixed) {
+                    const rightDistance = window.innerWidth - this.containerRightEdge;
+                    this.container.style.right = `${rightDistance}px`;
+                    this.container.style.left = 'auto';
+                }
+                this.container.style.transform = `scale(${this.minScale})`;
+                this.isFixed = true;
+            }
+        }
+        
+        updateDimensions(width, height) {
+            this.originalWidth = width;
+            this.originalHeight = height;
+            // Update CSS custom properties
+            document.documentElement.style.setProperty('--display-height', `${height}px`);
+            this.calculateScrollPositions();
+            this.updateContainerPosition();
+        }
+        
+        throttle(func, limit) {
+            let inThrottle;
+            return function() {
+                const args = arguments;
+                const context = this;
+                if (!inThrottle) {
+                    func.apply(context, args);
+                    inThrottle = true;
+                    setTimeout(() => inThrottle = false, limit);
+                }
+            }
+        }
+        
+        destroy() {
+            window.removeEventListener('scroll', this.boundScrollHandler);
+            window.removeEventListener('resize', this.handleResize);
+        }
+    }
+    
+    // Initialize the effect
+    window.scrollShrinkEffect = new ScrollShrinkEffect('.display-container');
 }
 
 function initializePreview(config) {
