@@ -135,20 +135,39 @@ class RoonClient:
         discover.stop()
         return servers[0]  # Return first server found
 
+    def _test_connectivity(self, server_ip, server_port):
+        """Test if server port is reachable."""
+        import socket
+        try:
+            sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+            sock.settimeout(3)  # 3 second timeout
+            result = sock.connect_ex((server_ip, int(server_port)))
+            sock.close()
+            logger.info(f"Connectivity test to {server_ip}:{server_port} returned code: {result}")
+            return result == 0
+        except Exception as e:
+            logger.warning(f"Connectivity test exception: {e}")
+            return False
+
     def _create_roon_connection(self, server_ip, server_port):
-        """Create RoonApi connection with authorization monitoring."""
+        """Create RoonApi connection."""
         token = self._get_token()
 
-        # Always start auth monitoring (even with existing token - it might be invalid)
-        auth_monitor = self._start_auth_monitor()
+        # Quick connectivity check before creating RoonApi
+        if not self._test_connectivity(server_ip, server_port):
+            logger.warning(f"Port {server_port} not reachable on {server_ip}")
+            return None
 
         try:
+            logger.info(f"Creating RoonApi with server {server_ip}:{server_port}")
             api = RoonApi(self.app_info, token, server_ip, server_port)
             logger.debug("RoonApi created successfully")
 
             # Test the connection by trying to fetch zones
             try:
+                logger.info("Testing connection by fetching zones...")
                 zones = api.zones
+                logger.info(f"Zones fetch completed, result: {zones is not None}")
                 if zones is not None:
                     logger.info("Successfully connected and validated!")
                     logger.debug(f"Found {len(zones)} zones")
@@ -162,21 +181,15 @@ class RoonClient:
                     return api
                 else:
                     api.stop()
-                    logger.warning(
-                        "Connected but couldn't fetch zones - token may be invalid"
-                    )
+                    logger.warning("Connected but couldn't fetch zones")
                     self.is_connected = False
-                    self._report_health_failure(
-                        "Invalid or expired authentication token"
-                    )
+                    self._report_health_failure("Could not fetch zones from Roon server")
                     return None
             except Exception as zone_error:
                 logger.warning(f"Error validating connection: {zone_error}")
                 api.stop()
                 self.is_connected = False
-                self._report_health_failure(
-                    f"Connection validation failed: {zone_error}"
-                )
+                self._report_health_failure(f"Connection validation failed: {zone_error}")
                 return None
 
         except Exception as e:
@@ -184,76 +197,7 @@ class RoonClient:
             self.is_connected = False
             self._report_health_failure(f"Roon connection failed: {e}")
             return None
-        finally:
-            # Stop authorization monitoring
-            if auth_monitor:
-                auth_monitor["stop_event"].set()
-                auth_monitor["thread"].join(timeout=1)
 
-    def _start_auth_monitor(self):
-        """Start background thread to monitor for authorization needs."""
-        import threading
-
-        stop_event = threading.Event()
-        auth_displayed = threading.Event()
-
-        def monitor_auth():
-            """Monitor for authorization state and display message."""
-            # Wait a bit for websocket to connect
-            time.sleep(2)
-
-            timeout_seconds = self.config_manager.get_roon_authorization_timeout()
-            start_time = time.time()
-            health_failure_sent = False
-
-            while not stop_event.is_set():
-                elapsed = time.time() - start_time
-
-                # Check for timeout
-                if elapsed > timeout_seconds:
-                    logger.error("Authorization timeout after 5 minutes")
-                    self.is_connected = False
-                    if not health_failure_sent:
-                        self._report_health_failure(
-                            "Authorization timeout - user did not approve extension"
-                        )
-                        health_failure_sent = True
-                    break
-
-                # Check if we need authorization by trying to access zones
-                try:
-                    # If we can access zones, connection is working
-                    if hasattr(self, "roon") and self.roon:
-                        zones = self.roon.zones
-                        if zones is not None:
-                            # Connection is working, stop monitoring
-                            logger.info("Connection successful - zones accessible")
-                            self.is_connected = True
-                            self._report_health_success(
-                                "Roon connection successful - extension approved"
-                            )
-                            break
-                except Exception as e:
-                    logger.debug(f"Zones not accessible yet: {e}")
-
-                # Still waiting for authorization - show message and send health failure
-                if not auth_displayed.is_set():
-                    self._display_authorization_message()
-                    auth_displayed.set()
-
-                    # Send health check failure for authorization needed
-                    if not health_failure_sent:
-                        self._report_health_failure(
-                            "Waiting for Roon authorization - extension needs approval"
-                        )
-                        health_failure_sent = True
-
-                time.sleep(2)
-
-        thread = threading.Thread(target=monitor_auth, daemon=True)
-        thread.start()
-
-        return {"thread": thread, "stop_event": stop_event}
 
     def _get_token(self):
         """Get saved authentication token."""
@@ -585,27 +529,6 @@ class RoonClient:
         ):
             self.viewer.health_manager.report_render_failure(message)
 
-    def _display_authorization_message(self):
-        """Display authorization waiting message on screen."""
-        try:
-            message = (
-                "Please approve this extension in the Roon app.\n\n"
-                "Look for 'Album Art Display' in:\n"
-                "Roon → Settings → Extensions\n\n"
-                "Waiting for authorization...\n"
-                "Timeout in 5:00"
-            )
-
-            renderer = MessageRenderer(self.config_manager)
-            img = renderer.create_text_message(message)
-
-            # Push authorization error to coordinator
-            self.render_coordinator.set_overlay(
-                "Waiting for Roon authorization - extension needs approval"
-            )
-
-        except Exception as e:
-            logger.warning(f"Could not display authorization message: {e}")
 
     def _monitor_connection(self):
         """Monitor connection status and detect different failure types."""
