@@ -9,10 +9,12 @@
             <span id="display-connection-status" class="status-indicator">●</span>
         </div>
     </div>
-    <div class="display-container">
-        <img id="current-display-image" src="/current-display-image" alt="Current Display">
-        <div id="display-overlay" class="display-overlay hidden">
-            <span class="overlay-text">PREVIEW</span>
+    <div class="display-positioning-container">
+        <div class="display-container">
+            <img id="current-display-image" src="/current-display-image" alt="Current Display">
+            <div id="display-overlay" class="display-overlay hidden">
+                <span class="overlay-text">PREVIEW</span>
+            </div>
         </div>
     </div>
     <div class="display-info">
@@ -83,6 +85,11 @@
         // Set anniversary counter from server
         setAnniversaryCounter({{ anniversary_count }});
 
+        // Set up CSS custom properties for dynamic layout
+        const webImageMaxWidth = {{ web_image_max_width }};
+        document.documentElement.style.setProperty('--display-width', `${webImageMaxWidth}px`);
+        document.documentElement.style.setProperty('--display-height', `${webImageMaxWidth}px`); // Assume square
+        
         // Initialize preview functionality
         initializePreview({
             debounceMs: {{ preview_debounce_ms }},
