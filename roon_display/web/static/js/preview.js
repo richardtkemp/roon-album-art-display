@@ -60,6 +60,11 @@ function revertToLiveDisplay() {
 
     overlay.classList.add('hidden');
     container.classList.remove('preview-active');
+    
+    // Clear any explicit dimensions that may have been set during sticky shrinking
+    container.style.width = '';
+    container.style.height = '';
+    
     updateDisplayImage();
 }
 
@@ -214,7 +219,7 @@ function setupStickyImageShrinking() {
     function initializeDimensions() {
         if (isInitialized) return; // Only initialize once
         
-        // Let image size itself naturally first
+        // Ensure no explicit dimensions are set - let CSS handle sizing
         stickyImage.style.width = '';
         stickyImage.style.height = '';
         
@@ -226,6 +231,7 @@ function setupStickyImageShrinking() {
             isInitialized = true;
             
             console.log(`Natural dimensions: ${naturalWidth}x${naturalHeight}, sticky at: ${stickyThreshold}`);
+            // Don't set dimensions here - let CSS continue to handle it until sticky
         });
     }
 
@@ -246,9 +252,9 @@ function setupStickyImageShrinking() {
             stickyImage.style.height = `${currentHeight}px`;
             stickyImage.style.width = `${currentWidth}px`;
         } else {
-            // Image hasn't become sticky yet - use natural size
-            stickyImage.style.width = `${naturalWidth}px`;
-            stickyImage.style.height = `${naturalHeight}px`;
+            // Image hasn't become sticky yet - clear any explicit dimensions, let CSS handle it
+            stickyImage.style.width = '';
+            stickyImage.style.height = '';
         }
     }
 
