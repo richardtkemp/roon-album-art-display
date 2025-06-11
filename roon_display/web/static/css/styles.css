@@ -212,7 +212,10 @@ button:hover { background-color: #45a049; }
 }
 
 .display-container {
-    position: relative;
+    position: absolute;
+    top: 0;
+    right: 0;
+    width: 100%;
     text-align: center;
     background: #ffffff;
     border: 1px solid #ddd;
@@ -346,6 +349,22 @@ button:hover { background-color: #45a049; }
     width: 1px;
     opacity: 0;
     pointer-events: none;
+}
+
+/* Display wrapper with horizontal flex layout */
+.display-wrapper {
+    position: sticky;
+    top: 0;
+    z-index: 100;
+    display: flex;
+    flex-direction: row;
+}
+
+/* Layout placeholder to prevent layout shifts */
+.layout-placeholder {
+    visibility: hidden;
+    flex: 1;
+    /* Height will be set dynamically by JavaScript */
 }
 
 /* System information styles */
