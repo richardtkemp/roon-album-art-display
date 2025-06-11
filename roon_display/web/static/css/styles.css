@@ -264,7 +264,6 @@ button:hover { background-color: #45a049; }
 .display-container.fixed {
     position: fixed;
     top: 0;
-    width: var(--display-width, 600px);
     height: var(--display-height, 600px);
 }
 

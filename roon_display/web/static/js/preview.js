@@ -175,13 +175,20 @@ function setupFormChangeDetection() {
 
                 // Handle web_image_max_width changes for layout updates
                 if (fieldName === 'IMAGE_QUALITY.web_image_max_width') {
-                    const newWidth = parseInt(e.target.value) || 600;
-                    document.documentElement.style.setProperty('--display-width', `${newWidth}px`);
-                    document.documentElement.style.setProperty('--display-height', `${newWidth}px`);
+                    const newConfigWidth = parseInt(e.target.value) || 600;
                     
-                    // Update scroll effect dimensions
+                    // Update global config width
+                    window.configImageWidth = newConfigWidth;
+                    
+                    // Calculate responsive width for height (width is handled by JavaScript)
+                    const responsiveWidth = window.calculateResponsiveWidth ? 
+                        window.calculateResponsiveWidth(newConfigWidth) : newConfigWidth;
+                    
+                    document.documentElement.style.setProperty('--display-height', `${responsiveWidth}px`);
+                    
+                    // Update scroll effect with new config dimensions
                     if (window.scrollShrinkEffect) {
-                        window.scrollShrinkEffect.updateDimensions(newWidth, newWidth);
+                        window.scrollShrinkEffect.updateDimensions(newConfigWidth, newConfigWidth);
                     }
                 }
 
@@ -218,8 +225,13 @@ function setupStickyImageShrinking() {
         constructor(containerSelector) {
             this.container = document.querySelector(containerSelector);
             this.positioningContainer = this.container.parentElement;
-            this.originalWidth = parseInt(getComputedStyle(document.documentElement).getPropertyValue('--display-width')) || 600;
-            this.originalHeight = parseInt(getComputedStyle(document.documentElement).getPropertyValue('--display-height')) || 600;
+            
+            // Track config width (original user setting) vs responsive width (viewport-constrained)
+            this.configWidth = window.configImageWidth || 600;
+            this.configHeight = this.configWidth; // Assume square
+            this.responsiveWidth = parseInt(getComputedStyle(document.documentElement).getPropertyValue('--display-width')) || 600;
+            this.responsiveHeight = parseInt(getComputedStyle(document.documentElement).getPropertyValue('--display-height')) || 600;
+            
             this.minScale = 0.4; // 40% of original size
             
             this.isFixed = false;
@@ -231,6 +243,9 @@ function setupStickyImageShrinking() {
         }
         
         init() {
+            // Capture the container's actual rendered width before any scroll effects
+            this.actualContainerWidth = this.container.getBoundingClientRect().width;
+            
             // Calculate scroll positions
             this.calculateScrollPositions();
             
@@ -254,7 +269,8 @@ function setupStickyImageShrinking() {
             this.shrinkStartY = positioningTop;
             
             // Calculate how much scroll distance we need to shrink to minimum
-            const maxShrinkDistance = this.originalHeight * (1 - this.minScale);
+            // Use responsive height for scroll distance calculation
+            const maxShrinkDistance = this.responsiveHeight * (1 - this.minScale);
             this.shrinkEndY = this.shrinkStartY + maxShrinkDistance;
         }
         
@@ -263,8 +279,35 @@ function setupStickyImageShrinking() {
         }
         
         handleResize() {
-            this.calculateScrollPositions();
-            this.updateContainerPosition();
+            // Recapture the container's actual rendered width after resize
+            if (!this.isFixed) {
+                this.actualContainerWidth = this.container.getBoundingClientRect().width;
+            }
+            
+            // Recalculate responsive width on viewport changes using config width as base
+            if (window.calculateResponsiveWidth) {
+                const newResponsiveWidth = window.calculateResponsiveWidth(this.configWidth);
+                const newResponsiveHeight = newResponsiveWidth; // Assume square
+                
+                if (newResponsiveWidth !== this.responsiveWidth) {
+                    // Update dimensions if responsive width changed
+                    document.documentElement.style.setProperty('--display-height', `${newResponsiveHeight}px`);
+                    
+                    // Update responsive dimensions but keep config dimensions unchanged
+                    this.responsiveWidth = newResponsiveWidth;
+                    this.responsiveHeight = newResponsiveHeight;
+                    
+                    this.calculateScrollPositions();
+                    this.updateContainerPosition();
+                } else {
+                    // Just recalculate positions if width didn't change
+                    this.calculateScrollPositions();
+                    this.updateContainerPosition();
+                }
+            } else {
+                this.calculateScrollPositions();
+                this.updateContainerPosition();
+            }
         }
         
         updateContainerPosition() {
@@ -276,11 +319,14 @@ function setupStickyImageShrinking() {
                 this.container.style.transform = 'scale(1)';
                 this.container.style.right = 'auto';
                 this.container.style.left = '0';
+                this.container.style.width = '';  // Remove any inline width to use CSS
                 this.isFixed = false;
             } else if (scrollY >= this.shrinkStartY && scrollY <= this.shrinkEndY) {
                 // During shrinking phase
                 if (!this.isFixed) {
                     this.container.classList.add('fixed');
+                    // Set explicit width to maintain current size
+                    this.container.style.width = `${this.actualContainerWidth}px`;
                     // Position container so its right edge stays in the same place
                     const rightDistance = window.innerWidth - this.containerRightEdge;
                     this.container.style.right = `${rightDistance}px`;
@@ -295,6 +341,8 @@ function setupStickyImageShrinking() {
                 // After shrinking is complete - stay at minimum size
                 this.container.classList.add('fixed');
                 if (!this.isFixed) {
+                    // Set explicit width to maintain current size
+                    this.container.style.width = `${this.actualContainerWidth}px`;
                     const rightDistance = window.innerWidth - this.containerRightEdge;
                     this.container.style.right = `${rightDistance}px`;
                     this.container.style.left = 'auto';
@@ -304,11 +352,29 @@ function setupStickyImageShrinking() {
             }
         }
         
-        updateDimensions(width, height) {
-            this.originalWidth = width;
-            this.originalHeight = height;
-            // Update CSS custom properties
-            document.documentElement.style.setProperty('--display-height', `${height}px`);
+        updateDimensions(newConfigWidth, newConfigHeight) {
+            // Update config dimensions (user's original setting)
+            this.configWidth = newConfigWidth;
+            this.configHeight = newConfigHeight;
+            
+            // Recalculate responsive dimensions from new config
+            if (window.calculateResponsiveWidth) {
+                this.responsiveWidth = window.calculateResponsiveWidth(this.configWidth);
+                this.responsiveHeight = this.responsiveWidth; // Assume square
+                
+                // Update CSS custom properties for height only (width handled by JavaScript)
+                document.documentElement.style.setProperty('--display-height', `${this.responsiveHeight}px`);
+            } else {
+                // Fallback if responsive calculation not available
+                this.responsiveWidth = newConfigWidth;
+                this.responsiveHeight = newConfigHeight;
+            }
+            
+            // Recapture actual container width after config change
+            if (!this.isFixed) {
+                this.actualContainerWidth = this.container.getBoundingClientRect().width;
+            }
+            
             this.calculateScrollPositions();
             this.updateContainerPosition();
         }
