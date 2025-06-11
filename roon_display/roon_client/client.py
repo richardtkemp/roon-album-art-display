@@ -413,11 +413,15 @@ class RoonClient:
         """Download album art from Roon server."""
         try:
             # Get image URL from Roon
+            screen_width = self.config_manager.get_screen_width()
+            screen_height = self.config_manager.get_screen_height()
+            # Use the minimum dimension to create a square
+            image_size = min(screen_width, screen_height)
             image_url = self.roon.get_image(
                 image_key,
                 "fit",
-                self.image_processor.image_size,
-                self.image_processor.image_size,
+                image_size,
+                image_size,
             )
 
             logger.info(f"Downloading album art from: {image_url}")
