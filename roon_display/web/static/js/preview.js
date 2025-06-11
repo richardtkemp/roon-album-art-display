@@ -201,6 +201,68 @@ function setupFormChangeDetection() {
     console.log(`Set up change detection for ${inputs.length} form inputs`);
 }
 
+function setupStickyImageShrinking() {
+    const stickyImage = document.querySelector('.sticky-image');
+    const image = document.querySelector('#current-display-image');
+    if (!stickyImage || !image) return;
+
+    let naturalWidth, naturalHeight, stickyThreshold;
+    let isInitialized = false;
+    const shrinkDistance = 300; // Distance to scroll to reach minimum size
+    const minScale = 0.4; // Shrink to 40% of original size
+
+    function initializeDimensions() {
+        if (isInitialized) return; // Only initialize once
+        
+        // Let image size itself naturally first
+        stickyImage.style.width = '';
+        stickyImage.style.height = '';
+        
+        // Wait for next frame to get natural dimensions
+        requestAnimationFrame(() => {
+            naturalWidth = stickyImage.offsetWidth;
+            naturalHeight = stickyImage.offsetHeight;
+            stickyThreshold = stickyImage.offsetTop;
+            isInitialized = true;
+            
+            console.log(`Natural dimensions: ${naturalWidth}x${naturalHeight}, sticky at: ${stickyThreshold}`);
+        });
+    }
+
+    function updateImageSize() {
+        if (!isInitialized) return; // Not initialized yet
+        
+        const scrollY = window.scrollY;
+        
+        if (scrollY >= stickyThreshold) {
+            // Image is sticky - shrink both dimensions from natural size
+            const scrollPastSticky = scrollY - stickyThreshold;
+            const shrinkProgress = Math.min(scrollPastSticky / shrinkDistance, 1);
+            const scale = 1 - ((1 - minScale) * shrinkProgress);
+            
+            const currentHeight = naturalHeight * scale;
+            const currentWidth = naturalWidth * scale;
+            
+            stickyImage.style.height = `${currentHeight}px`;
+            stickyImage.style.width = `${currentWidth}px`;
+        } else {
+            // Image hasn't become sticky yet - use natural size
+            stickyImage.style.width = `${naturalWidth}px`;
+            stickyImage.style.height = `${naturalHeight}px`;
+        }
+    }
+
+    // Initialize when image loads
+    if (image.complete) {
+        initializeDimensions();
+    } else {
+        image.addEventListener('load', initializeDimensions);
+    }
+
+    window.addEventListener('scroll', updateImageSize);
+    updateImageSize(); // Initial call
+}
+
 function initializePreview(config) {
     previewConfig = { ...previewConfig, ...config };
     
@@ -208,6 +270,7 @@ function initializePreview(config) {
     updateDisplayImage();
     updateDisplayMetadata();
     setupFormChangeDetection();
+    setupStickyImageShrinking();
 
     // Auto-refresh at configured interval
     setInterval(() => {
