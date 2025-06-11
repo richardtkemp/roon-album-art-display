@@ -2,23 +2,21 @@
 
 {% block content %}
     <!-- Current Display Preview -->
-    <div class="display-preview-section">
-        <div class="display-header">
-            <span>Current Display</span>
-            <div class="display-controls">
-                <button id="refresh-display" class="control-btn">↻ Refresh</button>
-                <span id="display-connection-status" class="status-indicator">●</span>
-            </div>
+    <div class="display-header">
+        <span>Current Display</span>
+        <div class="display-controls">
+            <button id="refresh-display" class="control-btn">↻ Refresh</button>
+            <span id="display-connection-status" class="status-indicator">●</span>
         </div>
-        <div class="display-container sticky-image">
-            <img id="current-display-image" src="/current-display-image" alt="Current Display">
-            <div id="display-overlay" class="display-overlay hidden">
-                <span class="overlay-text">PREVIEW</span>
-            </div>
+    </div>
+    <div class="display-container sticky-image">
+        <img id="current-display-image" src="/current-display-image" alt="Current Display">
+        <div id="display-overlay" class="display-overlay hidden">
+            <span class="overlay-text">PREVIEW</span>
         </div>
-        <div class="display-info">
-            <span id="display-metadata">Loading display info...</span>
-        </div>
+    </div>
+    <div class="display-info">
+        <span id="display-metadata">Loading display info...</span>
     </div>
 
     <!-- Flash messages for traditional form submission (fallback) -->
