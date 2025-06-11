@@ -220,6 +220,7 @@ button:hover { background-color: #45a049; }
     padding: 20px;
     margin-bottom: 15px;
     box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+    box-sizing: border-box;
 }
 
 .sticky-image {
@@ -227,6 +228,12 @@ button:hover { background-color: #45a049; }
     top: 0;
     z-index: 100;
     margin-left: auto;
+    transform-origin: top center;
+    transition: transform 0.2s ease-out;
+}
+
+.sticky-image.shrunk {
+    transform: scale(0.4);
 }
 
 #current-display-image {
@@ -330,6 +337,15 @@ button:hover { background-color: #45a049; }
     font-style: italic;
     padding: 20px;
     text-align: center;
+}
+
+
+/* Scroll sentinel for sticky tracking */
+.scroll-sentinel {
+    height: 1px;
+    width: 1px;
+    opacity: 0;
+    pointer-events: none;
 }
 
 /* System information styles */
