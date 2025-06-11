@@ -202,22 +202,22 @@ function setupFormChangeDetection() {
 }
 
 function setupStickyImageShrinking() {
-    const stickyElement = document.querySelector('.sticky-image');
+    const stickyElement = document.querySelector('.display-container');
     if (!stickyElement) {
-        console.log('❌ No .sticky-image element found');
         return;
     }
-
-    console.log('🔍 Setting up pixel-perfect sticky shrinking with sentinel for:', stickyElement);
 
     // Find existing sentinel element in the DOM
     const sentinel = document.querySelector('.scroll-sentinel');
     if (!sentinel) {
-        console.log('❌ No .scroll-sentinel element found in HTML');
         return;
     }
-    
-    console.log('👻 Found existing sentinel element:', sentinel);
+
+    // Find the wrapper element (now the sticky element)
+    const stickyWrapper = document.querySelector('.display-wrapper');
+    if (!stickyWrapper) {
+        return;
+    }
 
     let isSticky = false;
     let originalWidth = 0;
@@ -227,14 +227,16 @@ function setupStickyImageShrinking() {
     let targetHeight = 0;
     let maxShrinkWidth = 0;
     let maxShrinkHeight = 0;
+    let dimensionsInitialized = false;
+    let stickyStartScrollY = 0;
+    let hasCapturedStickyStart = false;
     
     const stickyThreshold = 0; // CSS top value for sticky positioning
 
     function initializeOriginalDimensions() {
-        // Clear any existing explicit dimensions to get natural size
-        stickyElement.style.width = '';
-        stickyElement.style.height = '';
+        if (dimensionsInitialized) return; // Only initialize once
         
+        // Capture natural dimensions without clearing styles (no judder)
         const rect = stickyElement.getBoundingClientRect();
         originalWidth = rect.width;
         originalHeight = rect.height;
@@ -242,36 +244,34 @@ function setupStickyImageShrinking() {
         targetHeight = originalHeight * targetFraction;
         maxShrinkWidth = originalWidth - targetWidth;
         maxShrinkHeight = originalHeight - targetHeight;
+        dimensionsInitialized = true;
         
-        console.log('📏 Original dimensions captured:', {
-            originalWidth: originalWidth.toFixed(1),
-            originalHeight: originalHeight.toFixed(1),
-            targetWidth: targetWidth.toFixed(1),
-            targetHeight: targetHeight.toFixed(1),
-            maxShrinkWidth: maxShrinkWidth.toFixed(1),
-            maxShrinkHeight: maxShrinkHeight.toFixed(1)
-        });
+        // Set layout placeholder to exact same height as original container
+        const placeholder = document.querySelector('.layout-placeholder');
+        if (placeholder) {
+            placeholder.style.height = originalHeight + 'px';
+        }
     }
 
     function updateStickySize() {
-        const rect = stickyElement.getBoundingClientRect();
-        const sentinelRect = sentinel.getBoundingClientRect();
-        const shouldBeSticky = rect.top <= stickyThreshold;
+        const wrapperRect = stickyWrapper.getBoundingClientRect();
+        const shouldBeSticky = wrapperRect.top <= stickyThreshold;
         
         if (shouldBeSticky && !isSticky) {
-            console.log('🔴 Element became sticky - capturing original dimensions');
-            initializeOriginalDimensions();
+            // Capture scroll position when first becoming sticky
+            stickyStartScrollY = window.scrollY;
+            hasCapturedStickyStart = true;
             isSticky = true;
         } else if (!shouldBeSticky && isSticky) {
-            console.log('🟢 Element no longer sticky - restoring natural size');
             stickyElement.style.width = '';
             stickyElement.style.height = '';
             isSticky = false;
+            hasCapturedStickyStart = false;
         }
         
-        if (isSticky) {
-            // Use sentinel position to calculate scroll distance past sticky point
-            const scrollPastSticky = Math.max(0, -sentinelRect.top);
+        if (isSticky && hasCapturedStickyStart) {
+            // Pure scroll-based calculation (no DOM measurements)
+            const scrollPastSticky = Math.max(0, window.scrollY - stickyStartScrollY);
             
             // Calculate pixel reduction (1:1 tracking)
             const widthReduction = Math.min(scrollPastSticky, maxShrinkWidth);
@@ -283,15 +283,6 @@ function setupStickyImageShrinking() {
             
             stickyElement.style.width = currentWidth + 'px';
             stickyElement.style.height = currentHeight + 'px';
-            
-            console.log(`📐 Sentinel tracking:`, {
-                sentinelTop: sentinelRect.top.toFixed(1),
-                scrollPastSticky: scrollPastSticky.toFixed(1),
-                widthReduction: widthReduction.toFixed(1),
-                heightReduction: heightReduction.toFixed(1),
-                currentWidth: currentWidth.toFixed(1),
-                currentHeight: currentHeight.toFixed(1)
-            });
         }
     }
 
@@ -302,10 +293,10 @@ function setupStickyImageShrinking() {
 
     window.addEventListener('scroll', handleScroll, { passive: true });
     
-    // Check initial state
+    // Initialize dimensions early (on page load, before any stickiness)
     setTimeout(() => {
+        initializeOriginalDimensions();
         updateStickySize();
-        console.log('✅ Pixel-perfect sticky shrinking with sentinel initialized');
     }, 100);
 }
 
