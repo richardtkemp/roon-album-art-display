@@ -57,10 +57,13 @@ class BaseViewer(ABC):
                 logger.warning(f"Could not load image for display: {image_path}")
                 return None
 
-            # Process image position (for fresh images)
-            img = self.image_processor.process_image_position(img)
+        # Apply ALL image processing to ALL images regardless of source
+        # 1. Apply enhancements (color, contrast, brightness, sharpness)
+        img = self.image_processor.apply_enhancements(img)
+        
+        # 2. Apply position processing (rotation, scaling, positioning)
+        img = self.image_processor.process_image_position(img)
 
-        # If img was provided, assume it's already processed (e.g., anniversaries, errors)
         return img
 
 

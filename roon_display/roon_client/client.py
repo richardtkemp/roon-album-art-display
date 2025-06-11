@@ -449,13 +449,8 @@ class RoonClient:
             with open(image_path, "wb") as f:
                 f.write(response.content)
 
-            # Load and process image
+            # Load image and return it (but don't process it - let viewer handle that)
             img = Image.open(image_path)
-
-            # Apply enhancements if configured
-            img = self.image_processor.apply_enhancements(img)
-            img.save(image_path)  # Save enhanced version
-
             logger.info(f"Successfully saved album art to {image_path}")
             return img
 

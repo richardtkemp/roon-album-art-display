@@ -1,3 +1,4 @@
+ tabs and anniv are too wide on mobile
 
 Completely disable logging to disk to protect it (or move logs to a ramdisk)
 

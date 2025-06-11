@@ -91,19 +91,19 @@
             const bodyMaxWidth = 800;
             const bodyPadding = 40; // 20px on each side
             const availableWidth = Math.min(window.innerWidth - bodyPadding, bodyMaxWidth);
-            
+
             // Use the smaller of: config width or available viewport width
             return Math.min(configWidth, availableWidth);
         }
-        
+
         const webImageMaxWidth = {{ web_image_max_width }};
         const responsiveWidth = calculateResponsiveWidth(webImageMaxWidth);
         document.documentElement.style.setProperty('--display-height', `${responsiveWidth}px`); // Height only, width handled by JavaScript
-        
+
         // Store values globally for scroll effect
         window.configImageWidth = webImageMaxWidth;
         window.calculateResponsiveWidth = calculateResponsiveWidth;
-        
+
         // Initialize preview functionality
         initializePreview({
             debounceMs: {{ preview_debounce_ms }},
