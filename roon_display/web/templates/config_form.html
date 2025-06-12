@@ -98,7 +98,8 @@
 
         const webImageMaxWidth = {{ web_image_max_width }};
         const responsiveWidth = calculateResponsiveWidth(webImageMaxWidth);
-        document.documentElement.style.setProperty('--display-height', `${responsiveWidth}px`); // Height only, width handled by JavaScript
+        const containerHeight = responsiveWidth + 40;
+        document.documentElement.style.setProperty('--display-height', `${containerHeight}px`);
 
         // Store values globally for scroll effect
         window.configImageWidth = webImageMaxWidth;
