@@ -200,9 +200,9 @@ class EinkViewer(Viewer):
 
         # Render on the eink display
         logger.debug(f"Starting sending image to display for {title}")
-        self.epd.should_stop = False
+
         self.epd.display(self.epd.getbuffer(img), title)
-        self.epd.should_stop = False
+
         logger.info(f"Finished sending image to display for {title}")
 
     def update(self, image_path, img, title):
@@ -211,8 +211,8 @@ class EinkViewer(Viewer):
         if img is None:
             return
 
-        logger.info(f"Setting should_stop for {title}") # TODO
-        self.epd.should_stop = True
+
+
 
         # Process the image position, including scale and offset while we wait for the thread to stop
         img = self.process_image_position(img)

@@ -10,28 +10,18 @@ The e-ink display has strict hardware limitations that must be respected:
 3. SILENT FAILURES: Sending commands during rendering fails silently - no errors!
 4. THREAD SAFETY: Only one display operation can run at a time
 
-SAFE CANCELLATION DESIGN:
-========================
-
-The e-ink library (libs/epd13in3E.py) has been modified to support safe cancellation:
-- should_stop flag is checked at multiple safe points during display()
-- Hardware is left in a safe state when cancelling
-
 THREADING IMPLEMENTATION:
 ========================
 
 This viewer uses the following thread safety approach:
 1. When new update() called while previous thread running:
-   - Set should_stop=True to request early exit of current operation
    - Wait for previous thread to complete safely (respects hardware constraints)
    - Start new thread only after hardware is idle
-2. DO NOT reset should_stop flag in display_image() - let the e-ink library handle it
 3. Thread completion ensures hardware is ready for next operation
 
 TESTING NOTES:
 =============
 - Mock display() should include time.sleep() to simulate real hardware timing
-- Tests verify that should_stop flag is properly set and handled
 - Real hardware testing required to validate cancellation points work correctly
 """
 
@@ -66,11 +56,10 @@ class EinkViewer(BaseViewer):
         """Display an image on the e-ink display."""
         thread_id = threading.current_thread().ident
         logger.debug(f"Starting display update for {title} (thread: {thread_id})")
-        logger.debug(f"should_stop flag at start: {self.epd.should_stop}")
 
         start_time = time.time()
 
-        # Send to e-ink display - don't reset should_stop flag here!
+        # Send to e-ink display 
         self.epd.display(self.epd.getbuffer(img), title)
 
         elapsed_time = time.time() - start_time
@@ -126,14 +115,6 @@ class EinkViewer(BaseViewer):
         previous_thread_id = None
         if self.update_thread is not None and self.update_thread.is_alive():
             previous_thread_id = self.update_thread.ident
-
-            # Use should_stop mechanism for smart render cancellation
-            logger.debug(
-                f"Setting stop flag for previous update (prev_thread: {previous_thread_id})"
-            )
-            logger.debug(f"should_stop before setting: {self.epd.should_stop}")
-            self.epd.should_stop = True
-            logger.debug(f"should_stop after setting: {self.epd.should_stop}")
 
         # Image is already processed by _load_and_process_image()
 

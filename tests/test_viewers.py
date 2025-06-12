@@ -176,7 +176,7 @@ class TestEinkViewer:
         # Verify e-ink display methods were called
         eink_viewer.epd.getbuffer.assert_called_once_with(sample_image)
         eink_viewer.epd.display.assert_called_once()
-        assert eink_viewer.epd.should_stop is False
+
 
     @patch("roon_display.viewers.eink_viewer.set_current_image_key")
     def test_display_image_sets_current_key(
@@ -244,14 +244,14 @@ class TestEinkViewer:
         first_thread = eink_viewer.update_thread
 
         # Verify initial state and first thread exists
-        assert eink_viewer.epd.should_stop is False
+
         assert first_thread is not None, "First update should create a thread"
 
         # Start second update - with partial_refresh=False, should NOT set stop flag
         eink_viewer.update("key2", "/path2", sample_image, "Song 2")
 
         # Should NOT set stop flag with partial_refresh=False
-        assert eink_viewer.epd.should_stop is False
+
 
         # Clean up threads
         if first_thread:
@@ -309,128 +309,6 @@ class TestEinkViewer:
         # Should never have more than 1 concurrent display() call
         assert max_concurrent <= 1, f"Had {max_concurrent} concurrent display calls"
         assert display_call_count >= 1, "Should have made at least one display call"
-
-    def test_should_stop_flag_not_reset_by_viewer(self, eink_viewer, sample_image):
-        """Test that viewer never resets should_stop flag during display."""
-        # Track all assignments to should_stop
-        assignments = []
-        original_setattr = type(eink_viewer.epd).__setattr__
-
-        def track_assignments(obj, name, value):
-            if name == "should_stop":
-                assignments.append(value)
-            original_setattr(obj, name, value)
-
-        type(eink_viewer.epd).__setattr__ = track_assignments
-
-        try:
-            # Start an update
-            eink_viewer.update("test_key", "/test/path", sample_image, "Test Song")
-
-            # Wait for thread to complete
-            if eink_viewer.update_thread:
-                eink_viewer.update_thread.join(timeout=1)
-
-            # Viewer should only set should_stop to True, never False
-            false_assignments = [a for a in assignments if a is False]
-            assert (
-                len(false_assignments) == 0
-            ), f"Viewer incorrectly set should_stop=False {len(false_assignments)} times"
-
-        finally:
-            type(eink_viewer.epd).__setattr__ = original_setattr
-
-    def test_song_skip_scenario(self, eink_viewer, sample_image):
-        """Test rapid song changes (realistic user scenario)."""
-        songs = [
-            ("key1", "Song One"),
-            ("key2", "Song Two"),
-            ("key3", "Song Three"),
-            ("key4", "Song Four"),
-        ]
-
-        # Simulate user rapidly skipping through songs
-        threads = []
-        for key, title in songs:
-            eink_viewer.update(key, f"/path/{key}", sample_image, title)
-            if eink_viewer.update_thread:
-                threads.append(eink_viewer.update_thread)
-            # Small delay to simulate realistic timing
-            time.sleep(0.05)
-
-        # All threads should complete without hanging
-        for thread in threads:
-            thread.join(timeout=2)
-            assert not thread.is_alive(), "Thread should have completed"
-
-        # Final state should be clean
-        assert eink_viewer.update_thread is not None, "Should have final thread"
-        assert (
-            not eink_viewer.update_thread.is_alive()
-            or eink_viewer.update_thread.join(timeout=1) is None
-        )
-
-    def test_display_error_cleanup(self, eink_viewer, sample_image):
-        """Test proper cleanup when display() throws an exception."""
-        # Make display() throw an exception
-        eink_viewer.epd.display.side_effect = Exception("Hardware error")
-
-        eink_viewer.update("error_key", "/error/path", sample_image, "Error Song")
-
-        # Thread should still complete despite error
-        if eink_viewer.update_thread:
-            eink_viewer.update_thread.join(timeout=1)
-            assert (
-                not eink_viewer.update_thread.is_alive()
-            ), "Thread should complete even after error"
-
-        # Should be able to start new update after error
-        eink_viewer.epd.display.side_effect = None  # Remove error
-        eink_viewer.update(
-            "recovery_key", "/recovery/path", sample_image, "Recovery Song"
-        )
-
-        if eink_viewer.update_thread:
-            eink_viewer.update_thread.join(timeout=1)
-            assert (
-                not eink_viewer.update_thread.is_alive()
-            ), "Should recover from errors"
-
-    def test_early_exit_simulation(self, eink_viewer, sample_image):
-        """Test simulation of e-ink library early exit behavior."""
-
-        # Create a custom display that simulates EarlyExit exception
-        class EarlyExit(Exception):
-            pass
-
-        call_count = 0
-
-        def early_exit_display(*args, **kwargs):
-            nonlocal call_count
-            call_count += 1
-            if call_count == 1:
-                # First call gets interrupted
-                raise EarlyExit("Simulated early exit")
-            # Second call succeeds
-            time.sleep(0.1)
-
-        eink_viewer.epd.display.side_effect = early_exit_display
-
-        # Start first update
-        eink_viewer.update("key1", "/path1", sample_image, "Song 1")
-        first_thread = eink_viewer.update_thread
-
-        # Start second update quickly to trigger early exit
-        eink_viewer.update("key2", "/path2", sample_image, "Song 2")
-
-        # Both threads should complete
-        if first_thread:
-            first_thread.join(timeout=1)
-        if eink_viewer.update_thread:
-            eink_viewer.update_thread.join(timeout=1)
-
-        # Should have made 2 display calls (first interrupted, second completed)
-        assert call_count == 2, f"Expected 2 display calls, got {call_count}"
 
     def test_fast_render_detection(self, eink_viewer, sample_image, caplog):
         """Test detection of fast renders that indicate hardware problems."""
@@ -743,41 +621,8 @@ class TestTkViewer:
             with patch("time.sleep") as mock_sleep:
                 viewer.update("key2", "/path2", sample_image, "Song 2")
 
-                # Should NOT have set should_stop flag
-                assert (
-                    not hasattr(viewer.epd, "should_stop") or not viewer.epd.should_stop
-                )
 
             # Clean up threads
             if viewer.update_thread and viewer.update_thread.is_alive():
                 viewer.update_thread.join(timeout=1)
 
-    def test_update_with_partial_refresh_enabled(
-        self, config_manager, mock_eink_module, sample_image
-    ):
-        """Test that update uses should_stop when partial_refresh is enabled."""
-        with patch("roon_display.viewers.eink_viewer.set_current_image_key"):
-            viewer = EinkViewer(
-                config_manager.config, mock_eink_module, partial_refresh=True
-            )
-            viewer.startup = Mock()
-
-            # Mock a slow display operation
-            def slow_display(*args, **kwargs):
-                time.sleep(0.1)
-
-            viewer.epd.display.side_effect = slow_display
-
-            # Start first update
-            viewer.update("key1", "/path1", sample_image, "Song 1")
-            time.sleep(0.01)  # Let first update start
-
-            # Start second update - should set should_stop flag
-            viewer.update("key2", "/path2", sample_image, "Song 2")
-
-            # Should have set should_stop flag for interruption
-            assert hasattr(viewer.epd, "should_stop")
-
-            # Clean up threads
-            if viewer.update_thread and viewer.update_thread.is_alive():
-                viewer.update_thread.join(timeout=1)

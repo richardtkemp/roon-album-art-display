@@ -8,18 +8,6 @@
 # * | Date        :   2019-11-01
 # * | Info        :
 # *
-# * MODIFICATIONS FOR SAFE CANCELLATION:
-# * ====================================
-# * This library has been modified to support safe cancellation of display operations:
-# * - Added should_stop flag (line 80)
-# * - Added returnFunc() method to check should_stop at safe points (lines 335-340)
-# * - Modified display() to call returnFunc() at multiple checkpoints (lines 350+ )
-# * - Modified ReadBusyH() to observe should_stop flag (lines 114-121)
-# * - Raises EarlyExit exception when should_stop=True to cleanly abort operations
-# *
-# * CRITICAL: Do not modify the returnFunc() calls without understanding the hardware
-# * implications. Each call represents a safe point where display operations can be
-# * safely interrupted without leaving the e-ink hardware in an unusable state.
 # ******************************************************************************/
 # Permission is hereby granted, free of charge, to any person obtaining a copy
 # of this software and associated documnetation files (the "Software"), to deal
@@ -66,10 +54,6 @@ def getParent():
     frame = inspect.currentframe().f_back.f_back
     return frame.f_code.co_name
 
-class EarlyExit(Exception):
-    logger.debug("Exiting early")
-    pass
-
 class EPD():
     def __init__(self):
         self.width = EPD_WIDTH
@@ -90,10 +74,6 @@ class EPD():
         self.EPD_BUSY_PIN  = epdconfig.EPD_BUSY_PIN
         self.EPD_PWR_PIN  = epdconfig.EPD_PWR_PIN
 
-        self.should_stop = False
-        # In case the script somehow restarts while the display is powered on,
-        # shut it down here
-        # segfaults: self.writePower(False, "Startup")
         # Dangerous? TODO
         self.powered_on = False
 
@@ -127,8 +107,6 @@ class EPD():
     def ReadBusyH(self, where, observe_stop_flag=True):
         logger.debug(f"e-Paper busy H checking at {where}")
         while(epdconfig.digital_read(self.EPD_BUSY_PIN) == 0):      # 0: busy, 1: idle
-            if observe_stop_flag and self.should_stop:
-                return
             epdconfig.delay_ms(100)
         logger.debug(f"e-Paper busy H released at {where}")
 
@@ -145,29 +123,20 @@ class EPD():
 
         logger.debug(f"Write power {name} starting for {title}") # Power on
         self.CS_ALL(0)
-#        self.returnFunc(title)
         self.SendCommand(cmd)
-#        self.returnFunc(title)
         if state == False:
             self.SendData(0x00)
-#            self.returnFunc(title)
         self.CS_ALL(1)
-#        self.returnFunc(title)
         self.ReadBusyH(f"[[{getParent()}]] for {title}", stop)
         self.powered_on = state
 
     def writeDRF(self, title):
         logger.debug(f"Write DRF for {title}") # Display refresh
         self.CS_ALL(0)
-        self.returnFunc("1 "+title)
         self.SendCommand(0x12)
-        self.returnFunc("2 "+title)
         self.SendData(0x00)
-        self.returnFunc("3 "+title)
         self.CS_ALL(1)
-        self.returnFunc("4 "+title)
         self.ReadBusyH(f"Write DRF {title}", True)
-        self.returnFunc("5 "+title)
 
     def updateDisplay(self, title):
         try:
@@ -181,9 +150,6 @@ class EPD():
 
             self.writePower(False, title)
             logger.debug(f"Write to display complete for {title}")
-
-        except EarlyExit:
-            return
 
     def Init(self):
         logger.debug("EPD init...")
@@ -348,13 +314,6 @@ class EPD():
 
         self.writePower(True, "Clear")
 
-    def returnFunc(self, title):
-        if self.should_stop:
-            logger.info(f"Returning early from [[{getParent()}]] due to should_stop for {title}")
-            epdconfig.digital_write(self.EPD_BUSY_PIN, 1)
-            self.should_stop = False
-            raise EarlyExit()
-
     def display(self, image, title):
         try:
             Width  = int(self.width / 4)
@@ -363,32 +322,20 @@ class EPD():
             self.ReadBusyH(f"Starting [[{getParent()}]] {title}")
             logger.debug(f"Sending data 1 for {title}")
             self.CS_ALL(1)
-            self.returnFunc("1 "+title)
             epdconfig.digital_write(self.EPD_CS_M_PIN, 0)
-            self.returnFunc("2 "+title)
             self.SendCommand(0x10)
-            self.returnFunc("3 "+title)
             for i in range(self.height):
                 self.SendData2(image[i * Width1 : i * Width1+Width], Width)
-                self.returnFunc("4 "+title)
             self.CS_ALL(1)
-            self.returnFunc("5 "+title)
 
             logger.debug(f"Sending data 2 for {title}")
             epdconfig.digital_write(self.EPD_CS_S_PIN, 0)
-            self.returnFunc("6 "+title)
             self.SendCommand(0x10)
-            self.returnFunc("7 "+title)
             for i in range(self.height):
                 self.SendData2(image[i * Width1+Width : i * Width1+Width1], Width)
-                self.returnFunc("8 "+title)
             self.CS_ALL(1)
-            self.returnFunc("9 "+title)
 
             self.updateDisplay(title)
-
-        except EarlyExit:
-            return
 
     def sleep(self):
         self.CS_ALL(0)
