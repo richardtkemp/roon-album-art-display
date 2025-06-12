@@ -93,7 +93,8 @@
             const availableWidth = Math.min(window.innerWidth - bodyPadding, bodyMaxWidth);
 
             // Use the smaller of: config width or available viewport width
-            return Math.min(configWidth, availableWidth);
+            const result = Math.min(configWidth, availableWidth);
+            return result;
         }
 
         const webImageMaxWidth = {{ web_image_max_width }};
