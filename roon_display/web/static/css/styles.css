@@ -242,7 +242,7 @@ button:hover { background-color: #45a049; }
     box-shadow: 0 2px 8px rgba(0,0,0,0.1);
     object-fit: contain;
     display: block;
-    margin: 0 auto;
+    margin: auto auto;
 }
 
 .display-overlay {

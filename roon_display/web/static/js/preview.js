@@ -226,11 +226,12 @@ function setupStickyImageShrinking() {
             this.container = document.querySelector(containerSelector);
             this.positioningContainer = this.container.parentElement;
 
-            // Track config width (original user setting) vs responsive width (viewport-constrained)
-            this.configWidth = window.configImageWidth || 600;
-            this.configHeight = this.configWidth; // Assume square
-            this.responsiveWidth = parseInt(getComputedStyle(document.documentElement).getPropertyValue('--display-width')) || 600;
-            this.responsiveHeight = parseInt(getComputedStyle(document.documentElement).getPropertyValue('--display-height')) || 600;
+            // Get containerHeight from CSS custom property (responsiveWidth + 40)
+            this.containerHeight = parseInt(getComputedStyle(document.documentElement).getPropertyValue('--display-height')) || 600;
+            
+            // Store initial container dimensions before any transformations
+            this.initialContainerWidth = 0;
+            this.initialContainerHeight = 0;
 
             this.minScale = 0.4; // 40% of original size
 
@@ -245,6 +246,11 @@ function setupStickyImageShrinking() {
         init() {
             // Capture the container's actual rendered width before any scroll effects
             this.actualContainerWidth = this.container.getBoundingClientRect().width;
+            
+            // Store initial container dimensions for consistent calculations
+            const containerRect = this.container.getBoundingClientRect();
+            this.initialContainerWidth = containerRect.width;
+            this.initialContainerHeight = containerRect.height;
 
             // Calculate scroll positions
             this.calculateScrollPositions();
@@ -269,8 +275,7 @@ function setupStickyImageShrinking() {
             this.shrinkStartY = positioningTop;
 
             // Calculate how much scroll distance we need to shrink to minimum
-            // Use responsive height for scroll distance calculation
-            const maxShrinkDistance = this.responsiveHeight * (1 - this.minScale);
+            const maxShrinkDistance = this.containerHeight * (1 - this.minScale);
             this.shrinkEndY = this.shrinkStartY + maxShrinkDistance;
         }
 
@@ -282,32 +287,18 @@ function setupStickyImageShrinking() {
             // Recapture the container's actual rendered width after resize
             if (!this.isFixed) {
                 this.actualContainerWidth = this.container.getBoundingClientRect().width;
+                
+                // Update initial container dimensions
+                const containerRect = this.container.getBoundingClientRect();
+                this.initialContainerWidth = containerRect.width;
+                this.initialContainerHeight = containerRect.height;
             }
 
-            // Recalculate responsive width on viewport changes using config width as base
-            if (window.calculateResponsiveWidth) {
-                const newResponsiveWidth = window.calculateResponsiveWidth(this.configWidth);
-                const newResponsiveHeight = newResponsiveWidth; // Assume square
+            // Update containerHeight from CSS custom property (may have changed due to viewport)
+            this.containerHeight = parseInt(getComputedStyle(document.documentElement).getPropertyValue('--display-height')) || 600;
 
-                if (newResponsiveWidth !== this.responsiveWidth) {
-                    // Update dimensions if responsive width changed
-                    document.documentElement.style.setProperty('--display-height', `${newResponsiveHeight}px`);
-
-                    // Update responsive dimensions but keep config dimensions unchanged
-                    this.responsiveWidth = newResponsiveWidth;
-                    this.responsiveHeight = newResponsiveHeight;
-
-                    this.calculateScrollPositions();
-                    this.updateContainerPosition();
-                } else {
-                    // Just recalculate positions if width didn't change
-                    this.calculateScrollPositions();
-                    this.updateContainerPosition();
-                }
-            } else {
-                this.calculateScrollPositions();
-                this.updateContainerPosition();
-            }
+            this.calculateScrollPositions();
+            this.updateContainerPosition();
         }
 
         updateContainerPosition() {
@@ -316,17 +307,19 @@ function setupStickyImageShrinking() {
             if (scrollY < this.shrinkStartY) {
                 // Before shrinking starts - normal position
                 this.container.classList.remove('fixed');
-                this.container.style.transform = 'scale(1)';
+                this.container.style.transform = 'none';
                 this.container.style.right = 'auto';
                 this.container.style.left = '0';
                 this.container.style.width = '';  // Remove any inline width to use CSS
+                this.container.style.height = '';  // Remove any inline height to use CSS
                 this.isFixed = false;
             } else if (scrollY >= this.shrinkStartY && scrollY <= this.shrinkEndY) {
                 // During shrinking phase
                 if (!this.isFixed) {
                     this.container.classList.add('fixed');
-                    // Set explicit width to maintain current size
-                    this.container.style.width = `${this.actualContainerWidth}px`;
+                    // Set explicit dimensions to maintain current size
+                    this.container.style.width = `${this.initialContainerWidth}px`;
+                    this.container.style.height = `${this.initialContainerHeight}px`;
                     // Position container so its right edge stays in the same place
                     const rightDistance = window.innerWidth - this.containerRightEdge;
                     this.container.style.right = `${rightDistance}px`;
@@ -335,44 +328,64 @@ function setupStickyImageShrinking() {
                 }
 
                 const progress = (scrollY - this.shrinkStartY) / (this.shrinkEndY - this.shrinkStartY);
-                const scale = 1 - (progress * (1 - this.minScale));
-                this.container.style.transform = `scale(${scale})`;
+                
+                // Calculate target dimensions directly
+                const scaleX = 1 - (progress * (1 - this.minScale));
+                const targetWidth = this.initialContainerWidth * scaleX;
+                
+                // Calculate when transition from horizontal-only to both-dimensions occurs
+                // targetWidth = containerHeight when scaleX = containerHeight / initialContainerWidth
+                const transitionScaleX = this.containerHeight / this.initialContainerWidth;
+                const transitionProgress = (1 - transitionScaleX) / (1 - this.minScale);
+                
+                if (targetWidth > this.containerHeight) {
+                    // Phase 1: Shrink width only via direct manipulation
+                    this.container.style.width = `${targetWidth}px`;
+                    this.container.style.height = `${this.initialContainerHeight}px`;
+                    this.container.style.transform = 'none';
+                } else {
+                    // Phase 2: Container is now square, apply uniform scaling to maintain squareness
+                    this.container.style.width = `${this.containerHeight}px`;
+                    this.container.style.height = `${this.initialContainerHeight}px`;
+                    
+                    // Calculate scale for remaining progress to shrink the square container
+                    const remainingProgress = (progress - transitionProgress) / (1 - transitionProgress);
+                    const scaleForPhase2 = 1 - (remainingProgress * (1 - this.minScale));
+                    this.container.style.transform = `scale(${scaleForPhase2})`;
+                }
             } else {
-                // After shrinking is complete - stay at minimum size
+                // After shrinking is complete - stay at minimum size (square)
                 this.container.classList.add('fixed');
+                
+                // Final state: square container at minimum scale
+                const finalSquareSize = this.containerHeight * this.minScale;
+                
                 if (!this.isFixed) {
-                    // Set explicit width to maintain current size
-                    this.container.style.width = `${this.actualContainerWidth}px`;
+                    // Set explicit dimensions and positioning
                     const rightDistance = window.innerWidth - this.containerRightEdge;
                     this.container.style.right = `${rightDistance}px`;
                     this.container.style.left = 'auto';
                 }
+                
+                this.container.style.width = `${this.containerHeight}px`;
+                this.container.style.height = `${this.initialContainerHeight}px`;
                 this.container.style.transform = `scale(${this.minScale})`;
                 this.isFixed = true;
             }
         }
 
         updateDimensions(newConfigWidth, newConfigHeight) {
-            // Update config dimensions (user's original setting)
-            this.configWidth = newConfigWidth;
-            this.configHeight = newConfigHeight;
-
-            // Recalculate responsive dimensions from new config
-            if (window.calculateResponsiveWidth) {
-                this.responsiveWidth = window.calculateResponsiveWidth(this.configWidth);
-                this.responsiveHeight = this.responsiveWidth; // Assume square
-
-                // Update CSS custom properties for height only (width handled by JavaScript)
-                document.documentElement.style.setProperty('--display-height', `${this.responsiveHeight}px`);
-            } else {
-                // Fallback if responsive calculation not available
-                this.responsiveWidth = newConfigWidth;
-                this.responsiveHeight = newConfigHeight;
-            }
+            // Update containerHeight from CSS custom property
+            this.containerHeight = parseInt(getComputedStyle(document.documentElement).getPropertyValue('--display-height')) || 600;
 
             // Recapture actual container width after config change
             if (!this.isFixed) {
                 this.actualContainerWidth = this.container.getBoundingClientRect().width;
+                
+                // Update initial container dimensions
+                const containerRect = this.container.getBoundingClientRect();
+                this.initialContainerWidth = containerRect.width;
+                this.initialContainerHeight = containerRect.height;
             }
 
             this.calculateScrollPositions();
