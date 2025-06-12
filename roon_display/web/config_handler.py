@@ -112,8 +112,9 @@ class WebConfigHandler:
                 "eink_success_threshold": {
                     "type": "number",
                     "input_type": "number",
-                    "step": "0.1",
-                    "comment": "E-ink success threshold in seconds (default: 12.0)",
+                    "step": "1",
+                    "min": "0",
+                    "comment": "E-ink success threshold in seconds (default: 12)",
                 },
                 "preview_auto_revert_seconds": {
                     "type": "number",
@@ -182,26 +183,34 @@ class WebConfigHandler:
                 "colour_balance_adjustment": {
                     "type": "number",
                     "input_type": "number",
-                    "step": "0.1",
-                    "comment": "Color balance adjustment (0.1-3.0, default: 1.0)",
+                    "step": "0.01",
+                    "min": "0",
+                    "max": "3.0",
+                    "comment": "Color balance adjustment (0.1-3, default: 1)",
                 },
                 "contrast_adjustment": {
                     "type": "number",
                     "input_type": "number",
-                    "step": "0.1",
-                    "comment": "Contrast adjustment (0.1-3.0, default: 1.0)",
+                    "step": "0.01",
+                    "min": "0",
+                    "max": "3.0",
+                    "comment": "Contrast adjustment (0.1-3, default: 1)",
                 },
                 "sharpness_adjustment": {
                     "type": "number",
                     "input_type": "number",
-                    "step": "0.1",
-                    "comment": "Sharpness adjustment (0.1-3.0, default: 1.0)",
+                    "step": "0.01",
+                    "min": "0",
+                    "max": "3.0",
+                    "comment": "Sharpness adjustment (0.1-3, default: 1)",
                 },
                 "brightness_adjustment": {
                     "type": "number",
                     "input_type": "number",
-                    "step": "0.1",
-                    "comment": "Brightness adjustment (0.1-3.0, default: 1.0)",
+                    "step": "0.01",
+                    "min": "0",
+                    "max": "3.0",
+                    "comment": "Brightness adjustment (0.1-3, default: 1)",
                 },
             },
             "IMAGE_POSITION": {
@@ -218,14 +227,18 @@ class WebConfigHandler:
                 "scale_x": {
                     "type": "number",
                     "input_type": "number",
-                    "step": "0.1",
-                    "comment": "Horizontal scale factor (0.1-3.0, default: 1.0)",
+                    "min": "0.1",
+                    "max": "3.0",
+                    "step": "0.01",
+                    "comment": "Horizontal scale factor (0.1-3, default: 1)",
                 },
                 "scale_y": {
                     "type": "number",
                     "input_type": "number",
-                    "step": "0.1",
-                    "comment": "Vertical scale factor (0.1-3.0, default: 1.0)",
+                    "min": "0.1",
+                    "max": "3.0",
+                    "step": "0.01",
+                    "comment": "Vertical scale factor (0.1-3, default: 1)",
                 },
                 "rotation": {
                     "type": "select",
@@ -371,7 +384,9 @@ class WebConfigHandler:
                         if field_name == "type":
                             metadata["value"] = self.config_manager.get_display_type()
                         elif field_name == "tkinter_fullscreen":
-                            metadata["value"] = self.config_manager.get_tkinter_fullscreen()
+                            metadata[
+                                "value"
+                            ] = self.config_manager.get_tkinter_fullscreen()
                         else:
                             metadata["value"] = ""
                     except Exception as e:
@@ -437,7 +452,7 @@ class WebConfigHandler:
 
     def get_system_info(self) -> Dict[str, Dict[str, Any]]:
         """Get read-only system information for display."""
-        
+
         def get_host_ip():
             """Get the primary host IP address."""
             try:
@@ -447,37 +462,45 @@ class WebConfigHandler:
                     return s.getsockname()[0]
             except Exception:
                 return "Unknown"
-        
+
         def get_wifi_ssid():
             """Get the current WiFi SSID."""
             try:
                 if platform.system() == "Darwin":  # macOS
-                    result = subprocess.run(['iwgetid', '-r'], capture_output=True, text=True)
+                    result = subprocess.run(
+                        ["iwgetid", "-r"], capture_output=True, text=True
+                    )
                     if result.returncode == 0:
                         return result.stdout.strip()
                 elif platform.system() == "Linux":
                     # Try nmcli first
-                    result = subprocess.run(['nmcli', '-t', '-f', 'active,ssid', 'dev', 'wifi'], 
-                                          capture_output=True, text=True)
+                    result = subprocess.run(
+                        ["nmcli", "-t", "-f", "active,ssid", "dev", "wifi"],
+                        capture_output=True,
+                        text=True,
+                    )
                     if result.returncode == 0:
-                        for line in result.stdout.strip().split('\n'):
-                            if line.startswith('yes:'):
-                                return line.split(':', 1)[1]
-                    
+                        for line in result.stdout.strip().split("\n"):
+                            if line.startswith("yes:"):
+                                return line.split(":", 1)[1]
+
                     # Fallback to iwgetid
-                    result = subprocess.run(['iwgetid', '-r'], capture_output=True, text=True)
+                    result = subprocess.run(
+                        ["iwgetid", "-r"], capture_output=True, text=True
+                    )
                     if result.returncode == 0:
                         return result.stdout.strip()
-                
+
                 return "Not connected to WiFi"
             except Exception:
                 return "Unknown"
-        
+
         def get_uptime():
             """Get system uptime."""
             try:
                 uptime_seconds = psutil.boot_time()
                 import time
+
                 uptime_duration = time.time() - uptime_seconds
                 days = int(uptime_duration // 86400)
                 hours = int((uptime_duration % 86400) // 3600)
@@ -485,7 +508,7 @@ class WebConfigHandler:
                 return f"{days}d {hours}h {minutes}m"
             except Exception:
                 return "Unknown"
-        
+
         def get_memory_usage():
             """Get memory usage percentage."""
             try:
@@ -494,56 +517,58 @@ class WebConfigHandler:
                 return f"{free_percent}% free"
             except Exception:
                 return "Unknown"
-        
+
         def get_disk_usage():
             """Get root disk usage percentage."""
             try:
-                disk = psutil.disk_usage('/')
+                disk = psutil.disk_usage("/")
                 free_percent = round((disk.free / disk.total) * 100, 1)
                 return f"{free_percent}% free"
             except Exception:
                 return "Unknown"
-        
+
         system_info = {
             "ROON_SERVER": {
                 "roon_server_ip": {
                     "label": "Roon Server IP",
-                    "value": self.config_manager.get_roon_server_ip() or "Not configured",
-                    "type": "info"
+                    "value": self.config_manager.get_roon_server_ip()
+                    or "Not configured",
+                    "type": "info",
                 },
                 "roon_server_port": {
-                    "label": "Roon Server Port", 
-                    "value": self.config_manager.get_roon_server_port() or "Not configured",
-                    "type": "info"
-                }
+                    "label": "Roon Server Port",
+                    "value": self.config_manager.get_roon_server_port()
+                    or "Not configured",
+                    "type": "info",
+                },
             },
             "HOST_SYSTEM": {
                 "host_ip": {
                     "label": "Host IP Address",
                     "value": get_host_ip(),
-                    "type": "info"
+                    "type": "info",
                 },
                 "wifi_ssid": {
                     "label": "WiFi Network",
                     "value": get_wifi_ssid(),
-                    "type": "info"
+                    "type": "info",
                 },
                 "uptime": {
                     "label": "System Uptime",
                     "value": get_uptime(),
-                    "type": "info"
+                    "type": "info",
                 },
                 "memory": {
                     "label": "Free Memory",
                     "value": get_memory_usage(),
-                    "type": "info"
+                    "type": "info",
                 },
                 "disk": {
                     "label": "Free Disk Space",
                     "value": get_disk_usage(),
-                    "type": "info"
-                }
-            }
+                    "type": "info",
+                },
+            },
         }
         return system_info
 
