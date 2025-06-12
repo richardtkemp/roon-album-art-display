@@ -577,13 +577,7 @@ class RoonClient:
                         except Exception as e:
                             logger.warning(f"Connection test failed: {e}")
                             # Distinguish between network errors and auth errors
-                            if (
-                                "unauthorized" in str(e).lower()
-                                or "auth" in str(e).lower()
-                            ):
-                                self._handle_connection_failure("auth_revoked")
-                            else:
-                                self._handle_connection_failure("roon_host_down")
+                            self._handle_connection_failure("auth_revoked")
 
                 # If disconnected, attempt reconnection every minute
                 elif not self.is_connected:
@@ -626,7 +620,8 @@ class RoonClient:
 
         if failure_type == "auth_revoked":
             # Show re-authorization message
-            message = (
+            msg1 = "Roon authorization revoked - extension needs re-approval"
+            msg2 = (
                 "Authorization has been revoked!\n\n"
                 "Please re-approve this extension in the Roon app.\n\n"
                 "Look for 'Album Art Display' in:\n"
@@ -634,30 +629,10 @@ class RoonClient:
                 "Waiting for re-authorization..."
             )
 
-            # Push authorization revoked error to coordinator
-            if self.render_coordinator:
-                timeout = self.config_manager.get_roon_authorization_timeout()
-                self.render_coordinator.set_overlay(message, timeout=timeout)
-            else:
-                # Fallback to direct viewer update
-                try:
-                    renderer = MessageRenderer(self.config_manager)
-                    img = renderer.create_text_message(message)
-                    self.viewer.update(
-                        "auth_revoked", None, img, "Re-Authorization Required"
-                    )
-                    logger.info("Displayed re-authorization message")
-                except Exception as e:
-                    logger.error(f"Could not display re-auth message: {e}")
-
-            # Report to health manager
-            self._report_health_failure(
-                "Roon authorization revoked - extension needs re-approval"
-            )
-
         elif failure_type == "roon_host_down":
             # Roon host or process issue
-            message = (
+            msg1 = "Roon server unavailable - host down or process not responding"
+            msg2 = (
                 "Connection to Roon server lost!\n\n"
                 "Possible causes:\n"
                 "• Roon server stopped\n"
@@ -667,27 +642,12 @@ class RoonClient:
                 "Attempting to reconnect..."
             )
 
-            # Push host down error to coordinator
-            if self.render_coordinator:
-                self.render_coordinator.set_overlay(
-                    message, timeout=120
-                )  # 2 minute timeout
-            else:
-                # Fallback to direct viewer update
-                try:
-                    renderer = MessageRenderer(self.config_manager)
-                    img = renderer.create_text_message(message)
-                    self.viewer.update(
-                        "roon_host_down", None, img, "Roon Server Unavailable"
-                    )
-                    logger.info("Displayed Roon server unavailable message")
-                except Exception as e:
-                    logger.error(f"Could not display server unavailable message: {e}")
-
-            # Report to health manager
-            self._report_health_failure(
-                "Roon server unavailable - host down or process not responding"
-            )
+        # Report to health manager
+        self._report_health_failure(msg1)
+        # Push host down error to coordinator
+        self.render_coordinator.set_overlay(
+            msg2, timeout=120
+        )
 
     def stop(self):
         """Stop the client."""
