@@ -33,6 +33,10 @@ for handler in api_logger.handlers:
 pil_logger = logging.getLogger("PIL")
 pil_logger.setLevel(logging.WARNING)
 
+# Suppress verbose websocket debug logs
+websocket_logger = logging.getLogger("websocket")
+websocket_logger.setLevel(logging.WARNING)
+
 
 def create_viewer(config_manager):
     """Create appropriate viewer based on configuration."""
