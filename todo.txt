@@ -1,4 +1,6 @@
- tabs and anniv are too wide on mobile
+anniv are too wide on mobile
+
+smooth out preview movements
 
 Completely disable logging to disk to protect it (or move logs to a ramdisk)
 
@@ -8,7 +10,7 @@ Support multiple anniversaries on the same day
 
 Figure out why avif still don't work
 
-Set up automated git pull
+Set up automated git pull? Shouldn't always be forced. Check a url?
 
 Consider that if the user modifies any files then a git pull will fail. OK?
  replace the text (and image?) positioning crap with a lib like wand?

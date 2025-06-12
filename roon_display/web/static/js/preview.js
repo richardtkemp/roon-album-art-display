@@ -252,6 +252,13 @@ function setupStickyImageShrinking() {
             this.initialContainerWidth = containerRect.width;
             this.initialContainerHeight = containerRect.height;
 
+            // Fix height if container is taller than wide (mobile issue)
+            if (this.containerHeight > this.initialContainerWidth) {
+                this.containerHeight = this.initialContainerWidth;
+                this.initialContainerHeight = this.containerHeight; // Update measured height to match correction
+                document.documentElement.style.setProperty('--display-height', `${this.containerHeight}px`);
+            }
+
             // Calculate scroll positions
             this.calculateScrollPositions();
 
@@ -295,6 +302,7 @@ function setupStickyImageShrinking() {
             }
 
             // Update containerHeight from CSS custom property (may have changed due to viewport)
+            const oldContainerHeight = this.containerHeight;
             this.containerHeight = parseInt(getComputedStyle(document.documentElement).getPropertyValue('--display-height')) || 600;
 
             this.calculateScrollPositions();
@@ -376,6 +384,7 @@ function setupStickyImageShrinking() {
 
         updateDimensions(newConfigWidth, newConfigHeight) {
             // Update containerHeight from CSS custom property
+            const oldContainerHeight = this.containerHeight;
             this.containerHeight = parseInt(getComputedStyle(document.documentElement).getPropertyValue('--display-height')) || 600;
 
             // Recapture actual container width after config change

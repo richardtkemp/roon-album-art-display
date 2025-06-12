@@ -230,7 +230,7 @@ button:hover { background-color: #45a049; }
     box-shadow: 0 2px 4px rgba(0,0,0,0.1);
     box-sizing: border-box;
     transform-origin: top right;
-    transition: none;
+    transition: width 0.15s ease-out, height 0.15s ease-out, transform 0.15s ease-out;
 }
 
 #current-display-image {
