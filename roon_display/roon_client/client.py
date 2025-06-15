@@ -250,16 +250,14 @@ class RoonClient:
 
     def subscribe_to_events(self):
         """Subscribe to Roon zone change events."""
-        logger.info("Subscribing to Roon events...")
+        logger.debug("Subscribing to Roon events...")
         try:
-            self.roon.register_state_callback(
-                self._zone_event_callback, "zones_changed"
-            )
+            self.roon.register_state_callback(self._zone_event_callback)
             logger.info("Successfully subscribed to zone events")
         except Exception as e:
             logger.error(f"Error subscribing to events: {e}")
 
-    def _zone_event_callback(self, event_type, data):
+    def _zone_event_callback(self, zone_name, data):
         """Handle zone change events."""
         try:
             # Update connection tracking - receiving callbacks means fully connected
@@ -478,7 +476,7 @@ class RoonClient:
     def _event_loop(self):
         """Main event loop."""
         try:
-            logger.info("Roon client event loop started")
+            logger.debug("Roon client event loop started")
 
             while self.running:
                 # Check if health script should be re-called (configurable interval)
@@ -544,8 +542,7 @@ class RoonClient:
 
     def _monitor_connection(self):
         """Monitor connection status and detect different failure types."""
-        logger.info("Starting connection monitoring")
-
+        logger.debug("Starting connection monitoring")
         while self.running:
             try:
                 if hasattr(self, "roon") and self.roon:
@@ -645,9 +642,7 @@ class RoonClient:
         # Report to health manager
         self._report_health_failure(msg1)
         # Push host down error to coordinator
-        self.render_coordinator.set_overlay(
-            msg2, timeout=120
-        )
+        self.render_coordinator.set_overlay(msg2, timeout=120)
 
     def stop(self):
         """Stop the client."""

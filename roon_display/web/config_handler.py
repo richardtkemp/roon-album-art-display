@@ -4,14 +4,15 @@ import configparser
 import logging
 import os
 import platform
-import psutil
 import socket
 import subprocess
 from pathlib import Path
 from typing import Any, Dict, List, Tuple
+
+import psutil
 from werkzeug.utils import secure_filename
 
-from ..config.config_manager import ConfigManager
+from ..config.config_manager import CONFIG_SCHEMA, COMPONENT_LOGGERS, ConfigManager
 from ..utils import ensure_anniversary_dir_exists
 from .utils import validate_image_format
 
@@ -30,380 +31,45 @@ class WebConfigHandler:
         """Get configuration sections with metadata for dynamic rendering."""
         sections = {}
 
-        # Define metadata for each section and field
-        field_metadata = {
-            "NETWORK": {
-                "internal_server_port": {
-                    "type": "number",
-                    "input_type": "number",
-                    "comment": "Port for internal HTTP server (default: 9090)",
-                },
-                "web_config_port": {
-                    "type": "number",
-                    "input_type": "number",
-                    "comment": "Port for web configuration server (default: 8080)",
-                },
-                "simulation_server_port": {
-                    "type": "number",
-                    "input_type": "number",
-                    "comment": "Port for simulation server (default: 9999)",
-                },
-                "internal_server_host": {
-                    "type": "text",
-                    "comment": "Host address for internal server (default: 127.0.0.1)",
-                },
-                "web_config_host": {
-                    "type": "text",
-                    "comment": "Host address for web config server (default: 0.0.0.0)",
-                },
-            },
-            "TIMEOUTS": {
-                "roon_authorization_timeout": {
-                    "type": "number",
-                    "input_type": "number",
-                    "comment": "Roon authorization timeout in seconds (default: 300)",
-                },
-                "health_script_timeout": {
-                    "type": "number",
-                    "input_type": "number",
-                    "comment": "Health script execution timeout in seconds (default: 30)",
-                },
-                "reconnection_interval": {
-                    "type": "number",
-                    "input_type": "number",
-                    "comment": "Time between reconnection attempts in seconds (default: 60)",
-                },
-                "web_request_timeout": {
-                    "type": "number",
-                    "input_type": "number",
-                    "comment": "Web request timeout in seconds (default: 5)",
-                },
-            },
-            "IMAGE_QUALITY": {
-                "jpeg_quality": {
-                    "type": "number",
-                    "input_type": "number",
-                    "min": "1",
-                    "max": "100",
-                    "comment": "JPEG quality for web images (1-100, default: 85)",
-                },
-                "web_image_max_width": {
-                    "type": "number",
-                    "input_type": "number",
-                    "comment": "Maximum width for web images in pixels (default: 600)",
-                },
-                "thumbnail_size": {
-                    "type": "number",
-                    "input_type": "number",
-                    "comment": "Thumbnail size in pixels (square, default: 100)",
-                },
-            },
-            "DISPLAY_TIMING": {
-                "web_auto_refresh_seconds": {
-                    "type": "number",
-                    "input_type": "number",
-                    "comment": "Web interface auto-refresh interval in seconds (default: 10)",
-                },
-                "anniversary_check_interval": {
-                    "type": "number",
-                    "input_type": "number",
-                    "comment": "Anniversary check interval in seconds (default: 60)",
-                },
-                "eink_success_threshold": {
-                    "type": "number",
-                    "input_type": "number",
-                    "step": "1",
-                    "min": "0",
-                    "comment": "E-ink success threshold in seconds (default: 12)",
-                },
-                "preview_auto_revert_seconds": {
-                    "type": "number",
-                    "input_type": "number",
-                    "comment": "Preview auto-revert time in seconds (default: 30)",
-                },
-                "preview_debounce_ms": {
-                    "type": "number",
-                    "input_type": "number",
-                    "comment": "Preview debounce time in milliseconds (default: 500)",
-                },
-            },
-            "LAYOUT": {
-                "overlay_size_x_percent": {
-                    "type": "number",
-                    "input_type": "number",
-                    "min": "5",
-                    "max": "50",
-                    "comment": "Overlay width percentage (5-50%, default: 33%)",
-                },
-                "overlay_size_y_percent": {
-                    "type": "number",
-                    "input_type": "number",
-                    "min": "5",
-                    "max": "50",
-                    "comment": "Overlay height percentage (5-50%, default: 25%)",
-                },
-                "overlay_border_size": {
-                    "type": "number",
-                    "input_type": "number",
-                    "comment": "Overlay border size in pixels (default: 20)",
-                },
-                "overlay_margin": {
-                    "type": "number",
-                    "input_type": "number",
-                    "comment": "Overlay margin from screen edge in pixels (default: 20)",
-                },
-                "anniversary_border_percent": {
-                    "type": "number",
-                    "input_type": "number",
-                    "comment": "Anniversary border percentage (default: 5%)",
-                },
-                "anniversary_text_percent": {
-                    "type": "number",
-                    "input_type": "number",
-                    "comment": "Anniversary text area percentage (default: 15%)",
-                },
-                "line_spacing_ratio": {
-                    "type": "number",
-                    "input_type": "number",
-                    "comment": "Line spacing ratio for text rendering (default: 8)",
-                },
-            },
-            "DISPLAY": {
-                "type": {
-                    "type": "select",
-                    "options": ["system_display", "epd13in3E"],
-                    "comment": "Display type: system_display for regular monitors, epd13in3E for e-ink",
-                },
-                "tkinter_fullscreen": {
-                    "type": "boolean",
-                    "comment": "Enable fullscreen mode for system displays (ignored by e-ink)",
-                },
-            },
-            "IMAGE_RENDER": {
-                "colour_balance_adjustment": {
-                    "type": "number",
-                    "input_type": "number",
-                    "step": "0.01",
-                    "min": "0",
-                    "max": "3.0",
-                    "comment": "Color balance adjustment (0.1-3, default: 1)",
-                },
-                "contrast_adjustment": {
-                    "type": "number",
-                    "input_type": "number",
-                    "step": "0.01",
-                    "min": "0",
-                    "max": "3.0",
-                    "comment": "Contrast adjustment (0.1-3, default: 1)",
-                },
-                "sharpness_adjustment": {
-                    "type": "number",
-                    "input_type": "number",
-                    "step": "0.01",
-                    "min": "0",
-                    "max": "3.0",
-                    "comment": "Sharpness adjustment (0.1-3, default: 1)",
-                },
-                "brightness_adjustment": {
-                    "type": "number",
-                    "input_type": "number",
-                    "step": "0.01",
-                    "min": "0",
-                    "max": "3.0",
-                    "comment": "Brightness adjustment (0.1-3, default: 1)",
-                },
-            },
-            "IMAGE_POSITION": {
-                "position_offset_x": {
-                    "type": "number",
-                    "input_type": "number",
-                    "comment": "Horizontal position offset in pixels",
-                },
-                "position_offset_y": {
-                    "type": "number",
-                    "input_type": "number",
-                    "comment": "Vertical position offset in pixels",
-                },
-                "scale_x": {
-                    "type": "number",
-                    "input_type": "number",
-                    "min": "0.1",
-                    "max": "3.0",
-                    "step": "0.01",
-                    "comment": "Horizontal scale factor (0.1-3, default: 1)",
-                },
-                "scale_y": {
-                    "type": "number",
-                    "input_type": "number",
-                    "min": "0.1",
-                    "max": "3.0",
-                    "step": "0.01",
-                    "comment": "Vertical scale factor (0.1-3, default: 1)",
-                },
-                "rotation": {
-                    "type": "select",
-                    "options": ["0", "90", "180", "270"],
-                    "comment": "Image rotation in degrees",
-                },
-            },
-            "ZONES": {
-                "allowed_zone_names": {
-                    "type": "text",
-                    "comment": "Comma-separated list of allowed zone names (leave blank for all)",
-                },
-                "forbidden_zone_names": {
-                    "type": "text",
-                    "comment": "Comma-separated list of forbidden zone names",
-                },
-            },
-            "ANNIVERSARIES": {
-                "enabled": {
-                    "type": "boolean",
-                    "comment": "Enable anniversary notifications",
-                },
-            },
-            "MONITORING": {
-                "log_level": {
-                    "type": "select",
-                    "options": ["DEBUG", "INFO", "WARNING", "ERROR"],
-                    "comment": "Logging level",
-                },
-                "loop_time": {
-                    "type": "text",
-                    "comment": 'Event loop sleep time (e.g., "10 minutes", "30 seconds")',
-                },
-                "performance_logging": {
-                    "type": "select",
-                    "options": ["", "info", "debug"],
-                    "comment": "Enable performance logging (empty = disabled)",
-                },
-                "health_script": {
-                    "type": "text",
-                    "comment": "Path to health monitoring script (optional)",
-                },
-                "health_recheck_interval": {
-                    "type": "text",
-                    "comment": 'Time between health script calls (e.g., "30 minutes")',
-                },
-            },
-        }
-
-        # Define mapping from fields to config_manager getter methods
-        field_getters = {
-            "NETWORK": {
-                "internal_server_port": self.config_manager.get_internal_server_port,
-                "web_config_port": self.config_manager.get_web_config_port,
-                "simulation_server_port": self.config_manager.get_simulation_server_port,
-                "internal_server_host": self.config_manager.get_internal_server_host,
-                "web_config_host": self.config_manager.get_web_config_host,
-            },
-            "TIMEOUTS": {
-                "roon_authorization_timeout": self.config_manager.get_roon_authorization_timeout,
-                "health_script_timeout": self.config_manager.get_health_script_timeout,
-                "reconnection_interval": self.config_manager.get_reconnection_interval,
-                "web_request_timeout": self.config_manager.get_web_request_timeout,
-            },
-            "IMAGE_QUALITY": {
-                "jpeg_quality": self.config_manager.get_jpeg_quality,
-                "web_image_max_width": self.config_manager.get_web_image_max_width,
-                "thumbnail_size": self.config_manager.get_thumbnail_size,
-            },
-            "DISPLAY_TIMING": {
-                "web_auto_refresh_seconds": self.config_manager.get_web_auto_refresh_seconds,
-                "anniversary_check_interval": self.config_manager.get_anniversary_check_interval,
-                "eink_success_threshold": self.config_manager.get_eink_success_threshold,
-                "preview_auto_revert_seconds": self.config_manager.get_preview_auto_revert_seconds,
-                "preview_debounce_ms": self.config_manager.get_preview_debounce_ms,
-            },
-            "LAYOUT": {
-                "overlay_size_x_percent": self.config_manager.get_overlay_size_x_percent,
-                "overlay_size_y_percent": self.config_manager.get_overlay_size_y_percent,
-                "overlay_border_size": self.config_manager.get_overlay_border_size,
-                "overlay_margin": self.config_manager.get_overlay_margin,
-                "anniversary_border_percent": self.config_manager.get_anniversary_border_percent,
-                "anniversary_text_percent": self.config_manager.get_anniversary_text_percent,
-                "line_spacing_ratio": self.config_manager.get_line_spacing_ratio,
-            },
-            "IMAGE_RENDER": {
-                "colour_balance_adjustment": self.config_manager.get_colour_balance_adjustment,
-                "contrast_adjustment": self.config_manager.get_contrast_adjustment,
-                "sharpness_adjustment": self.config_manager.get_sharpness_adjustment,
-                "brightness_adjustment": self.config_manager.get_brightness_adjustment,
-            },
-            "IMAGE_POSITION": {
-                "position_offset_x": self.config_manager.get_position_offset_x,
-                "position_offset_y": self.config_manager.get_position_offset_y,
-                "scale_x": self.config_manager.get_scale_x,
-                "scale_y": self.config_manager.get_scale_y,
-                "rotation": self.config_manager.get_rotation,
-            },
-            "DISPLAY": {
-                "type": self.config_manager.get_display_type,
-                "tkinter_fullscreen": self.config_manager.get_tkinter_fullscreen,
-            },
-            "ZONES": {
-                "allowed_zone_names": self.config_manager.get_allowed_zone_names,
-                "forbidden_zone_names": self.config_manager.get_forbidden_zone_names,
-            },
-            "MONITORING": {
-                "log_level": self.config_manager.get_log_level_string,
-                "loop_time": self.config_manager.get_loop_time_string,
-                "performance_logging": self.config_manager.get_performance_logging_string,
-                "health_script": self.config_manager.get_health_script,
-                "health_recheck_interval": self.config_manager.get_health_recheck_interval_string,
-            },
-            "ANNIVERSARIES": {
-                "enabled": self.config_manager.get_anniversaries_enabled,
-            },
-        }
-
-        # Build sections with current values from config_manager
-        for section_name, section_fields in field_metadata.items():
+        # Build sections with current values from CONFIG_SCHEMA
+        for section_name, schema_fields in CONFIG_SCHEMA.items():
             sections[section_name] = {}
 
-            # Process all fields defined in metadata
-            for field_name, field_metadata_item in section_fields.items():
-                metadata = field_metadata_item.copy()
+            # Process all fields defined in schema
+            for field_name, field_config in schema_fields.items():
+                metadata = field_config.copy()
 
-                # Get current value using config_manager getter method
-                if (
-                    section_name in field_getters
-                    and field_name in field_getters[section_name]
-                ):
-                    try:
-                        current_value = field_getters[section_name][field_name]()
+                # Get current value using auto-generated getter method
+                getter_method_name = f"get_{field_name}"
+                try:
+                    if hasattr(self.config_manager, getter_method_name):
+                        getter_method = getattr(self.config_manager, getter_method_name)
+                        current_value = getter_method()
                         metadata["value"] = current_value
-                    except Exception as e:
+                    else:
                         logger.warning(
-                            f"Error getting value for {section_name}.{field_name}: {e}"
+                            f"No getter method found for {section_name}.{field_name}"
                         )
-                        metadata["value"] = ""
-                elif section_name == "DISPLAY":
-                    # Special handling for DISPLAY section using individual getters
-                    try:
-                        if field_name == "type":
-                            metadata["value"] = self.config_manager.get_display_type()
-                        elif field_name == "tkinter_fullscreen":
-                            metadata[
-                                "value"
-                            ] = self.config_manager.get_tkinter_fullscreen()
-                        else:
-                            metadata["value"] = ""
-                    except Exception as e:
-                        logger.warning(
-                            f"Error getting display config for {field_name}: {e}"
-                        )
-                        metadata["value"] = ""
-                else:
-                    # This shouldn't happen now that all sections have getters
+                        metadata["value"] = field_config["default"]
+                except Exception as e:
                     logger.warning(
-                        f"No getter method found for {section_name}.{field_name}"
+                        f"Error getting value for {section_name}.{field_name}: {e}"
                     )
-                    metadata["value"] = ""
+                    metadata["value"] = field_config["default"]
+
+                # Add default value for restore/reset functionality
+                metadata["default_value"] = field_config["default"]
 
                 # Set default input type if not specified
                 if "input_type" not in metadata:
-                    metadata["input_type"] = "text"
+                    if metadata["type"] == "boolean":
+                        metadata["input_type"] = "checkbox"
+                    elif metadata["type"] == "select":
+                        metadata["input_type"] = "select"
+                    elif metadata["type"] == "textarea":
+                        metadata["input_type"] = "textarea"
+                    else:
+                        metadata["input_type"] = "text"
 
                 # Handle boolean conversion
                 if metadata["type"] == "boolean":
@@ -447,6 +113,29 @@ class WebConfigHandler:
                         "value": f"{date},{message},{wait_str}",
                         "input_type": "text",
                     }
+
+        # Add dynamic LOG_LEVELS section
+        sections["LOG_LEVELS"] = {}
+        for (
+            component_name,
+            default_level,
+            logger_name,
+            description,
+        ) in COMPONENT_LOGGERS:
+            # Get current value from config
+            current_value = self.config_manager._config.get(
+                "LOG_LEVELS", component_name, fallback=default_level
+            )
+
+            sections["LOG_LEVELS"][component_name] = {
+                "type": "select",
+                "options": ["DEBUG", "INFO", "WARNING", "ERROR"],
+                "value": current_value,
+                "default": default_level,
+                "default_value": default_level,
+                "input_type": "select",
+                "comment": f"Log level for {description}",
+            }
 
         return sections
 
@@ -529,13 +218,13 @@ class WebConfigHandler:
 
         system_info = {
             "ROON_SERVER": {
-                "roon_server_ip": {
+                "ip": {
                     "label": "Roon Server IP",
                     "value": self.config_manager.get_roon_server_ip()
                     or "Not configured",
                     "type": "info",
                 },
-                "roon_server_port": {
+                "port": {
                     "label": "Roon Server Port",
                     "value": self.config_manager.get_roon_server_port()
                     or "Not configured",

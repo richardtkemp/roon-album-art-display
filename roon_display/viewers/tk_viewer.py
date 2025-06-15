@@ -115,4 +115,3 @@ class TkViewer(BaseViewer):
         """Thread-safe method to request image update."""
         # Store update data for main thread to process
         self.pending_image_data = (image_key, image_path, img, title)
-

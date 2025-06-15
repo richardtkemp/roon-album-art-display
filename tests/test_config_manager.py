@@ -46,7 +46,7 @@ class TestConfigManager:
         # Test individual getters
         allowed_str = config_manager.get_allowed_zone_names()
         forbidden_str = config_manager.get_forbidden_zone_names()
-        
+
         # Parse like the client does
         allowed = [zone.strip() for zone in allowed_str.split(",") if zone.strip()]
         forbidden = [zone.strip() for zone in forbidden_str.split(",") if zone.strip()]
@@ -70,7 +70,7 @@ class TestConfigManager:
         # Test individual getters with empty values
         allowed_str = config_manager.get_allowed_zone_names()
         forbidden_str = config_manager.get_forbidden_zone_names()
-        
+
         # Parse like the client does
         allowed = [zone.strip() for zone in allowed_str.split(",") if zone.strip()]
         forbidden = [zone.strip() for zone in forbidden_str.split(",") if zone.strip()]

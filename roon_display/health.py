@@ -23,15 +23,17 @@ class HealthManager:
     ):
         """Initialize health manager with config manager and optional overrides."""
         self.config_manager = config_manager
-        
+
         # Use provided path or get from config
         script_path = health_script_path or config_manager.get_health_script()
         self.health_script_path = self._resolve_script_path(script_path)
-        
+
         # Use provided interval or get from config
-        interval_seconds = recheck_interval_seconds or config_manager.get_health_recheck_interval()
+        interval_seconds = (
+            recheck_interval_seconds or config_manager.get_health_recheck_interval()
+        )
         self.recheck_interval = timedelta(seconds=interval_seconds)
-        
+
         self.last_timestamp = None
         self.last_params = None
 

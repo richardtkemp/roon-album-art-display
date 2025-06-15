@@ -7,7 +7,7 @@ from datetime import datetime
 from pathlib import Path
 from typing import Any, Dict, Optional, Tuple
 
-from PIL import Image
+from PIL import Image, ImageEnhance
 
 logger = logging.getLogger(__name__)
 
@@ -15,7 +15,14 @@ logger = logging.getLogger(__name__)
 class RenderCoordinator:
     """Coordinates rendering with main content slot and overlay slot."""
 
-    def __init__(self, viewer, image_processor, message_renderer, config_manager, anniversary_manager=None):
+    def __init__(
+        self,
+        viewer,
+        image_processor,
+        message_renderer,
+        config_manager,
+        anniversary_manager=None,
+    ):
         """Initialize render coordinator."""
         self.viewer = viewer
         self.image_processor = image_processor
@@ -27,7 +34,7 @@ class RenderCoordinator:
         self.main_content = None  # Art or anniversary content (fullscreen)
         self.overlay_content = None  # Errors or temporary messages (bottom-right)
         self.overlay_timeout = None  # When overlay should auto-clear
-        
+
         # Rendering control
         self.currently_rendering = False
         self.render_lock = threading.Lock()
@@ -36,9 +43,6 @@ class RenderCoordinator:
         self.eink_display_persistent = hasattr(viewer, "epd")  # Check if this is e-ink
         self.current_display_image_key = None
 
-        # Anniversary timing
-        self.last_anniversary_check = 0
-        
         # Image caching for web access
         self.last_rendered_image = None
         self.last_render_metadata = {}
@@ -47,10 +51,157 @@ class RenderCoordinator:
 
         # Check if there's a current image displayed (for e-ink persistence)
         self._initialize_current_display_state()
-        
+
         # Start anniversary checking if enabled
         if self.anniversary_manager:
-            self._start_anniversary_monitor()
+            self.anniversary_manager.start_anniversary_monitor(self)
+
+    def create_final_display_image(
+        self, main_content, config_manager, overrides: Optional[Dict[str, Any]] = None
+    ) -> Image.Image:
+        """
+        Create the final display image by compositing main content onto a white canvas.
+
+        This function centralizes all image processing and positioning logic in one place.
+        It handles the complete flow from raw content image to final display-ready image.
+
+        Data Flow:
+        1. Extract screen dimensions and positioning parameters from config_manager
+        2. Allow web interface overrides to take precedence over config values
+        3. Create a white canvas at full screen dimensions
+        4. Process the main content image: scale, rotate, and position
+        5. Composite the processed image onto the canvas, centered with offsets
+        6. Return the final composite image ready for display
+
+        Args:
+            main_content: The source image to be displayed (album art, anniversary, etc.)
+            config_manager: Configuration manager providing default values for all parameters
+            overrides: Optional dict with web interface overrides. Keys can include:
+                            - 'screen_width', 'screen_height': Display dimensions
+                            - 'scale_x', 'scale_y': Scaling factors (1.0 = no scaling)
+                            - 'rotation': Rotation angle (0, 90, 180, 270 degrees)
+                            - 'image_offset_x', 'image_offset_y': Position offsets in pixels
+                            - 'color_enhance', 'contrast', 'brightness', 'sharpness': Image enhancements (1.0 = no change)
+
+        Returns:
+            PIL.Image: Final composite image at screen dimensions, ready for display
+
+        Processing Steps:
+        - Gets screen dimensions from config or overrides
+        - Gets scaling factors (default 1.0 = no scaling)
+        - Gets rotation angle (default 0 = no rotation)
+        - Gets position offsets (default 0 = centered)
+        - Gets image enhancement values (default 1.0 = no change)
+        - Creates white background canvas at screen size
+        - Scales main content image by scale_x and scale_y factors
+        - Rotates image by specified angle
+        - Applies image enhancements (color, contrast, brightness, sharpness)
+        - Positions image at center + offsets on the canvas
+        - Returns final composite ready for viewer
+        """
+        # Extract all configuration parameters
+        screen_width = config_manager.get_config(overrides, "screen_width")
+        screen_height = config_manager.get_config(overrides, "screen_height")
+        scale_x = config_manager.get_config(overrides, "scale_x")
+        scale_y = config_manager.get_config(overrides, "scale_y")
+        rotation = str(config_manager.get_config(overrides, "rotation"))
+        offset_x = config_manager.get_config(overrides, "image_offset_x")
+        offset_y = config_manager.get_config(overrides, "image_offset_y")
+
+        # IMAGE_RENDER configuration parameters
+        color_enhance = config_manager.get_config(overrides, "color_enhance")
+        contrast = config_manager.get_config(overrides, "contrast")
+        brightness = config_manager.get_config(overrides, "brightness")
+        sharpness = config_manager.get_config(overrides, "sharpness")
+
+        # Create white canvas at screen dimensions
+        canvas = Image.new("RGB", (screen_width, screen_height), "white")
+
+        # Process the main content image
+        logger.debug(f"Preview for {main_content}")
+        processed_image = main_content["img"].copy()
+
+        # First, fit the source image to canvas dimensions while preserving aspect ratio
+        original_width, original_height = processed_image.size
+        canvas_size = min(screen_width, screen_height)
+        processed_image = processed_image.resize(
+            (canvas_size, canvas_size), Image.Resampling.LANCZOS
+        )
+        logger.debug(
+            f"Fitted image to canvas size: {original_width}x{original_height} → {canvas_size}x{canvas_size}"
+        )
+
+        # Then apply scaling on top of the fitted image
+        if scale_x != 1.0 or scale_y != 1.0:
+            fitted_width, fitted_height = processed_image.size
+            new_width = int(fitted_width * scale_x)
+            new_height = int(fitted_height * scale_y)
+            processed_image = processed_image.resize(
+                (new_width, new_height), Image.Resampling.LANCZOS
+            )
+            logger.debug(
+                f"Scaled fitted image: {fitted_width}x{fitted_height} → {new_width}x{new_height}"
+            )
+
+        # Apply rotation
+        if rotation == "90":
+            processed_image = processed_image.transpose(Image.ROTATE_90)
+        elif rotation == "180":
+            processed_image = processed_image.transpose(Image.ROTATE_180)
+        elif rotation == "270":
+            processed_image = processed_image.transpose(Image.ROTATE_270)
+
+        if rotation != "0":
+            logger.debug(f"Rotated image by {rotation}°: {processed_image.size}")
+
+        # Apply IMAGE_RENDER enhancements
+        enhancement_applied = False
+
+        if color_enhance != 1.0:
+            enhancer = ImageEnhance.Color(processed_image)
+            processed_image = enhancer.enhance(color_enhance)
+            enhancement_applied = True
+
+        if contrast != 1.0:
+            enhancer = ImageEnhance.Contrast(processed_image)
+            processed_image = enhancer.enhance(contrast)
+            enhancement_applied = True
+
+        if brightness != 1.0:
+            enhancer = ImageEnhance.Brightness(processed_image)
+            processed_image = enhancer.enhance(brightness)
+            enhancement_applied = True
+
+        if sharpness != 1.0:
+            enhancer = ImageEnhance.Sharpness(processed_image)
+            processed_image = enhancer.enhance(sharpness)
+            enhancement_applied = True
+
+        if enhancement_applied:
+            logger.debug(
+                f"Applied enhancements: color={color_enhance}, contrast={contrast}, brightness={brightness}, sharpness={sharpness}"
+            )
+
+        # Calculate centered position with offsets
+        img_width, img_height = processed_image.size
+        center_x = (screen_width - img_width) // 2
+        center_y = (screen_height - img_height) // 2
+        final_x = center_x + offset_x
+        final_y = center_y + offset_y
+
+        # Composite onto canvas
+        canvas.paste(processed_image, (final_x, final_y))
+
+        logger.debug(
+            f"Final composite: {screen_width}x{screen_height} canvas, "
+            f"image at ({final_x}, {final_y}), "
+            f"scale=({scale_x}, {scale_y}), rotation={rotation}°, offset=({offset_x}, {offset_y})"
+        )
+
+        # Cache the rendered image for web access
+        self._cache_rendered_image(canvas)
+
+        return canvas
 
     def set_main_content(
         self,
@@ -59,15 +210,24 @@ class RenderCoordinator:
         image_path: Path = None,
         img: Optional[Image.Image] = None,
         track_info: str = None,
-        **kwargs
+        **kwargs,
     ):
         """Set main content (art or anniversary) for fullscreen display."""
         logger.info(f"Setting main content: {content_type}")
 
         # Check if this is already displayed on e-ink (no need to re-render)
-        if self.eink_display_persistent and image_key and self.current_display_image_key == image_key:
-            logger.info(f"Skipping render - image {image_key} already displayed on e-ink")
+        if (
+            self.eink_display_persistent
+            and image_key
+            and self.current_display_image_key == image_key
+        ):
+            logger.info(
+                f"Skipping render - image {image_key} already displayed on e-ink"
+            )
             return
+
+        if content_type == "last_art":
+            img = self.image_processor.fetch_image(image_path)
 
         # Store main content data
         self.main_content = {
@@ -77,7 +237,7 @@ class RenderCoordinator:
             "img": img,
             "track_info": track_info,
             "timestamp": time.time(),
-            **kwargs
+            **kwargs,
         }
 
         # Update anniversary timing for new art (not for startup/cached art)
@@ -96,7 +256,7 @@ class RenderCoordinator:
             "message": message,
             "timestamp": time.time(),
         }
-        
+
         # Set timeout for auto-clearing
         if timeout:
             self.overlay_timeout = time.time() + timeout
@@ -129,161 +289,28 @@ class RenderCoordinator:
                 return
             self.currently_rendering = True
 
-        try:
-            # Determine what to render
-            if self.main_content:
-                self._render_main_with_overlay()
-            elif self.overlay_content:
-                self._render_overlay_fullscreen()
-            else:
-                logger.warning("No content to render")
-
-        except Exception as e:
-            logger.error(f"Error rendering display: {e}")
-        finally:
-            with self.render_lock:
-                self.currently_rendering = False
-
-    def _render_main_with_overlay(self):
-        """Render main content with optional overlay."""
-        # Get main content image
-        main_img = self._get_main_content_image()
-        if not main_img:
-            # Fall back to overlay fullscreen if can't get main content
-            if self.overlay_content:
-                self._render_overlay_fullscreen()
-            return
-
-        # If we have overlay content, composite it
-        if self.overlay_content:
-            # Create error overlay with configurable size
-            overlay_img = self.message_renderer.create_error_overlay(
-                self.overlay_content["message"], 
-                main_img.size, 
-                size_x_percent=self.config_manager.get_overlay_size_x_percent(),
-                size_y_percent=self.config_manager.get_overlay_size_y_percent()
+        # Determine what to render
+        if self.main_content:
+            img = self.create_final_display_image(
+                self.main_content, self.config_manager, None
             )
-
-            # Composite overlay onto main image
-            final_img = main_img.copy()
-            # Position overlay in bottom-right corner
-            margin = self.config_manager.get_overlay_margin()
-            overlay_x = final_img.width - overlay_img.width - margin
-            overlay_y = final_img.height - overlay_img.height - margin
-            final_img.paste(overlay_img, (overlay_x, overlay_y))
+        elif self.overlay_content:
+            img = self._render_overlay_fullscreen()
         else:
-            final_img = main_img
-
-        # Send to viewer
-        content_type = self.main_content["content_type"]
-        image_key = self.main_content.get("image_key", content_type)
-        track_info = self.main_content.get("track_info", f"{content_type} content")
-        
-        # Cache the rendered image for web access
-        self._cache_rendered_image(final_img, {
-            'timestamp': time.time(),
-            'content_type': content_type,
-            'image_key': image_key,
-            'track_info': track_info,
-            'has_overlay': bool(self.overlay_content)
-        })
-        
-        self.viewer.update(image_key, self.main_content.get("image_path"), final_img, track_info)
-        
-        # Track successful render
-        if self.main_content.get("image_key"):
-            self.current_display_image_key = self.main_content["image_key"]
-
-    def _render_overlay_fullscreen(self):
-        """Render overlay fullscreen when no main content available."""
-        if not self.overlay_content:
-            return
-            
-        overlay_img = self.message_renderer.create_text_message(
-            self.overlay_content["message"]
-        )
-        
-        # Cache the overlay image for web access
-        self._cache_rendered_image(overlay_img, {
-            'timestamp': time.time(),
-            'content_type': 'overlay_fullscreen',
-            'image_key': 'overlay_fullscreen',
-            'track_info': 'Fullscreen Message',
-            'has_overlay': True
-        })
-        
-        self.viewer.update("overlay_fullscreen", None, overlay_img, "Message")
-
-    def _get_main_content_image(self) -> Optional[Image.Image]:
-        """Get the image for main content."""
-        if not self.main_content:
+            logger.warning("No content to render")
             return None
-            
-        content_type = self.main_content["content_type"]
-        
-        # If image is already provided, use it
-        if self.main_content.get("img"):
-            return self.main_content["img"]
-            
-        # For anniversary content, create the image (check BEFORE generic image_path)
-        if content_type == "anniversary" and self.anniversary_manager:
-            try:
-                border = self.config_manager.get_anniversary_border_percent()
-                return self.anniversary_manager.create_anniversary_display(
-                    self.main_content, self.image_processor, border
-                )
-            except Exception as e:
-                logger.error(f"Failed to create anniversary image: {e}")
-                return None
-                
-        # If image path is provided, load it (for non-anniversary content)
-        if self.main_content.get("image_path"):
-            try:
-                return Image.open(self.main_content["image_path"])
-            except Exception as e:
-                logger.error(f"Failed to load image from {self.main_content['image_path']}: {e}")
-                return None
-        
-        return None
 
-    def _start_anniversary_monitor(self):
-        """Start anniversary monitoring in background thread."""
-        def monitor_anniversaries():
-            while True:
-                try:
-                    current_time = time.time()
-                    anniversary_check_interval = self.config_manager.get_anniversary_check_interval()
-                    if current_time - self.last_anniversary_check >= anniversary_check_interval:
-                        self.last_anniversary_check = current_time
-                        self._check_anniversaries()
-                    time.sleep(10)  # Check every 10 seconds for timing
-                except Exception as e:
-                    logger.error(f"Error in anniversary monitor: {e}")
-                    time.sleep(self.config_manager.get_reconnection_interval())  # Wait longer on error
+        logger.debug(f"Rendering display content: {self.main_content}")
+        self.viewer.update(
+            self.main_content["image_key"], None, img, self.main_content["track_info"]
+        )
+        with self.render_lock:
+            self.currently_rendering = False
 
-        anniversary_thread = threading.Thread(target=monitor_anniversaries, daemon=True)
-        anniversary_thread.start()
-        logger.info("Started anniversary monitoring thread")
-
-    def _check_anniversaries(self):
-        """Check for anniversaries and update main content if needed."""
-        if not self.anniversary_manager:
-            return
-
-        try:
-            anniversary = self.anniversary_manager.check_anniversary_if_date_changed()
-            if anniversary:
-                logger.info(f"Anniversary triggered: {anniversary['name']} - {anniversary['message']}")
-                
-                # Set anniversary as main content
-                self.set_main_content(
-                    content_type="anniversary",
-                    image_key="anniversary", 
-                    track_info=f"Anniversary: {anniversary['message']}",
-                    **anniversary
-                )
-        except Exception as e:
-            logger.error(f"Error checking anniversaries: {e}")
+    def force_refresh(self):
+        """Force a re-render of the current display content with updated config values."""
+        logger.info("Force refresh triggered from web interface")
+        self._render_display()
 
     def _initialize_current_display_state(self):
         """Initialize coordinator with current display state (e-ink persistence)."""
@@ -304,257 +331,83 @@ class RenderCoordinator:
         """Update the current display image key (called by viewers after successful renders)."""
         self.current_display_image_key = image_key
         logger.debug(f"Updated current display image key: {image_key}")
-    
-    def _cache_rendered_image(self, image: Optional[Image.Image], metadata: Dict[str, Any]):
+
+    def _cache_rendered_image(self, image: Optional[Image.Image]):
         """Cache the rendered image for internal server access."""
         if image:
             self.last_rendered_image = image.copy()
         else:
             self.last_rendered_image = None
-        self.last_render_metadata = metadata.copy()
-        logger.debug(f"Cached rendered image: {metadata.get('content_type')} - {metadata.get('image_key')}")
-    
-    def get_current_rendered_image(self) -> Tuple[Optional[Image.Image], Dict[str, Any]]:
+
+    def get_current_rendered_image(
+        self,
+    ) -> Tuple[Optional[Image.Image], Dict[str, Any]]:
         """Get current rendered image and metadata for internal server."""
         return self.last_rendered_image, self.last_render_metadata.copy()
-        
+
     def render_preview(self, config_data: Dict[str, Any]) -> Optional[Image.Image]:
-        """Render preview image with temporary configuration changes.
-        
+        """
+        Generate a preview image showing how the current display would look with modified settings.
+
+        This function provides real-time preview functionality for the web configuration interface.
+        Users can adjust settings in the web form and see immediate visual feedback of how those
+        changes would affect the actual display output, without applying the changes permanently.
+
+        Data Flow:
+        1. Takes the current main content image (album art, anniversary image, etc.)
+        2. Applies temporary configuration overrides from the web interface
+        3. Uses the centralized create_final_display_image() function to render the result
+        4. Returns the preview image for display in the web browser
+
+        Configuration Handling:
+        - Accepts config_data in web form format (e.g., "IMAGE_RENDER.brightness")
+        - Passes overrides directly to create_final_display_image() without conversion
+        - Falls back to current config values for any settings not overridden
+        - Supports all rendering parameters: scaling, rotation, positioning, enhancements
+
+        Use Cases:
+        - Web interface live preview while adjusting sliders/inputs
+        - Validating configuration changes before saving
+        - Visual feedback for complex multi-parameter adjustments
+
         Args:
-            config_data: Configuration changes to apply for preview
-            
+            config_data: Dictionary of configuration overrides from web form.
+                        Keys should be in "SECTION.field" format (e.g., "IMAGE_POSITION.scale_x")
+                        Values are typically strings from form inputs that get converted as needed
+
         Returns:
-            Preview image or None if preview generation failed
+            PIL.Image: Preview image at full screen dimensions, or None if preview generation failed
         """
         try:
-            logger.info(f"Generating preview with config changes: {list(config_data.keys())}")
-            
-            # Get the current base image to apply changes to
-            base_image = self._get_preview_base_image()
-            if not base_image:
-                logger.warning("No base image available for preview")
+            # Get diff to show only changed values
+            config_diff = self.config_manager.get_config_diff(config_data)
+            if config_diff:
+                changes_summary = []
+                for key, diff in config_diff.items():
+                    changes_summary.append(f"{key}: {diff['old']} → {diff['new']}")
+                logger.info(
+                    f"Generating preview with config changes: {', '.join(changes_summary)}"
+                )
+            else:
+                logger.info("Generating preview with no config changes")
+
+            # Get main content image directly
+            if not self.main_content:
+                logger.warning("No main content image available for preview")
                 return None
-            
-            # Apply different types of configuration changes
-            preview_image = base_image.copy()
-            
-            # Apply image processing effects
-            preview_image = self._apply_image_effects_preview(preview_image, config_data)
-            
-            # Apply position/scaling changes
-            preview_image = self._apply_position_preview(preview_image, config_data)
-            
-            # Handle anniversary changes (if any)
-            anniversary_preview = self._apply_anniversary_preview(config_data)
-            if anniversary_preview:
-                preview_image = anniversary_preview
-            
-            # Apply overlay if current display has one
-            if self.overlay_content:
-                preview_image = self._apply_overlay_preview(preview_image, config_data)
-            
-            logger.debug("Preview image generated successfully")
+
+            # Use centralized rendering function with config overrides
+            preview_image = self.create_final_display_image(
+                self.main_content,
+                self.config_manager,
+                config_data,  # Pass config_data directly - no conversion needed
+            )
+
+            logger.debug(
+                "Preview image generated successfully using centralized renderer"
+            )
             return preview_image
-                
+
         except Exception as e:
             logger.error(f"Error generating preview: {e}")
             return None
-    
-    def _get_preview_base_image(self) -> Optional[Image.Image]:
-        """Get the base image for preview generation."""
-        if self.last_rendered_image:
-            return self.last_rendered_image.copy()
-        
-        # If no rendered image, try to get the main content image
-        if self.main_content:
-            return self._get_main_content_image()
-        
-        return None
-    
-    def _apply_image_effects_preview(self, image: Image.Image, config_data: Dict[str, Any]) -> Image.Image:
-        """Apply image processing effects for preview."""
-        try:
-            from PIL import ImageEnhance
-            
-            # Check for image render settings
-            brightness = self._get_config_value(config_data, 'IMAGE_RENDER.brightness_adjustment')
-            contrast = self._get_config_value(config_data, 'IMAGE_RENDER.contrast_adjustment')
-            color = self._get_config_value(config_data, 'IMAGE_RENDER.colour_balance_adjustment')
-            sharpness = self._get_config_value(config_data, 'IMAGE_RENDER.sharpness_adjustment')
-            
-            result_image = image.copy()
-            
-            # Apply brightness adjustment
-            if brightness and float(brightness) != 1.0:
-                enhancer = ImageEnhance.Brightness(result_image)
-                result_image = enhancer.enhance(float(brightness))
-            
-            # Apply contrast adjustment
-            if contrast and float(contrast) != 1.0:
-                enhancer = ImageEnhance.Contrast(result_image)
-                result_image = enhancer.enhance(float(contrast))
-            
-            # Apply color adjustment
-            if color and float(color) != 1.0:
-                enhancer = ImageEnhance.Color(result_image)
-                result_image = enhancer.enhance(float(color))
-            
-            # Apply sharpness adjustment
-            if sharpness and float(sharpness) != 1.0:
-                enhancer = ImageEnhance.Sharpness(result_image)
-                result_image = enhancer.enhance(float(sharpness))
-            
-            return result_image
-            
-        except Exception as e:
-            logger.warning(f"Error applying image effects preview: {e}")
-            return image
-    
-    def _apply_position_preview(self, image: Image.Image, config_data: Dict[str, Any]) -> Image.Image:
-        """Apply position and scaling changes for preview."""
-        try:
-            # Check for position settings
-            offset_x = self._get_config_value(config_data, 'IMAGE_POSITION.position_offset_x')
-            offset_y = self._get_config_value(config_data, 'IMAGE_POSITION.position_offset_y')
-            scale_x = self._get_config_value(config_data, 'IMAGE_POSITION.scale_x')
-            scale_y = self._get_config_value(config_data, 'IMAGE_POSITION.scale_y')
-            rotation = self._get_config_value(config_data, 'IMAGE_POSITION.rotation')
-            
-            result_image = image.copy()
-            
-            # Apply rotation
-            if rotation and int(rotation) != 0:
-                result_image = result_image.rotate(int(rotation), expand=True)
-            
-            # Apply scaling
-            if (scale_x and float(scale_x) != 1.0) or (scale_y and float(scale_y) != 1.0):
-                scale_x_val = float(scale_x) if scale_x else 1.0
-                scale_y_val = float(scale_y) if scale_y else 1.0
-                
-                new_width = int(result_image.width * scale_x_val)
-                new_height = int(result_image.height * scale_y_val)
-                result_image = result_image.resize((new_width, new_height), Image.Resampling.LANCZOS)
-            
-            # Apply position offset (create larger canvas and position image)
-            if (offset_x and int(offset_x) != 0) or (offset_y and int(offset_y) != 0):
-                offset_x_val = int(offset_x) if offset_x else 0
-                offset_y_val = int(offset_y) if offset_y else 0
-                
-                # Create larger canvas
-                canvas_width = result_image.width + abs(offset_x_val) * 2
-                canvas_height = result_image.height + abs(offset_y_val) * 2
-                canvas = Image.new('RGB', (canvas_width, canvas_height), color=(128, 128, 128))
-                
-                # Position image on canvas
-                paste_x = max(0, offset_x_val) + abs(offset_x_val)
-                paste_y = max(0, offset_y_val) + abs(offset_y_val)
-                canvas.paste(result_image, (paste_x, paste_y))
-                result_image = canvas
-            
-            return result_image
-            
-        except Exception as e:
-            logger.warning(f"Error applying position preview: {e}")
-            return image
-    
-    def _apply_anniversary_preview(self, config_data: Dict[str, Any]) -> Optional[Image.Image]:
-        """Generate anniversary preview if anniversary settings changed."""
-        try:
-            # Check if anniversaries are enabled and if any anniversary data is in config
-            anniversary_enabled = self._get_config_value(config_data, 'ANNIVERSARIES.enabled')
-            
-            # Look for anniversary entries in the form data
-            anniversary_entries = {}
-            for key, value in config_data.items():
-                if key.startswith('anniversary_name_'):
-                    index = key.split('_')[-1]
-                    name = value
-                    date_key = f'anniversary_date_{index}'
-                    message_key = f'anniversary_message_{index}'
-                    wait_key = f'anniversary_wait_{index}'
-                    
-                    if (date_key in config_data and message_key in config_data 
-                        and wait_key in config_data and name and config_data[date_key]):
-                        anniversary_entries[name] = {
-                            'date': config_data[date_key],
-                            'message': config_data[message_key],
-                            'wait_time': config_data[wait_key]
-                        }
-            
-            # If we have anniversary entries, create a preview
-            if anniversary_entries and anniversary_enabled == 'true':
-                # Use the first anniversary for preview
-                first_anniversary = list(anniversary_entries.values())[0]
-                
-                if self.anniversary_manager:
-                    # Create a mock anniversary for preview
-                    preview_anniversary = {
-                        'name': list(anniversary_entries.keys())[0],
-                        'message': first_anniversary['message'],
-                        'date': first_anniversary['date']
-                    }
-                    
-                    try:
-                        border = self.config_manager.get_anniversary_border_percent()
-                        return self.anniversary_manager.create_anniversary_display(
-                            {'anniversary': preview_anniversary}, 
-                            self.image_processor, 
-                            border
-                        )
-                    except Exception as e:
-                        logger.warning(f"Could not create anniversary preview: {e}")
-            
-            return None
-            
-        except Exception as e:
-            logger.warning(f"Error applying anniversary preview: {e}")
-            return None
-    
-    def _apply_overlay_preview(self, image: Image.Image, config_data: Dict[str, Any]) -> Image.Image:
-        """Apply overlay preview if overlay settings changed."""
-        try:
-            # Check for overlay size settings
-            overlay_size_x = self._get_config_value(config_data, 'OVERLAY.size_x')
-            overlay_size_y = self._get_config_value(config_data, 'OVERLAY.size_y')
-            
-            if overlay_size_x or overlay_size_y:
-                # Create overlay with new settings
-                size_x = int(overlay_size_x) if overlay_size_x else self.config_manager.get_overlay_size_x_percent()
-                size_y = int(overlay_size_y) if overlay_size_y else self.config_manager.get_overlay_size_y_percent()
-                
-                overlay_img = self.message_renderer.create_error_overlay(
-                    self.overlay_content["message"], 
-                    image.size, 
-                    size_x_percent=size_x,
-                    size_y_percent=size_y
-                )
-                
-                # Composite overlay onto image
-                result_img = image.copy()
-                margin = self.config_manager.get_overlay_margin()
-                overlay_x = result_img.width - overlay_img.width - margin
-                overlay_y = result_img.height - overlay_img.height - margin
-                result_img.paste(overlay_img, (overlay_x, overlay_y))
-                return result_img
-            
-            return image
-            
-        except Exception as e:
-            logger.warning(f"Error applying overlay preview: {e}")
-            return image
-    
-    def _get_config_value(self, config_data: Dict[str, Any], key: str) -> Optional[str]:
-        """Get configuration value from config data, handling both flat and nested keys."""
-        # Try direct key first
-        if key in config_data:
-            return config_data[key]
-        
-        # Try nested key format (SECTION.field)
-        if '.' in key:
-            section, field = key.split('.', 1)
-            nested_key = f"{section}.{field}"
-            if nested_key in config_data:
-                return config_data[nested_key]
-        
-        return None

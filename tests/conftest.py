@@ -135,7 +135,6 @@ def mock_eink_module():
     mock_epd.display = Mock(side_effect=slow_display)
     mock_epd.getbuffer = Mock(return_value=b"test_buffer")
 
-
     mock_module.EPD = Mock(return_value=mock_epd)
     return mock_module
 

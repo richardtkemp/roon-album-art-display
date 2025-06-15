@@ -7,9 +7,11 @@
         {% if config_item.type == 'boolean' %}
             <input type="checkbox" id="{{ section_name }}_{{ key }}"
                    name="{{ section_name }}.{{ key }}"
-                   value="true" {{ 'checked' if config_item.value else '' }}>
+                   value="true" {{ 'checked' if config_item.value else '' }}
+                   data-default="{{ config_item.default_value }}">
         {% elif config_item.type == 'select' %}
-            <select id="{{ section_name }}_{{ key }}" name="{{ section_name }}.{{ key }}">
+            <select id="{{ section_name }}_{{ key }}" name="{{ section_name }}.{{ key }}"
+                    data-default="{{ config_item.default_value }}">
                 {% for option in config_item.options %}
                     <option value="{{ option }}" {{ 'selected' if option == config_item.value else '' }}>
                         {{ option }}
@@ -18,12 +20,37 @@
             </select>
         {% elif config_item.type == 'textarea' %}
             <textarea id="{{ section_name }}_{{ key }}" name="{{ section_name }}.{{ key }}"
-                      class="textarea-large">{{ config_item.value }}</textarea>
+                      class="textarea-large"
+                      data-default="{{ config_item.default_value }}">{{ config_item.value }}</textarea>
+        {% elif config_item.input_type == 'range' %}
+            <div class="range-input-group">
+                <input type="range"
+                       id="{{ section_name }}_{{ key }}"
+                       name="{{ section_name }}.{{ key }}"
+                       value="{{ config_item.value }}"
+                       data-default="{{ config_item.default_value }}"
+                       {% if config_item.min %}min="{{ config_item.min }}"{% endif %}
+                       {% if config_item.max %}max="{{ config_item.max }}"{% endif %}
+                       {% if config_item.step %}step="{{ config_item.step }}"{% endif %}
+                       class="range-slider"
+                       oninput="syncRangeToText(this)">
+                <input type="number"
+                       id="{{ section_name }}_{{ key }}_text"
+                       name="{{ section_name }}.{{ key }}_text"
+                       value="{{ config_item.value }}"
+                       data-default="{{ config_item.default_value }}"
+                       {% if config_item.min %}min="{{ config_item.min }}"{% endif %}
+                       {% if config_item.max %}max="{{ config_item.max }}"{% endif %}
+                       {% if config_item.step %}step="{{ config_item.step }}"{% endif %}
+                       class="range-text-input"
+                       oninput="syncTextToRange(this, '{{ section_name }}_{{ key }}')">
+            </div>
         {% else %}
             <input type="{{ config_item.input_type }}"
                    id="{{ section_name }}_{{ key }}"
                    name="{{ section_name }}.{{ key }}"
                    value="{{ config_item.value }}"
+                   data-default="{{ config_item.default_value }}"
                    {% if config_item.min %}min="{{ config_item.min }}"{% endif %}
                    {% if config_item.max %}max="{{ config_item.max }}"{% endif %}
                    {% if config_item.step %}step="{{ config_item.step }}"{% endif %}>

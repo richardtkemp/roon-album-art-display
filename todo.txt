@@ -1,5 +1,7 @@
 anniv are too wide on mobile
 
+Set display type default based on device type
+
 smooth out preview movements
 
 Completely disable logging to disk to protect it (or move logs to a ramdisk)
@@ -15,22 +17,18 @@ Set up automated git pull? Shouldn't always be forced. Check a url?
 Consider that if the user modifies any files then a git pull will fail. OK?
  replace the text (and image?) positioning crap with a lib like wand?
 
-scroll image down on image oage of website (keep in view)
+preview shrink is wrong on other tabs
 
-button on each web page to reset to defaults
- renderer is running image edits for previews. shouldnt it use functinos from imageprocesso?
-
- try increasing the scale in the preview. is it correct?
+try increasing the scale in the preview. is it correct?
 
  import matplotlib.font_manager as fm
 # Get only regular/normal fonts (no bold, italic, etc.)
-regular_fonts = [f.name for f in fm.fontManager.ttflist 
+regular_fonts = [f.name for f in fm.fontManager.ttflist
                  if f.style == 'normal' and f.weight == 400]
 regular_fonts = sorted(set(regular_fonts))
 print("Regular fonts:", regular_fonts)
 
 web server:
-- reset page to defaults
 - password
 - updating (git pull)
 - roon connection status
