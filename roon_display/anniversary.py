@@ -1,6 +1,7 @@
 """Anniversary message management for the Roon display application."""
 
 import logging
+import threading
 import random
 import time
 from datetime import datetime
@@ -26,6 +27,10 @@ class AnniversaryManager:
     def __init__(self, config_manager):
         """Initialize anniversary manager with configuration."""
         self.config_manager = config_manager
+        self.render_coordinator = None
+
+        # Anniversary timing
+        self.last_anniversary_check = 0
 
         # Load last track time from file, default to 1 hour ago if not found
         saved_time = get_last_track_time()
@@ -51,7 +56,6 @@ class AnniversaryManager:
         self.last_track_time = time.time()
         # Save to file for persistence across restarts
         set_last_track_time(self.last_track_time)
-
 
     def _get_current_image(self, anniversary: Dict) -> Optional[str]:
         """Get a random image from the anniversary's directory."""
@@ -104,7 +108,6 @@ class AnniversaryManager:
 
         logger.info(f"Selected anniversary image: {relative_path}")
         return str(selected_file)
-
 
     def check_anniversary_if_date_changed(self) -> Optional[Dict]:
         """Only check for anniversaries if the date has changed since last check."""
@@ -222,20 +225,37 @@ class AnniversaryManager:
         self, anniversary: Dict, image_processor, config_manager
     ) -> Image.Image:
         """Create anniversary display image (text or custom image)."""
+        logger.debug(
+            f"create_anniversary_display called with anniversary: {anniversary}"
+        )
+
         image_path = anniversary.get("image_path")
         message = anniversary["message"]
-        
+
+        logger.debug(f"Anniversary image_path: {image_path}")
+        logger.debug(f"Anniversary message: {message}")
 
         # Use the reusable message renderer with custom border
         renderer = MessageRenderer(config_manager)
-        
+
         # If there's an image, create image with text using configurable border
         if image_path and Path(image_path).exists():
-            return self._create_image_with_text_custom_border(image_path, message, image_processor, config_manager)
+            logger.debug(f"Image path exists, creating image with text: {image_path}")
+            return self._create_image_with_text_custom_border(
+                image_path, message, image_processor, config_manager
+            )
         else:
+            logger.debug(
+                f"No image path or path doesn't exist, creating text-only message"
+            )
+            logger.debug(
+                f"Image path check - path: {image_path}, exists: {Path(image_path).exists() if image_path else 'N/A'}"
+            )
             return renderer.create_text_message(message, image_path)
 
-    def _create_text_only_image(self, message: str, image_processor, config_manager) -> Image.Image:
+    def _create_text_only_image(
+        self, message: str, image_processor, config_manager
+    ) -> Image.Image:
         """Create a text-only image with centered text."""
         width = config_manager.get_screen_width()
         height = config_manager.get_screen_height()
@@ -245,7 +265,9 @@ class AnniversaryManager:
         draw = ImageDraw.Draw(img)
 
         # Get font
-        font = ImageFont.truetype(config_manager.get_font(), config_manager.get_font_size())
+        font = ImageFont.truetype(
+            config_manager.get_font(), config_manager.get_font_size()
+        )
 
         # Calculate text position (centered)
         text_width, text_height = self._get_text_size(draw, message, font)
@@ -268,8 +290,12 @@ class AnniversaryManager:
         canvas = Image.new("RGB", (screen_width, screen_height), "white")
 
         # Define layout parameters from config
-        border_fraction = self.config_manager.get_anniversary_border_percent() / 100.0  # Convert to decimal
-        text_area_fraction = self.config_manager.get_anniversary_text_percent() / 100.0  # Convert to decimal
+        border_fraction = (
+            self.config_manager.get_anniversary_border_percent() / 100.0
+        )  # Convert to decimal
+        text_area_fraction = (
+            self.config_manager.get_anniversary_text_percent() / 100.0
+        )  # Convert to decimal
 
         # Calculate areas
         border_size = int(screen_width * border_fraction)
@@ -319,7 +345,9 @@ class AnniversaryManager:
         logger.debug(f"Image position: ({image_x}, {image_y})")
 
         # Position text in the text area at bottom
-        font = ImageFont.truetype(config_manager.get_font(), config_manager.get_font_size())
+        font = ImageFont.truetype(
+            config_manager.get_font(), config_manager.get_font_size()
+        )
         draw = ImageDraw.Draw(canvas)
         text_width, text_height = self._get_text_size(draw, message, font)
 
@@ -346,11 +374,14 @@ class AnniversaryManager:
 
         # Create blank canvas for full screen
         canvas = Image.new("RGB", (full_screen_width, full_screen_height), "white")
-        
 
         # Define layout parameters using configurable border
-        border_fraction = config_manager.get_anniversary_border_percent() / 100.0  # Convert to decimal
-        text_area_fraction = self.config_manager.get_anniversary_text_percent() / 100.0  # Convert to decimal
+        border_fraction = (
+            config_manager.get_anniversary_border_percent() / 100.0
+        )  # Convert to decimal
+        text_area_fraction = (
+            self.config_manager.get_anniversary_text_percent() / 100.0
+        )  # Convert to decimal
 
         # Calculate areas within effective screen space
         border_size = int(min(effective_width, effective_height) * border_fraction)
@@ -358,10 +389,14 @@ class AnniversaryManager:
 
         image_area_width = effective_width - 2 * border_size
         image_area_height = effective_height - border_size - text_area_height
-        
+
         # Calculate offset to center effective area on full screen
-        offset_x = (full_screen_width - effective_width) // 2 + image_processor.position_offset_x
-        offset_y = (full_screen_height - effective_height) // 2 + image_processor.position_offset_y
+        offset_x = (
+            full_screen_width - effective_width
+        ) // 2 + image_processor.position_offset_x
+        offset_y = (
+            full_screen_height - effective_height
+        ) // 2 + image_processor.position_offset_y
 
         try:
             # Load and process image
@@ -401,13 +436,17 @@ class AnniversaryManager:
             image_y = offset_y + border_size + (image_area_height - scaled_height) // 2
 
             # Position text in the text area at bottom (within effective screen, then offset)
-            font = ImageFont.truetype(config_manager.get_font(), config_manager.get_font_size())
+            font = ImageFont.truetype(
+                config_manager.get_font(), config_manager.get_font_size()
+            )
             draw = ImageDraw.Draw(canvas)
             text_width, text_height = self._get_text_size(draw, message, font)
 
             text_x = offset_x + (effective_width - text_width) // 2
             text_y = offset_y + (
-                effective_height - text_area_height + (text_area_height - text_height) // 2
+                effective_height
+                - text_area_height
+                + (text_area_height - text_height) // 2
             )
 
             # Draw image and text
@@ -422,7 +461,6 @@ class AnniversaryManager:
 
         return canvas
 
-
     def _get_text_size(self, draw, text: str, font):
         """Get text dimensions with fallback for different Pillow versions."""
         if font:
@@ -436,3 +474,52 @@ class AnniversaryManager:
         else:
             # Estimate text size without font
             return len(text) * 10, 20
+
+    def start_anniversary_monitor(self, render_coordinator):
+        """Start anniversary monitoring in background thread."""
+
+        self.render_coordinator = render_coordinator
+
+        def monitor_anniversaries():
+            while True:
+                try:
+                    current_time = time.time()
+                    anniversary_check_interval = (
+                        self.config_manager.get_anniversary_check_interval()
+                    )
+                    if (
+                        current_time - self.last_anniversary_check
+                        >= anniversary_check_interval
+                    ):
+                        self.last_anniversary_check = current_time
+                        self._check_anniversaries()
+                        ### TODO magic number
+                    time.sleep(10)  # Check every 10 seconds for timing
+                except Exception as e:
+                    logger.error(f"Error in anniversary monitor: {e}")
+                    time.sleep(
+                        self.config_manager.get_reconnection_interval()
+                    )  # Wait longer on error
+
+        anniversary_thread = threading.Thread(target=monitor_anniversaries, daemon=True)
+        anniversary_thread.start()
+        logger.info("Started anniversary monitoring thread")
+
+    def _check_anniversaries(self):
+        """Check for anniversaries and update main content if needed."""
+        try:
+            anniversary = self.check_anniversary_if_date_changed()
+            if anniversary:
+                logger.info(
+                    f"Anniversary triggered: {anniversary['name']} - {anniversary['message']}"
+                )
+
+                # Set anniversary as main content
+                self.set_main_content(
+                    content_type="anniversary",
+                    image_key="anniversary",
+                    track_info=f"Anniversary: {anniversary['message']}",
+                    **anniversary,
+                )
+        except Exception as e:
+            logger.error(f"Error checking anniversaries: {e}")

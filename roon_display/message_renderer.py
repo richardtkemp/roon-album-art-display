@@ -28,21 +28,44 @@ class MessageRenderer:
         Returns:
             PIL Image ready for display
         """
+        logger.debug(
+            f"create_text_message called with message: '{message}', image_path: '{image_path}'"
+        )
+
         if image_path and Path(image_path).exists():
+            logger.debug(f"Image path exists, creating image with text: {image_path}")
             return self._create_image_with_text(image_path, message)
         else:
+            logger.debug(f"Creating text-only image (no image path or doesn't exist)")
+            if image_path:
+                logger.debug(
+                    f"Image path check failed - path: {image_path}, exists: {Path(image_path).exists()}"
+                )
             return self._create_text_only_image(message)
 
     def _create_text_only_image(self, message: str) -> Image.Image:
         """Create a text-only image with centered text."""
+        logger.debug(f"Creating text-only image with message: '{message}'")
+
         # Create blank white image
         screen_width = self.config_manager.get_screen_width()
         screen_height = self.config_manager.get_screen_height()
+        logger.debug(f"Screen dimensions: {screen_width}x{screen_height}")
+
         img = Image.new("RGB", (screen_width, screen_height), "white")
         draw = ImageDraw.Draw(img)
 
         # Get font and wrap text to fit screen
-        font = ImageFont.truetype(self.config_manager.get_font(), 3 * self.config_manager.get_font_size())
+        font_path = self.config_manager.get_font()
+        font_size = 3 * self.config_manager.get_font_size()
+        logger.debug(f"Loading font: path='{font_path}', size={font_size}")
+
+        try:
+            font = ImageFont.truetype(font_path, font_size)
+            logger.debug(f"Successfully loaded font")
+        except Exception as e:
+            logger.debug(f"Failed to load font: {e}, falling back to default")
+            font = ImageFont.load_default()
         wrapped_message = self._wrap_text_for_screen(message, font)
 
         # Split wrapped message into lines and calculate total height
@@ -56,7 +79,11 @@ class MessageRenderer:
             max_line_width = max(max_line_width, line_width)
 
         # Calculate total text block height (including line spacing)
-        line_spacing = self.config_manager.get_line_spacing_ratio() if font else self.config_manager.get_line_spacing_ratio()
+        line_spacing = (
+            self.config_manager.get_line_spacing_ratio()
+            if font
+            else self.config_manager.get_line_spacing_ratio()
+        )
         total_height = sum(line_heights) + (len(lines) - 1) * line_spacing
 
         # Center the text block
@@ -88,9 +115,18 @@ class MessageRenderer:
 
         try:
             # Load and process image
+            logger.debug(f"Attempting to open image: {image_path}")
+            logger.debug(f"Image path absolute: {Path(image_path).absolute()}")
+            logger.debug(f"Image path is file: {Path(image_path).is_file()}")
+
             msg_img = Image.open(image_path)
+            logger.debug(
+                f"Successfully opened image: {msg_img.size}, mode: {msg_img.mode}"
+            )
+
             if msg_img.mode != "RGB":
                 msg_img = msg_img.convert("RGB")
+                logger.debug(f"Converted image to RGB mode")
 
             # Calculate scaling to fit image area
             img_width, img_height = msg_img.size
@@ -130,15 +166,15 @@ class MessageRenderer:
             # Fall back to text-only if image fails
 
         # Add text at bottom
-        font = ImageFont.truetype(self.config_manager.get_font(), self.config_manager.get_font_size())
+        font = ImageFont.truetype(
+            self.config_manager.get_font(), self.config_manager.get_font_size()
+        )
         draw = ImageDraw.Draw(canvas)
         text_width, text_height = self._get_text_size(draw, message, font)
 
         text_x = (screen_width - text_width) // 2
         text_y = (
-            screen_height
-            - text_area_height
-            + (text_area_height - text_height) // 2
+            screen_height - text_area_height + (text_area_height - text_height) // 2
         )
 
         draw.text((text_x, text_y), message, fill="black", font=font)
@@ -146,7 +182,11 @@ class MessageRenderer:
         return canvas
 
     def create_error_overlay(
-        self, error_message: str, background_size: tuple, size_x_percent: int = 33, size_y_percent: int = 25
+        self,
+        error_message: str,
+        background_size: tuple,
+        size_x_percent: int = 33,
+        size_y_percent: int = 25,
     ) -> Image.Image:
         """Create a small error overlay for bottom-right corner.
 
@@ -185,11 +225,15 @@ class MessageRenderer:
         )
 
         # Get smaller font for overlay
-        font = ImageFont.truetype(self.config_manager.get_font(), self.config_manager.get_font_size() // 3)
+        font = ImageFont.truetype(
+            self.config_manager.get_font(), self.config_manager.get_font_size() // 3
+        )
 
         # Wrap text to fit overlay
         wrapped_text = self._wrap_text_for_overlay(
-            error_message, font, overlay_width - self.config_manager.get_overlay_border_size()
+            error_message,
+            font,
+            overlay_width - self.config_manager.get_overlay_border_size(),
         )
 
         # Calculate text position (centered)
@@ -214,7 +258,6 @@ class MessageRenderer:
         rgb_overlay.paste(overlay, mask=overlay.split()[-1])  # Use alpha as mask
 
         return rgb_overlay
-
 
     def _wrap_text_for_overlay(self, text: str, font, max_width: int) -> str:
         """Wrap text to fit within overlay width."""
@@ -278,78 +321,87 @@ class MessageRenderer:
             # Estimate text width without font
             return len(text) * 8
 
-    
-    def _text_fits_in_bounds(self, message: str, font, available_width: int, available_height: int) -> bool:
+    def _text_fits_in_bounds(
+        self, message: str, font, available_width: int, available_height: int
+    ) -> bool:
         """Check if text with given font fits within the available space."""
         if not font:
             return True  # Can't measure without font, assume it fits
-        
+
         # For this check, we'll use the text as-is since wrapping could cause recursion
         # The actual rendering will handle wrapping
         lines = message.split("\n")
         line_heights = []
         max_line_width = 0
-        
+
         # Create temporary draw to measure text
         temp_img = Image.new("RGB", (1, 1), "white")
         temp_draw = ImageDraw.Draw(temp_img)
-        
+
         for line in lines:
             line_width, line_height = self._get_text_size(temp_draw, line, font)
             line_heights.append(line_height)
             max_line_width = max(max_line_width, line_width)
-        
+
         # Check if width fits (should fit since we wrapped it, but double-check)
         if max_line_width > available_width:
             return False
-        
+
         # Check if height fits (including line spacing)
-        line_spacing = self.config_manager.get_line_spacing_ratio() if hasattr(font, 'size') else self.config_manager.get_line_spacing_ratio()
+        line_spacing = (
+            self.config_manager.get_line_spacing_ratio()
+            if hasattr(font, "size")
+            else self.config_manager.get_line_spacing_ratio()
+        )
         total_height = sum(line_heights) + (len(lines) - 1) * line_spacing
-        
+
         return total_height <= available_height
-    
+
     def _wrap_text_for_screen(self, message: str, font) -> str:
         """Wrap text to fit screen width, respecting existing line breaks."""
         if not font:
             # Simple character-based wrapping fallback
             screen_width = self.config_manager.get_screen_width()
             margin = self.config_manager.get_overlay_border_size()
-            chars_per_line = (screen_width - 2 * margin) // self.config_manager.get_line_spacing_ratio()
+            chars_per_line = (
+                screen_width - 2 * margin
+            ) // self.config_manager.get_line_spacing_ratio()
             return self._simple_wrap_text(message, chars_per_line)
-        
+
         # Calculate available width
         screen_width = self.config_manager.get_screen_width()
         margin = self.config_manager.get_overlay_border_size()
         available_width = screen_width - 2 * margin
-        
+
         # Process each paragraph (separated by existing newlines) separately
         paragraphs = message.split("\n")
         wrapped_paragraphs = []
-        
+
         for paragraph in paragraphs:
             if not paragraph.strip():
                 wrapped_paragraphs.append("")  # Preserve empty lines
                 continue
-                
-            wrapped_paragraph = self._wrap_paragraph_to_width(paragraph, font, available_width)
+
+            wrapped_paragraph = self._wrap_paragraph_to_width(
+                paragraph, font, available_width
+            )
             wrapped_paragraphs.append(wrapped_paragraph)
-        
+
         return "\n".join(wrapped_paragraphs)
-    
+
     def _wrap_paragraph_to_width(self, paragraph: str, font, max_width: int) -> str:
         """Wrap a single paragraph to fit within the specified width."""
         words = paragraph.split()
         if not words:
             return ""
-        
+
         lines = []
         current_line = ""
-        
+
         for word in words:
             test_line = current_line + (" " if current_line else "") + word
             test_width = self._get_text_size_width(test_line, font)
-            
+
             if test_width <= max_width:
                 current_line = test_line
             else:
@@ -362,7 +414,9 @@ class MessageRenderer:
                     if len(word) > 20:  # Only break very long words
                         # Split long word across lines
                         while word:
-                            chars_that_fit = self._find_max_chars_that_fit(word, font, max_width)
+                            chars_that_fit = self._find_max_chars_that_fit(
+                                word, font, max_width
+                            )
                             if chars_that_fit == 0:
                                 chars_that_fit = 1  # Take at least one char
                             lines.append(word[:chars_that_fit])
@@ -370,33 +424,33 @@ class MessageRenderer:
                         current_line = ""
                     else:
                         current_line = word
-        
+
         if current_line:
             lines.append(current_line)
-        
+
         return "\n".join(lines)
-    
+
     def _find_max_chars_that_fit(self, text: str, font, max_width: int) -> int:
         """Find maximum number of characters that fit within max_width."""
         for i in range(len(text), 0, -1):
             if self._get_text_size_width(text[:i], font) <= max_width:
                 return i
         return 0
-    
+
     def _simple_wrap_text(self, text: str, chars_per_line: int) -> str:
         """Simple character-based wrapping fallback when no font is available."""
         paragraphs = text.split("\n")
         wrapped_paragraphs = []
-        
+
         for paragraph in paragraphs:
             if not paragraph.strip():
                 wrapped_paragraphs.append("")
                 continue
-                
+
             words = paragraph.split()
             lines = []
             current_line = ""
-            
+
             for word in words:
                 test_line = current_line + (" " if current_line else "") + word
                 if len(test_line) <= chars_per_line:
@@ -405,12 +459,12 @@ class MessageRenderer:
                     if current_line:
                         lines.append(current_line)
                     current_line = word
-            
+
             if current_line:
                 lines.append(current_line)
-            
+
             wrapped_paragraphs.append("\n".join(lines))
-        
+
         return "\n".join(wrapped_paragraphs)
 
     def _get_text_size(self, draw, text: str, font):

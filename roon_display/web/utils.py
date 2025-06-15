@@ -1,7 +1,7 @@
 """Utility functions for the web interface."""
 
-import tempfile
 import logging
+import tempfile
 from pathlib import Path
 from typing import Dict, List, Tuple
 
@@ -79,9 +79,7 @@ def get_anniversary_images() -> Dict[str, List[str]]:
     return anniversary_images
 
 
-def create_thumbnail(
-    image_path: Path, max_size: Tuple[int, int] = (150, 150), jpeg_quality: int = 85
-) -> bytes:
+def create_thumbnail(image_path: Path, max_size: Tuple[int, int] = (150, 150)) -> bytes:
     """Create a thumbnail from an image file."""
     try:
         with Image.open(image_path) as img:
@@ -102,7 +100,7 @@ def create_thumbnail(
             import io
 
             thumb_io = io.BytesIO()
-            img.save(thumb_io, format="JPEG", quality=jpeg_quality)
+            img.save(thumb_io, format="JPEG", quality=85)
             thumb_io.seek(0)
             return thumb_io.getvalue()
 
@@ -138,7 +136,7 @@ def delete_anniversary_image(anniversary_name: str, filename: str) -> bool:
         return False
 
 
-def create_placeholder_image(jpeg_quality: int = 85) -> bytes:
+def create_placeholder_image() -> bytes:
     """Create placeholder image when main app not available."""
     try:
         # Create simple placeholder image
@@ -146,8 +144,9 @@ def create_placeholder_image(jpeg_quality: int = 85) -> bytes:
 
         # Convert to bytes
         import io
+
         img_io = io.BytesIO()
-        placeholder.save(img_io, "JPEG", quality=jpeg_quality)
+        placeholder.save(img_io, "JPEG", quality=85)
         img_io.seek(0)
         return img_io.getvalue()
 

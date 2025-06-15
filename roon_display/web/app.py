@@ -6,9 +6,19 @@ from pathlib import Path
 from typing import Any, Dict
 
 import requests
-from flask import Flask, flash, jsonify, redirect, render_template, request, send_file, url_for
+from flask import (
+    Flask,
+    flash,
+    jsonify,
+    redirect,
+    render_template,
+    request,
+    send_file,
+    url_for,
+)
 from werkzeug.utils import secure_filename
 
+from ..utils import get_extra_images_dir
 from .config_handler import WebConfigHandler
 from .utils import (
     create_placeholder_image,
@@ -16,7 +26,6 @@ from .utils import (
     delete_anniversary_image,
     get_anniversary_images,
 )
-from ..utils import get_extra_images_dir
 
 logger = logging.getLogger(__name__)
 
@@ -107,6 +116,22 @@ class InternalAppClient:
             logger.debug(f"Failed to update config: {e}")
             return {"success": False, "error": str(e)}
 
+    def force_refresh(self) -> dict:
+        """Trigger a force refresh of the display."""
+        try:
+            timeout = self.config_manager.get_web_request_timeout()
+            response = requests.post(f"{self.base_url}/force-refresh", timeout=timeout)
+            if response.status_code == 200:
+                return {"success": True}
+            else:
+                logger.warning(
+                    f"Failed to trigger force refresh: HTTP {response.status_code}"
+                )
+                return {"success": False, "error": f"HTTP {response.status_code}"}
+        except requests.RequestException as e:
+            logger.debug(f"Failed to trigger force refresh: {e}")
+            return {"success": False, "error": str(e)}
+
 
 def create_app(config_path=None, port=None):
     """Create and configure the Flask application."""
@@ -142,11 +167,21 @@ def create_app(config_path=None, port=None):
                         update_result = internal_client.update_config(config_updates)
                         if not update_result.get("success"):
                             message = f'Configuration saved but live update failed: {update_result.get("error", "Unknown error")}'
-                            logger.warning(f"Live config update failed: {update_result}")
+                            logger.warning(
+                                f"Live config update failed: {update_result}"
+                            )
                         else:
                             logger.info(
                                 f"Live config update successful: {update_result.get('updated_keys', [])}"
                             )
+                            # Trigger display refresh after successful config update
+                            refresh_result = internal_client.force_refresh()
+                            if refresh_result.get("success"):
+                                logger.info("Display refresh triggered successfully")
+                            else:
+                                logger.warning(
+                                    f"Display refresh failed: {refresh_result.get('error', 'Unknown error')}"
+                                )
 
                     # Include any image upload warnings in the message
                     if error_messages:
@@ -171,12 +206,22 @@ def create_app(config_path=None, port=None):
                             logger.info(
                                 f"Live config update successful: {update_result.get('updated_keys', [])}"
                             )
+                            # Trigger display refresh after successful config update
+                            refresh_result = internal_client.force_refresh()
+                            if refresh_result.get("success"):
+                                logger.info("Display refresh triggered successfully")
+                            else:
+                                logger.warning(
+                                    f"Display refresh failed: {refresh_result.get('error', 'Unknown error')}"
+                                )
                         else:
                             flash(
                                 f'Configuration saved but live update failed: {update_result.get("error", "Unknown error")}',
                                 "error",
                             )
-                            logger.warning(f"Live config update failed: {update_result}")
+                            logger.warning(
+                                f"Live config update failed: {update_result}"
+                            )
                     else:
                         flash("Configuration saved successfully!", "success")
 
@@ -198,7 +243,7 @@ def create_app(config_path=None, port=None):
 
         # GET request - show form
         sections = config_handler.get_config_sections()
-        
+
         # Get system information for read-only display
         system_info = config_handler.get_system_info()
 
@@ -242,10 +287,13 @@ def create_app(config_path=None, port=None):
         anniversary_images = get_anniversary_images()
 
         # Get web timing values from config
-        refresh_interval_seconds = config_handler.config_manager.get_web_auto_refresh_seconds()
+        refresh_interval_seconds = (
+            config_handler.config_manager.get_web_auto_refresh_seconds()
+        )
         debounce_ms = config_handler.config_manager.get_preview_debounce_ms()
-        auto_revert_seconds = config_handler.config_manager.get_preview_auto_revert_seconds()
-        web_image_max_width = config_handler.config_manager.get_web_image_max_width()
+        auto_revert_seconds = (
+            config_handler.config_manager.get_preview_auto_revert_seconds()
+        )
 
         return render_template(
             "config_form.html",
@@ -253,10 +301,11 @@ def create_app(config_path=None, port=None):
             sections=sections,
             anniversary_count=anniversary_count,
             anniversary_images=anniversary_images,
-            web_refresh_interval=refresh_interval_seconds * 1000,  # Convert to milliseconds
+            web_refresh_interval=refresh_interval_seconds
+            * 1000,  # Convert to milliseconds
             preview_debounce_ms=debounce_ms,
-            preview_auto_revert_ms=auto_revert_seconds * 1000,  # Convert to milliseconds
-            web_image_max_width=web_image_max_width,
+            preview_auto_revert_ms=auto_revert_seconds
+            * 1000,  # Convert to milliseconds
         )
 
     @app.route("/thumbnail/<anniversary_name>/<filename>")
@@ -278,11 +327,9 @@ def create_app(config_path=None, port=None):
 
             # Create and return thumbnail
             thumbnail_size = config_handler.config_manager.get_thumbnail_size()
-            jpeg_quality = config_handler.config_manager.get_jpeg_quality()
             thumbnail_data = create_thumbnail(
                 image_path,
                 max_size=(thumbnail_size, thumbnail_size),
-                jpeg_quality=jpeg_quality,
             )
             if thumbnail_data:
                 return send_file(
@@ -361,21 +408,23 @@ def create_app(config_path=None, port=None):
                 )
             else:
                 # Return placeholder image when no image available
-                jpeg_quality = config_handler.config_manager.get_jpeg_quality()
-                placeholder_data = create_placeholder_image(jpeg_quality)
+                placeholder_data = create_placeholder_image()
                 if placeholder_data:
                     return send_file(
-                        io.BytesIO(placeholder_data), mimetype="image/jpeg", as_attachment=False
+                        io.BytesIO(placeholder_data),
+                        mimetype="image/jpeg",
+                        as_attachment=False,
                     )
                 else:
                     return jsonify({"error": "No image available"}), 404
         except Exception as e:
             logger.error(f"Error serving current display image: {e}")
-            jpeg_quality = config_handler.config_manager.get_jpeg_quality()
-            placeholder_data = create_placeholder_image(jpeg_quality)
+            placeholder_data = create_placeholder_image()
             if placeholder_data:
                 return send_file(
-                    io.BytesIO(placeholder_data), mimetype="image/jpeg", as_attachment=False
+                    io.BytesIO(placeholder_data),
+                    mimetype="image/jpeg",
+                    as_attachment=False,
                 )
             else:
                 return jsonify({"error": "No image available"}), 404

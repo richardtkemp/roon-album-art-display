@@ -45,6 +45,7 @@
 
             {% for tab_name, tab_sections_data in tab_sections.items() %}
             <div class="tab-content {{ 'active' if loop.first else '' }}" id="content-{{ tab_name }}">
+
                 {% for section_name, section_data in tab_sections_data.items() %}
                 {% if section_data %}
                 <div class="section">
@@ -65,6 +66,12 @@
         </div>
 
         <div class="button-group">
+            <button type="button" class="control-btn restore-btn" onclick="restoreAllValues()">
+                ↺ Restore All Saved Values
+            </button>
+            <button type="button" class="control-btn reset-btn" onclick="resetAllToDefaults()">
+                ⚠ Reset All to Defaults
+            </button>
             <button type="submit" name="action" value="apply" class="apply-btn" id="apply-btn">Apply Changes</button>
             <div id="message-area" style="margin-top: 15px; display: none;">
                 <div id="message-content" class="flash-success"></div>
@@ -86,24 +93,20 @@
         setAnniversaryCounter({{ anniversary_count }});
 
         // Set up CSS custom properties for dynamic layout with viewport constraints
-        function calculateResponsiveWidth(configWidth) {
+        function calculateResponsiveWidth() {
             // Body has max-width: 800px and padding: 20px (40px total horizontal padding)
             const bodyMaxWidth = 800;
             const bodyPadding = 40; // 20px on each side
             const availableWidth = Math.min(window.innerWidth - bodyPadding, bodyMaxWidth);
 
-            // Use the smaller of: config width or available viewport width
-            const result = Math.min(configWidth, availableWidth);
-            return result;
+            return availableWidth;
         }
 
-        const webImageMaxWidth = {{ web_image_max_width }};
-        const responsiveWidth = calculateResponsiveWidth(webImageMaxWidth);
-        const containerHeight = responsiveWidth + 40;
-        document.documentElement.style.setProperty('--display-height', `${containerHeight}px`);
+        const responsiveWidth = calculateResponsiveWidth();
+//        const containerHeight = responsiveWidth + 40;
+//        document.documentElement.style.setProperty('--display-height', `${containerHeight}px`);
 
         // Store values globally for scroll effect
-        window.configImageWidth = webImageMaxWidth;
         window.calculateResponsiveWidth = calculateResponsiveWidth;
 
         // Initialize preview functionality

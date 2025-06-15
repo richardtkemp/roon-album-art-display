@@ -177,7 +177,6 @@ class TestEinkViewer:
         eink_viewer.epd.getbuffer.assert_called_once_with(sample_image)
         eink_viewer.epd.display.assert_called_once()
 
-
     @patch("roon_display.viewers.eink_viewer.set_current_image_key")
     def test_display_image_sets_current_key(
         self, mock_set_key, eink_viewer, sample_image
@@ -251,7 +250,6 @@ class TestEinkViewer:
         eink_viewer.update("key2", "/path2", sample_image, "Song 2")
 
         # Should NOT set stop flag with partial_refresh=False
-
 
         # Clean up threads
         if first_thread:
@@ -621,8 +619,6 @@ class TestTkViewer:
             with patch("time.sleep") as mock_sleep:
                 viewer.update("key2", "/path2", sample_image, "Song 2")
 
-
             # Clean up threads
             if viewer.update_thread and viewer.update_thread.is_alive():
                 viewer.update_thread.join(timeout=1)
-

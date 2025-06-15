@@ -36,7 +36,7 @@ input[type="text"],
 input[type="number"],
 select,
 textarea {
-    width: 100%;
+    width: 30%;
     padding: 8px;
     border: 1px solid #ddd;
     border-radius: 3px;
@@ -56,8 +56,25 @@ input[type="checkbox"] { margin-right: 8px; }
 
 /* Button styles */
 .button-group {
-    text-align: center;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    gap: 15px;
     margin-top: 30px;
+    flex-wrap: wrap;
+}
+
+/* Responsive adjustments for button group */
+@media (max-width: 600px) {
+    .button-group {
+        flex-direction: column;
+        gap: 10px;
+    }
+
+    .button-group button {
+        width: 100%;
+        max-width: 300px;
+    }
 }
 
 button {
@@ -230,7 +247,6 @@ button:hover { background-color: #45a049; }
     box-shadow: 0 2px 4px rgba(0,0,0,0.1);
     box-sizing: border-box;
     transform-origin: top right;
-    transition: width 0.15s ease-out, height 0.15s ease-out, transform 0.15s ease-out;
 }
 
 #current-display-image {
@@ -351,6 +367,25 @@ button:hover { background-color: #45a049; }
 
 .tab-content.active { display: block; }
 
+
+.restore-btn {
+    background: #2196F3;
+    color: white;
+}
+
+.restore-btn:hover {
+    background: #1976D2;
+}
+
+.reset-btn {
+    background: #FF9800;
+    color: white;
+}
+
+.reset-btn:hover {
+    background: #F57C00;
+}
+
 /* Anniversary styles */
 .anniversary-entry {
     border: 1px solid #eee;
@@ -407,4 +442,84 @@ button:hover { background-color: #45a049; }
     font-family: monospace;
     color: #333;
     margin-top: 5px;
+}
+
+/* Range input group styles */
+.range-input-group {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    width: 100%;
+}
+
+.range-slider {
+    flex: 1;
+    min-width: 200px;
+    height: 8px;
+    border-radius: 5px;
+    background: #ddd;
+    outline: none;
+    -webkit-appearance: none;
+}
+
+.range-slider::-webkit-slider-thumb {
+    -webkit-appearance: none;
+    appearance: none;
+    width: 20px;
+    height: 20px;
+    border-radius: 50%;
+    background: #4CAF50;
+    cursor: pointer;
+    border: 2px solid #fff;
+    box-shadow: 0 2px 4px rgba(0,0,0,0.2);
+}
+
+.range-slider::-moz-range-thumb {
+    width: 20px;
+    height: 20px;
+    border-radius: 50%;
+    background: #4CAF50;
+    cursor: pointer;
+    border: 2px solid #fff;
+    box-shadow: 0 2px 4px rgba(0,0,0,0.2);
+}
+
+.range-text-input {
+    width: 80px;
+    padding: 8px;
+    border: 1px solid #ddd;
+    border-radius: 3px;
+    box-sizing: border-box;
+    text-align: center;
+    font-size: 0.9em;
+}
+
+/* Focus styles for better accessibility */
+.range-slider:focus {
+    box-shadow: 0 0 5px rgba(76, 175, 80, 0.5);
+}
+
+.range-text-input:focus {
+    border-color: #4CAF50;
+    box-shadow: 0 0 5px rgba(76, 175, 80, 0.5);
+    outline: none;
+}
+
+/* Responsive adjustments for smaller screens */
+@media (max-width: 600px) {
+    .range-input-group {
+        flex-direction: column;
+        align-items: stretch;
+        gap: 5px;
+    }
+
+    .range-slider {
+        min-width: auto;
+        width: 100%;
+    }
+
+    .range-text-input {
+        width: 100px;
+        align-self: center;
+    }
 }

@@ -237,9 +237,10 @@ def send_simulation_trigger():
     try:
         # Get port from config
         from .config.config_manager import ConfigManager
+
         config_manager = ConfigManager()
         port = config_manager.get_simulation_server_port()
-        
+
         sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         sock.settimeout(5.0)  # 5 second timeout
         sock.connect(("localhost", port))

@@ -86,7 +86,11 @@ def main():
         # Set logging level from config
         log_level = config_manager.get_log_level()
         logging.getLogger().setLevel(log_level)
-        logger.info(f"Log level set to: {logging.getLevelName(log_level)}")
+        logger.info(f"Global log level set to: {logging.getLevelName(log_level)}")
+
+        # Configure component-specific log levels
+        config_manager.configure_component_log_levels()
+        logger.info("Component-specific log levels configured")
 
         # Set performance logging from config
         performance_logging = config_manager.get_performance_logging()
@@ -109,14 +113,19 @@ def main():
         from .render_coordinator import RenderCoordinator
 
         render_coordinator = RenderCoordinator(
-            viewer, viewer.image_processor, message_renderer, config_manager, anniversary_manager
+            viewer,
+            viewer.image_processor,
+            message_renderer,
+            config_manager,
+            anniversary_manager,
         )
 
         # Set coordinator in viewer for state tracking
         viewer.set_render_coordinator(render_coordinator)
-        
+
         # Create internal server for web communication
         from .internal_server import InternalServer
+
         internal_server = InternalServer(render_coordinator, config_manager)
         internal_server.start()
 
@@ -131,22 +140,17 @@ def main():
         # Load any existing image on startup through coordinator
         from .utils import get_current_image_key, get_saved_image_dir
 
-        try:
-            current_key = get_current_image_key()
-            if current_key:
-                image_path = get_saved_image_dir() / f"album_art_{current_key}.jpg"
-                if image_path.exists():
-                    logger.info(
-                        f"Loading last displayed image on startup: {current_key}"
-                    )
-                    render_coordinator.set_main_content(
-                        content_type="last_art",
-                        image_key=current_key,
-                        image_path=image_path,
-                        track_info="Last displayed artwork"
-                    )
-        except Exception as e:
-            logger.warning(f"Could not load startup image: {e}")
+        current_key = get_current_image_key()
+        if current_key:
+            image_path = get_saved_image_dir() / f"album_art_{current_key}.jpg"
+            if image_path.exists():
+                logger.info(f"Loading last displayed image on startup: {current_key}")
+                render_coordinator.set_main_content(
+                    content_type="last_art",
+                    image_key=current_key,
+                    image_path=image_path,
+                    track_info="Last displayed artwork",
+                )
 
         # Start simulation server for testing
         simulation_server = SimulationServer(roon_client, config_manager)

@@ -60,12 +60,11 @@ class BaseViewer(ABC):
         # Apply ALL image processing to ALL images regardless of source
         # 1. Apply enhancements (color, contrast, brightness, sharpness)
         img = self.image_processor.apply_enhancements(img)
-        
+
         # 2. Apply position processing (rotation, scaling, positioning)
         img = self.image_processor.process_image_position(img)
 
         return img
-
 
     def _log_render_error(self, error, title, duration=None):
         """Common error logging for render failures."""
@@ -92,4 +91,3 @@ class BaseViewer(ABC):
     def display_image(self, image_key, image_path, img, title):
         """Display an image on the device."""
         pass
-

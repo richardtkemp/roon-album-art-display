@@ -59,7 +59,7 @@ class EinkViewer(BaseViewer):
 
         start_time = time.time()
 
-        # Send to e-ink display 
+        # Send to e-ink display
         self.epd.display(self.epd.getbuffer(img), title)
 
         elapsed_time = time.time() - start_time

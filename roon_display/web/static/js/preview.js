@@ -140,7 +140,6 @@ function shouldTriggerPreview(section, fieldName) {
         'allowed_zone_names', 'forbidden_zone_names',
         'web_auto_refresh_seconds', 'anniversary_check_interval',
         'performance_threshold_seconds', 'eink_success_threshold',
-        'eink_warning_threshold', 'eink_check_interval',
         'preview_auto_revert_seconds', 'preview_debounce_ms'
     ];
     if (skipSpecificFields.some(field => fieldName.includes(field))) {
@@ -172,25 +171,6 @@ function setupFormChangeDetection() {
             input.addEventListener(eventType, (e) => {
                 const section = getFormSection(e.target);
                 const fieldName = e.target.name || '';
-
-                // Handle web_image_max_width changes for layout updates
-                if (fieldName === 'IMAGE_QUALITY.web_image_max_width') {
-                    const newConfigWidth = parseInt(e.target.value) || 600;
-
-                    // Update global config width
-                    window.configImageWidth = newConfigWidth;
-
-                    // Calculate responsive width for height (width is handled by JavaScript)
-                    const responsiveWidth = window.calculateResponsiveWidth ?
-                        window.calculateResponsiveWidth(newConfigWidth) : newConfigWidth;
-
-                    document.documentElement.style.setProperty('--display-height', `${responsiveWidth}px`);
-
-                    // Update scroll effect with new config dimensions
-                    if (window.scrollShrinkEffect) {
-                        window.scrollShrinkEffect.updateDimensions(newConfigWidth, newConfigWidth);
-                    }
-                }
 
                 if (shouldTriggerPreview(section, fieldName)) {
                     // Add visual feedback
@@ -228,7 +208,7 @@ function setupStickyImageShrinking() {
 
             // Get containerHeight from CSS custom property (responsiveWidth + 40)
             this.containerHeight = parseInt(getComputedStyle(document.documentElement).getPropertyValue('--display-height')) || 600;
-            
+
             // Store initial container dimensions before any transformations
             this.initialContainerWidth = 0;
             this.initialContainerHeight = 0;
@@ -246,18 +226,25 @@ function setupStickyImageShrinking() {
         init() {
             // Capture the container's actual rendered width before any scroll effects
             this.actualContainerWidth = this.container.getBoundingClientRect().width;
-            
+
             // Store initial container dimensions for consistent calculations
             const containerRect = this.container.getBoundingClientRect();
             this.initialContainerWidth = containerRect.width;
-            this.initialContainerHeight = containerRect.height;
+
+	    // fix the container to be the right size
+            const image = this.container.querySelector('img');
+	    const computed = getComputedStyle(this.container);
+            const vpad = parseFloat(computed.paddingTop) + parseFloat(computed.paddingBottom);
+            this.containerHeight = image.offsetHeight + vpad;
+            this.initialContainerHeight = this.containerHeight;
 
             // Fix height if container is taller than wide (mobile issue)
             if (this.containerHeight > this.initialContainerWidth) {
                 this.containerHeight = this.initialContainerWidth;
                 this.initialContainerHeight = this.containerHeight; // Update measured height to match correction
-                document.documentElement.style.setProperty('--display-height', `${this.containerHeight}px`);
             }
+            console.log(`Setting container to ${this.containerHeight}px`);
+            document.documentElement.style.setProperty('--display-height', `${this.containerHeight}px`);
 
             // Calculate scroll positions
             this.calculateScrollPositions();
@@ -294,7 +281,7 @@ function setupStickyImageShrinking() {
             // Recapture the container's actual rendered width after resize
             if (!this.isFixed) {
                 this.actualContainerWidth = this.container.getBoundingClientRect().width;
-                
+
                 // Update initial container dimensions
                 const containerRect = this.container.getBoundingClientRect();
                 this.initialContainerWidth = containerRect.width;
@@ -315,6 +302,7 @@ function setupStickyImageShrinking() {
             if (scrollY < this.shrinkStartY) {
                 // Before shrinking starts - normal position
                 this.container.classList.remove('fixed');
+		this.container.style.transition = '';
                 this.container.style.transform = 'none';
                 this.container.style.right = 'auto';
                 this.container.style.left = '0';
@@ -325,6 +313,7 @@ function setupStickyImageShrinking() {
                 // During shrinking phase
                 if (!this.isFixed) {
                     this.container.classList.add('fixed');
+		    this.container.style.transition = "transform 0.15s ease-out";
                     // Set explicit dimensions to maintain current size
                     this.container.style.width = `${this.initialContainerWidth}px`;
                     this.container.style.height = `${this.initialContainerHeight}px`;
@@ -335,49 +324,33 @@ function setupStickyImageShrinking() {
                     this.isFixed = true;
                 }
 
+		// Fraction of how far through the scroll area we are
                 const progress = (scrollY - this.shrinkStartY) / (this.shrinkEndY - this.shrinkStartY);
-                
+
                 // Calculate target dimensions directly
-                const scaleX = 1 - (progress * (1 - this.minScale));
-                const targetWidth = this.initialContainerWidth * scaleX;
-                
-                // Calculate when transition from horizontal-only to both-dimensions occurs
-                // targetWidth = containerHeight when scaleX = containerHeight / initialContainerWidth
-                const transitionScaleX = this.containerHeight / this.initialContainerWidth;
-                const transitionProgress = (1 - transitionScaleX) / (1 - this.minScale);
-                
-                if (targetWidth > this.containerHeight) {
-                    // Phase 1: Shrink width only via direct manipulation
-                    this.container.style.width = `${targetWidth}px`;
-                    this.container.style.height = `${this.initialContainerHeight}px`;
-                    this.container.style.transform = 'none';
-                } else {
-                    // Phase 2: Container is now square, apply uniform scaling to maintain squareness
-                    this.container.style.width = `${this.containerHeight}px`;
-                    this.container.style.height = `${this.initialContainerHeight}px`;
-                    
-                    // Calculate scale for remaining progress to shrink the square container
-                    const remainingProgress = (progress - transitionProgress) / (1 - transitionProgress);
-                    const scaleForPhase2 = 1 - (remainingProgress * (1 - this.minScale));
-                    this.container.style.transform = `scale(${scaleForPhase2})`;
-                }
+                const scale = 1 - (progress * (1 - this.minScale));
+		    console.log(`scale=${scale}`);
+
+		requestAnimationFrame(() => {
+			this.container.style.transform = `scale(${scale})`;
+		});
             } else {
                 // After shrinking is complete - stay at minimum size (square)
                 this.container.classList.add('fixed');
-                
-                // Final state: square container at minimum scale
-                const finalSquareSize = this.containerHeight * this.minScale;
-                
+
+		requestAnimationFrame(() => {
+			this.container.style.transform = `scale(${this.minscale})`;
+		});
+
                 if (!this.isFixed) {
                     // Set explicit dimensions and positioning
                     const rightDistance = window.innerWidth - this.containerRightEdge;
                     this.container.style.right = `${rightDistance}px`;
                     this.container.style.left = 'auto';
                 }
-                
-                this.container.style.width = `${this.containerHeight}px`;
+
+                this.container.style.width = `${this.initialContainerWidth}px`;
                 this.container.style.height = `${this.initialContainerHeight}px`;
-                this.container.style.transform = `scale(${this.minScale})`;
                 this.isFixed = true;
             }
         }
@@ -390,7 +363,7 @@ function setupStickyImageShrinking() {
             // Recapture actual container width after config change
             if (!this.isFixed) {
                 this.actualContainerWidth = this.container.getBoundingClientRect().width;
-                
+
                 // Update initial container dimensions
                 const containerRect = this.container.getBoundingClientRect();
                 this.initialContainerWidth = containerRect.width;
