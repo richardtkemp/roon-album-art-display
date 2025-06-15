@@ -146,6 +146,67 @@ def create_app(config_path=None, port=None):
     app.config["config_handler"] = config_handler
     app.config["internal_client"] = internal_client
 
+    def _process_config_save(form_data, files):
+        """Common function to process configuration save."""
+        success, error_messages, config_updates = config_handler.save_config(form_data, files)
+        
+        message = ""
+        live_update_success = False
+        
+        if success:
+            message = "Configuration updated successfully!"
+            
+            # Send config updates to main process for immediate effect
+            if config_updates:
+                update_result = internal_client.update_config(config_updates)
+                if not update_result.get("success"):
+                    message = f'Configuration saved but live update failed: {update_result.get("error", "Unknown error")}'
+                    logger.warning(f"Live config update failed: {update_result}")
+                else:
+                    logger.info(f"Live config update successful: {update_result.get('updated_keys', [])}")
+                    live_update_success = True
+                    
+                    # Trigger display refresh after successful config update
+                    refresh_result = internal_client.force_refresh()
+                    if refresh_result.get("success"):
+                        logger.info("Display refresh triggered successfully")
+                    else:
+                        logger.warning(f"Display refresh failed: {refresh_result.get('error', 'Unknown error')}")
+            else:
+                message = "Configuration saved successfully!"
+                
+        return success, message, error_messages, live_update_success
+
+    def _handle_ajax_response(success, message, error_messages):
+        """Common function to handle AJAX responses."""
+        if success:
+            # Include any image upload warnings in the message
+            if error_messages:
+                warnings_text = "; ".join(error_messages)
+                message = f"{message} (Warnings: {warnings_text})"
+            return jsonify({"success": True, "message": message})
+        else:
+            error_text = "Error saving configuration!"
+            if error_messages:
+                error_text = "; ".join([error_text] + error_messages)
+            return jsonify({"success": False, "message": error_text})
+
+    def _handle_traditional_response(success, message, error_messages, form_data):
+        """Common function to handle traditional form responses."""
+        if success:
+            flash(message, "success")
+        else:
+            flash("Error saving configuration!", "error")
+            
+        # Show any image upload warnings/errors
+        for error_msg in error_messages:
+            flash(error_msg, "error")
+
+        # Store current tab and scroll position for redirect
+        current_tab = form_data.get("current_tab", "Image")
+        scroll_position = form_data.get("scroll_position", "0")
+        return redirect(url_for("config_interface", tab=current_tab, scroll=scroll_position))
+
     @app.route("/", methods=["GET", "POST"])
     def config_interface():
         """Main configuration interface."""
@@ -153,93 +214,16 @@ def create_app(config_path=None, port=None):
             # Check if this is an AJAX request
             is_ajax = request.headers.get("X-Requested-With") == "XMLHttpRequest"
 
-            success, error_messages, config_updates = config_handler.save_config(
+            # Process the configuration save using common function
+            success, message, error_messages, live_update_success = _process_config_save(
                 request.form, request.files
             )
 
+            # Handle response based on request type
             if is_ajax:
-                # Return JSON response for AJAX requests
-                if success:
-                    message = "Configuration updated successfully!"
-
-                    # Send config updates to main process for immediate effect
-                    if config_updates:
-                        update_result = internal_client.update_config(config_updates)
-                        if not update_result.get("success"):
-                            message = f'Configuration saved but live update failed: {update_result.get("error", "Unknown error")}'
-                            logger.warning(
-                                f"Live config update failed: {update_result}"
-                            )
-                        else:
-                            logger.info(
-                                f"Live config update successful: {update_result.get('updated_keys', [])}"
-                            )
-                            # Trigger display refresh after successful config update
-                            refresh_result = internal_client.force_refresh()
-                            if refresh_result.get("success"):
-                                logger.info("Display refresh triggered successfully")
-                            else:
-                                logger.warning(
-                                    f"Display refresh failed: {refresh_result.get('error', 'Unknown error')}"
-                                )
-
-                    # Include any image upload warnings in the message
-                    if error_messages:
-                        warnings_text = "; ".join(error_messages)
-                        message = f"{message} (Warnings: {warnings_text})"
-
-                    return jsonify({"success": True, "message": message})
-                else:
-                    error_text = "Error saving configuration!"
-                    if error_messages:
-                        error_text = "; ".join([error_text] + error_messages)
-
-                    return jsonify({"success": False, "message": error_text})
+                return _handle_ajax_response(success, message, error_messages)
             else:
-                # Traditional form submission - keep existing redirect behavior
-                if success:
-                    # Send config updates to main process for immediate effect
-                    if config_updates:
-                        update_result = internal_client.update_config(config_updates)
-                        if update_result.get("success"):
-                            flash("Configuration updated successfully!", "success")
-                            logger.info(
-                                f"Live config update successful: {update_result.get('updated_keys', [])}"
-                            )
-                            # Trigger display refresh after successful config update
-                            refresh_result = internal_client.force_refresh()
-                            if refresh_result.get("success"):
-                                logger.info("Display refresh triggered successfully")
-                            else:
-                                logger.warning(
-                                    f"Display refresh failed: {refresh_result.get('error', 'Unknown error')}"
-                                )
-                        else:
-                            flash(
-                                f'Configuration saved but live update failed: {update_result.get("error", "Unknown error")}',
-                                "error",
-                            )
-                            logger.warning(
-                                f"Live config update failed: {update_result}"
-                            )
-                    else:
-                        flash("Configuration saved successfully!", "success")
-
-                    # Show any image upload warnings
-                    for error_msg in error_messages:
-                        flash(error_msg, "error")
-
-                else:
-                    flash("Error saving configuration!", "error")
-                    for error_msg in error_messages:
-                        flash(error_msg, "error")
-
-                # Store current tab and scroll position for redirect
-                current_tab = request.form.get("current_tab", "Image")
-                scroll_position = request.form.get("scroll_position", "0")
-                return redirect(
-                    url_for("config_interface", tab=current_tab, scroll=scroll_position)
-                )
+                return _handle_traditional_response(success, message, error_messages, request.form)
 
         # GET request - show form
         sections = config_handler.get_config_sections()
