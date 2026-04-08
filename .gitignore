@@ -186,5 +186,3 @@ extra_images/
 simulation_track_index.txt
 myhealth.sh
 
-# Pre-commit
-.pre-commit-config.yaml
