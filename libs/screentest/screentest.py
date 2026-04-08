@@ -35,7 +35,7 @@ try:
     font24 = ImageFont.truetype(os.path.join(picdir, 'Font.ttc'), 24)
     font18 = ImageFont.truetype(os.path.join(picdir, 'Font.ttc'), 18)
     font40 = ImageFont.truetype(os.path.join(picdir, 'Font.ttc'), 40)
-    
+
     # Drawing on the image
     print("1.Drawing on the image...")
     Himage = Image.new('RGB', (epd.width, epd.height), epd.WHITE)  # 255: clear the frame
@@ -55,7 +55,7 @@ try:
     epd.display(epd.getbuffer(Himage))
     time.sleep(3)
 
-    # read bmp file 
+    # read bmp file
     print("2.read bmp file")
     Himage = Image.open(os.path.join(picdir, '13in3E.bmp'))
     epd.display(epd.getbuffer(Himage))
@@ -69,5 +69,3 @@ try:
 except:
     print("goto sleep...")
     epd.sleep()
-
-

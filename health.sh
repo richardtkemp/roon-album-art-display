@@ -8,4 +8,3 @@ if [[ "$1" == "good" ]] ; then
 else
         ${confirm} "$2" "${URL}/fail"
 fi
-

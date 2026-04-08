@@ -37,7 +37,9 @@ class TestHealthManager:
         script_path = "/path/to/script.sh"
         interval = 3600  # 1 hour
         health_manager = HealthManager(
-            make_config(), health_script_path=script_path, recheck_interval_seconds=interval
+            make_config(),
+            health_script_path=script_path,
+            recheck_interval_seconds=interval,
         )
         assert health_manager.health_script_path == script_path
         assert health_manager.recheck_interval == timedelta(seconds=interval)
@@ -62,7 +64,9 @@ class TestHealthManager:
             f.write('#!/bin/bash\necho "Script executed successfully"')
 
         try:
-            health_manager = HealthManager(make_config(), health_script_path=script_path)
+            health_manager = HealthManager(
+                make_config(), health_script_path=script_path
+            )
             result = health_manager.call_health_script("good", "test info")
 
             assert result is True
@@ -88,7 +92,9 @@ class TestHealthManager:
         mock_result.stderr = "Script failed"
         mock_run.return_value = mock_result
 
-        health_manager = HealthManager(make_config(), health_script_path="/path/to/script.sh")
+        health_manager = HealthManager(
+            make_config(), health_script_path="/path/to/script.sh"
+        )
         result = health_manager.call_health_script("bad", "error info")
 
         assert result is False
@@ -100,7 +106,9 @@ class TestHealthManager:
         """Test health script timeout."""
         mock_run.side_effect = subprocess.TimeoutExpired("cmd", 30)
 
-        health_manager = HealthManager(make_config(), health_script_path="/path/to/script.sh")
+        health_manager = HealthManager(
+            make_config(), health_script_path="/path/to/script.sh"
+        )
         result = health_manager.call_health_script("good", "test info")
 
         assert result is False
@@ -110,7 +118,9 @@ class TestHealthManager:
         """Test health script file not found."""
         mock_run.side_effect = FileNotFoundError()
 
-        health_manager = HealthManager(make_config(), health_script_path="/nonexistent/script.sh")
+        health_manager = HealthManager(
+            make_config(), health_script_path="/nonexistent/script.sh"
+        )
         result = health_manager.call_health_script("good", "test info")
 
         assert result is False
@@ -142,13 +152,17 @@ class TestHealthManager:
 
     def test_should_recheck_health_no_previous_call(self):
         """Test should_recheck_health with no previous call."""
-        health_manager = HealthManager(make_config(), health_script_path="/path/to/script.sh")
+        health_manager = HealthManager(
+            make_config(), health_script_path="/path/to/script.sh"
+        )
         assert health_manager.should_recheck_health() is False
 
     def test_should_recheck_health_too_soon(self):
         """Test should_recheck_health when called too soon."""
         health_manager = HealthManager(
-            make_config(), health_script_path="/path/to/script.sh", recheck_interval_seconds=3600
+            make_config(),
+            health_script_path="/path/to/script.sh",
+            recheck_interval_seconds=3600,
         )
         health_manager.last_timestamp = datetime.now()
         assert health_manager.should_recheck_health() is False
@@ -156,7 +170,9 @@ class TestHealthManager:
     def test_should_recheck_health_time_passed(self):
         """Test should_recheck_health when enough time has passed."""
         health_manager = HealthManager(
-            make_config(), health_script_path="/path/to/script.sh", recheck_interval_seconds=60
+            make_config(),
+            health_script_path="/path/to/script.sh",
+            recheck_interval_seconds=60,
         )
         health_manager.last_timestamp = datetime.now() - timedelta(seconds=61)
         assert health_manager.should_recheck_health() is True
@@ -170,7 +186,9 @@ class TestHealthManager:
     def test_recheck_health_success(self):
         """Test successful recheck_health."""
         health_manager = HealthManager(
-            make_config(), health_script_path="/path/to/script.sh", recheck_interval_seconds=60
+            make_config(),
+            health_script_path="/path/to/script.sh",
+            recheck_interval_seconds=60,
         )
         health_manager.last_timestamp = datetime.now() - timedelta(seconds=61)
         health_manager.last_params = ("good", "previous message")
@@ -197,7 +215,9 @@ class TestHealthManagerIntegration:
             Path(script_path).chmod(0o755)
 
             health_manager = HealthManager(
-                make_config(), health_script_path=script_path, recheck_interval_seconds=1
+                make_config(),
+                health_script_path=script_path,
+                recheck_interval_seconds=1,
             )
 
             # First call

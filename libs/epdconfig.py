@@ -6,7 +6,7 @@
 # *----------------
 # * |	This version:   V1.0
 # * | Date        :   2019-11-01
-# * | Info        :   
+# * | Info        :
 # ******************************************************************************/
 # Permission is hereby granted, free of charge, to any person obtaining a copy
 # of this software and associated documnetation files (the "Software"), to deal
@@ -45,7 +45,7 @@ EPD_DC_PIN      =25
 EPD_RST_PIN     =17
 EPD_BUSY_PIN    =24
 EPD_PWR_PIN     =18
- 
+
 log_format = '%(asctime)s [%(levelname)-7s] %(name)-12s: %(message)s [[%(funcName)s]]'
 # Configure logging
 logging.basicConfig(
@@ -86,20 +86,18 @@ def digital_write(pin, value):
 def digital_read(pin):
     return spi.DEV_Digital_Read(pin)
 
-def spi_writebyte(value): 
+def spi_writebyte(value):
     spi.DEV_SPI_SendData(value)
 
-def spi_writebyte2(buf, len): 
+def spi_writebyte2(buf, len):
     array_data = (ctypes.c_ubyte * len)(*buf)
     spi.DEV_SPI_SendData_nByte(array_data, ctypes.c_ulong(len))
- 
+
 def delay_ms(delaytime):
     time.sleep(delaytime / 1000.0)
-        
+
 def module_init():
     spi.DEV_ModuleInit()
 
 def module_exit():
     spi.DEV_ModuleExit()
-
-  

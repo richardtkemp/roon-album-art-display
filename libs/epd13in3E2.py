@@ -6,7 +6,7 @@
 # *----------------
 # * |	This version:   V1.0
 # * | Date        :   2019-11-01
-# * | Info        :   
+# * | Info        :
 # ******************************************************************************/
 # Permission is hereby granted, free of charge, to any person obtaining a copy
 # of this software and associated documnetation files (the "Software"), to deal
@@ -47,7 +47,7 @@ class EPD():
         self.RED    = 0x0000ff   #   0011
         self.BLUE   = 0xff0000   #   0101
         self.GREEN  = 0x00ff00   #   0110
-        
+
         self.EPD_CS_M_PIN  = epdconfig.EPD_CS_M_PIN
         self.EPD_CS_S_PIN  = epdconfig.EPD_CS_S_PIN
 
@@ -57,18 +57,18 @@ class EPD():
         self.EPD_PWR_PIN  = epdconfig.EPD_PWR_PIN
 
 
-    
+
     def Reset(self):
-        epdconfig.digital_write(self.EPD_RST_PIN, 1) 
-        time.sleep(0.03) 
-        epdconfig.digital_write(self.EPD_RST_PIN, 0) 
-        time.sleep(0.03) 
-        epdconfig.digital_write(self.EPD_RST_PIN, 1) 
-        time.sleep(0.03) 
-        epdconfig.digital_write(self.EPD_RST_PIN, 0) 
-        time.sleep(0.03) 
-        epdconfig.digital_write(self.EPD_RST_PIN, 1) 
-        time.sleep(0.03) 
+        epdconfig.digital_write(self.EPD_RST_PIN, 1)
+        time.sleep(0.03)
+        epdconfig.digital_write(self.EPD_RST_PIN, 0)
+        time.sleep(0.03)
+        epdconfig.digital_write(self.EPD_RST_PIN, 1)
+        time.sleep(0.03)
+        epdconfig.digital_write(self.EPD_RST_PIN, 0)
+        time.sleep(0.03)
+        epdconfig.digital_write(self.EPD_RST_PIN, 1)
+        time.sleep(0.03)
 
     def CS_ALL(self, Value):
         epdconfig.digital_write(self.EPD_CS_M_PIN, Value)
@@ -79,7 +79,7 @@ class EPD():
 
     def SendData(self, Data):
         epdconfig.spi_writebyte(Data)
-    
+
     def SendData2(self, buf, Len):
         epdconfig.spi_writebyte2(buf, Len)
 
@@ -115,8 +115,8 @@ class EPD():
     def Init(self):
         print("EPD init...")
         epdconfig.module_init()
-        
-        self.Reset() 
+
+        self.Reset()
         self.ReadBusyH()
 
         epdconfig.digital_write(self.EPD_CS_M_PIN, 0)
@@ -223,7 +223,7 @@ class EPD():
         self.SendCommand(0xB1)
         self.SendData(0x02)
         self.CS_ALL(1)
-    
+
     def getbuffer(self, image):
         # Create a pallette with the 7 colors supported by the panel
         pal_image = Image.new("P", (1,1))
@@ -250,9 +250,9 @@ class EPD():
         for i in range(0, len(buf_7color), 2):
             buf[idx] = (buf_7color[i] << 4) + buf_7color[i+1]
             idx += 1
-            
+
         return buf
-    
+
     def Clear(self, color=0x11):
         epdconfig.digital_write(self.EPD_CS_M_PIN, 0)
         self.SendCommand(0x10)
@@ -294,5 +294,3 @@ class EPD():
         epdconfig.delay_ms(2000)
         epdconfig.module_exit()
 ### END OF FILE ###
-
-

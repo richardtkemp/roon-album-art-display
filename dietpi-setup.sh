@@ -1,6 +1,6 @@
 #!/bin/bash
 
-##dietpi install 
+##dietpi install
 #69 rpi.gpio
 #70 wiringpi
 #17 git

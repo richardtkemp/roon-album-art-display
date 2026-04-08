@@ -18,7 +18,7 @@
 2025-05-20 12:17:15,374 [INFO   ] RoonArtFrame: Successfully registered for state callbacks [[subscribe_to_events]]
 2025-05-20 12:17:15,376 [INFO   ] RoonArtFrame: Event loop started [[event_loop]]
 2025-05-20 12:17:20,415 [INFO   ] RoonArtFrame: Finished sending image to display for Marry You [[display_image]]
-bcm2835 init success !!! 
+bcm2835 init success !!!
 2025-05-20 12:23:54,296 [ERROR  ] roonapi     : Error while parsing message '<websocket._app.WebSocketApp object at 0x7fb1c11f50>' [[on_message]]
 Traceback (most recent call last):
   File "/usr/local/lib/python3.11/dist-packages/roonapi/roonapisocket.py", line 127, in on_message
