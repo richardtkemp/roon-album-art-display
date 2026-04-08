@@ -358,7 +358,7 @@ CONFIG_SCHEMA = {
             "type": "boolean",
             "comment": "Enable anniversary notifications",
         }
-        ### Other annivesary config fields not mentioned as they have specific functions to handle them
+        # Other anniversary config fields not mentioned as they have specific functions to handle them
     },
     "MONITORING": {
         "log_level": {

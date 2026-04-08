@@ -78,7 +78,9 @@ class RoonClient:
     def is_connected(self, value):
         """Set connection status with state change logging."""
         if self._is_connected != value:
-            logger.warning(f"🔗 CONNECTION STATE CHANGE: {self._is_connected} → {value}")
+            logger.warning(
+                f"🔗 CONNECTION STATE CHANGE: {self._is_connected} → {value}"
+            )
             self._is_connected = value
 
     def connect(self):
@@ -127,7 +129,6 @@ class RoonClient:
 
     def _discover_server(self):
         """Discover Roon server on network."""
-        token = self._get_token()
         discover = RoonDiscovery(None)
 
         # Wait for server discovery

@@ -78,9 +78,6 @@ class TestBaseViewer:
     def test_startup_existing_image_no_file(self, concrete_viewer, temp_dir):
         """Test startup method with existing image key but no file."""
         image_key = "test_image_123"
-        _expected_path = (
-            temp_dir / "album_art" / f"album_art_{image_key}.jpg"
-        )  # noqa: F841
 
         with patch(
             "roon_display.viewers.base.get_current_image_key", return_value=image_key
