@@ -45,7 +45,7 @@ class RenderCoordinator:
         self.overlay_timeout: Optional[float] = None  # When overlay should auto-clear
 
         # Rendering control
-        self.currently_rendering = False
+        self._render_pending = False
         self.render_lock = threading.Lock()
 
         # E-ink display persistence tracking
@@ -135,48 +135,46 @@ class RenderCoordinator:
 
     def _render_display(self) -> None:
         """Render the current state to the display."""
-        if self.currently_rendering:
-            return
-
-        # Check for overlay timeout
-        if self.overlay_timeout and time.time() > self.overlay_timeout:
-            self.overlay_content = None
-            self.overlay_timeout = None
-
-        with self.render_lock:
-            if self.currently_rendering:
-                return  # type: ignore[unreachable]
-            self.currently_rendering = True
+        self._render_pending = True
+        if not self.render_lock.acquire(blocking=False):
+            return  # render in progress; it will loop and pick up the flag
 
         try:
-            # Determine what to render
-            if self.main_content:
-                img = self.image_processor.prepare(
-                    self.main_content["img"],
-                    self.main_content["image_path"],
-                )
-                if img is None:
-                    logger.error("Failed to prepare image for render")
-                    return
-                self._cache_rendered_image(img)
-            elif self.overlay_content:
-                # No main content — render overlay as full-screen message
-                img = self.message_renderer.create_text_message(
-                    self.overlay_content["message"]
-                )
-            else:
-                logger.warning("No content to render")
-                return
+            while self._render_pending:
+                self._render_pending = False
 
-            logger.debug(f"Rendering display content: {self.main_content}")
-            self.viewer.update(
-                self.main_content["image_key"] if self.main_content else None,
-                img,
-                self.main_content["track_info"] if self.main_content else None,
-            )
+                # Check for overlay timeout
+                if self.overlay_timeout and time.time() > self.overlay_timeout:
+                    self.overlay_content = None
+                    self.overlay_timeout = None
+
+                # Determine what to render
+                if self.main_content:
+                    img = self.image_processor.prepare(
+                        self.main_content["img"],
+                        self.main_content["image_path"],
+                    )
+                    if img is None:
+                        logger.error("Failed to prepare image for render")
+                        continue
+                    self._cache_rendered_image(img)
+                elif self.overlay_content:
+                    # No main content — render overlay as full-screen message
+                    img = self.message_renderer.create_text_message(
+                        self.overlay_content["message"]
+                    )
+                else:
+                    logger.warning("No content to render")
+                    continue
+
+                logger.debug(f"Rendering display content: {self.main_content}")
+                self.viewer.update(
+                    self.main_content["image_key"] if self.main_content else None,
+                    img,
+                    self.main_content["track_info"] if self.main_content else None,
+                )
         finally:
-            with self.render_lock:
-                self.currently_rendering = False
+            self.render_lock.release()
 
     def force_refresh(self) -> None:
         """Force a re-render of the current display content with updated config values."""
