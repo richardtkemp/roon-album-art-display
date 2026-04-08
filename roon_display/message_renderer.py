@@ -307,17 +307,10 @@ class MessageRenderer:
     def _get_text_size_width(self, text: str, font: Any) -> int:
         """Get text width using font metrics."""
         if font:
-            try:
-                # Create temporary draw to measure text
-                temp_img = Image.new("RGB", (1, 1), "white")
-                temp_draw = ImageDraw.Draw(temp_img)
-                bbox = temp_draw.textbbox((0, 0), text, font=font)
-                return int(bbox[2] - bbox[0])
-            except AttributeError:
-                # Fallback for older Pillow versions
-                temp_img = Image.new("RGB", (1, 1), "white")
-                temp_draw = ImageDraw.Draw(temp_img)
-                return temp_draw.textsize(text, font=font)[0]  # type: ignore[attr-defined,no-any-return]
+            temp_img = Image.new("RGB", (1, 1), "white")
+            temp_draw = ImageDraw.Draw(temp_img)
+            bbox = temp_draw.textbbox((0, 0), text, font=font)
+            return int(bbox[2] - bbox[0])
         else:
             # Estimate text width without font
             return len(text) * 8
@@ -465,15 +458,10 @@ class MessageRenderer:
         return "\n".join(wrapped_paragraphs)
 
     def _get_text_size(self, draw: Any, text: str, font: Any) -> Tuple[int, int]:
-        """Get text dimensions with fallback for different Pillow versions."""
+        """Get text dimensions using font metrics."""
         if font:
-            try:
-                # Use textbbox for newer Pillow versions
-                bbox = draw.textbbox((0, 0), text, font=font)
-                return bbox[2] - bbox[0], bbox[3] - bbox[1]
-            except AttributeError:
-                # Fallback for older Pillow versions
-                return draw.textsize(text, font=font)  # type: ignore[no-any-return]
+            bbox = draw.textbbox((0, 0), text, font=font)
+            return bbox[2] - bbox[0], bbox[3] - bbox[1]
         else:
             # Estimate text size without font
             return len(text) * 10, 20

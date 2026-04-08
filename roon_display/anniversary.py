@@ -412,13 +412,10 @@ class AnniversaryManager:
         return canvas
 
     def _get_text_size(self, draw: Any, text: str, font: Any) -> tuple[int, int]:
-        """Get text dimensions with fallback for different Pillow versions."""
+        """Get text dimensions using font metrics."""
         if font:
-            try:
-                bbox = draw.textbbox((0, 0), text, font=font)
-                return bbox[2] - bbox[0], bbox[3] - bbox[1]
-            except AttributeError:
-                return draw.textsize(text, font=font)  # type: ignore[no-any-return]
+            bbox = draw.textbbox((0, 0), text, font=font)
+            return bbox[2] - bbox[0], bbox[3] - bbox[1]
         else:
             return len(text) * 10, 20
 
