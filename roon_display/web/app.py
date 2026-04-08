@@ -223,7 +223,7 @@ def create_app(config_path: Optional[str] = None, port: Optional[int] = None) ->
             url_for("config_interface", tab=current_tab, scroll=scroll_position)
         )
 
-    @app.route("/", methods=["GET", "POST"])  # type: ignore[misc]
+    @app.route("/", methods=["GET", "POST"])
     def config_interface() -> Any:
         """Main configuration interface."""
         if request.method == "POST":
@@ -310,7 +310,7 @@ def create_app(config_path: Optional[str] = None, port: Optional[int] = None) ->
             * 1000,  # Convert to milliseconds
         )
 
-    @app.route("/thumbnail/<anniversary_name>/<filename>")  # type: ignore[misc]
+    @app.route("/thumbnail/<anniversary_name>/<filename>")
     def serve_thumbnail(anniversary_name: str, filename: str) -> Any:
         """Serve thumbnail images for anniversary photos."""
         try:
@@ -347,7 +347,7 @@ def create_app(config_path: Optional[str] = None, port: Optional[int] = None) ->
             logger.error(f"Error serving thumbnail {anniversary_name}/{filename}: {e}")
             return "Internal server error", 500
 
-    @app.route("/delete-image", methods=["POST"])  # type: ignore[misc]
+    @app.route("/delete-image", methods=["POST"])
     def delete_image() -> Any:
         """Delete an anniversary image."""
         try:
@@ -379,7 +379,7 @@ def create_app(config_path: Optional[str] = None, port: Optional[int] = None) ->
             logger.error(f"Error in delete image endpoint: {e}")
             return jsonify({"success": False, "error": str(e)})
 
-    @app.route("/display-status")  # type: ignore[misc]
+    @app.route("/display-status")
     def display_status() -> Any:
         """Get current display status from main app."""
         try:
@@ -399,7 +399,7 @@ def create_app(config_path: Optional[str] = None, port: Optional[int] = None) ->
                 }
             )
 
-    @app.route("/current-display-image")  # type: ignore[misc]
+    @app.route("/current-display-image")
     def serve_current_display_image() -> Any:
         """Proxy current display image from main app."""
         try:
@@ -431,7 +431,7 @@ def create_app(config_path: Optional[str] = None, port: Optional[int] = None) ->
             else:
                 return jsonify({"error": "No image available"}), 404
 
-    @app.route("/preview-image", methods=["POST"])  # type: ignore[misc]
+    @app.route("/preview-image", methods=["POST"])
     def generate_preview_image() -> Any:
         """Generate preview image with form changes."""
         try:

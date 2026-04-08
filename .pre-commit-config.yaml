@@ -30,11 +30,11 @@ repos:
         exclude: ^(libs/|test\.py$)
 
   - repo: https://github.com/pre-commit/mirrors-mypy
-    rev: v1.11.2
+    rev: v1.16.0
     hooks:
       - id: mypy
         exclude: ^(libs/|tests/|test\.py$|simulate_track_change\.py$)
-        additional_dependencies: [types-requests, types-Pillow]
+        additional_dependencies: [types-requests, types-Pillow, flask]
 
   - repo: https://github.com/PyCQA/bandit
     rev: 1.7.10

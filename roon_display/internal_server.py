@@ -31,7 +31,7 @@ class InternalServer:
     def setup_routes(self) -> None:
         """Setup internal API routes."""
 
-        @self.app.route("/current-image")  # type: ignore[misc]
+        @self.app.route("/current-image")
         def get_current_image() -> Any:
             """Return the exact image currently on display."""
             try:
@@ -47,7 +47,7 @@ class InternalServer:
                 logger.error(f"Error serving current image: {e}")
                 return self._create_error_image(str(e))
 
-        @self.app.route("/current-status")  # type: ignore[misc]
+        @self.app.route("/current-status")
         def get_current_status() -> Any:
             """Return current display status metadata."""
             try:
@@ -67,7 +67,7 @@ class InternalServer:
                 logger.error(f"Error getting current status: {e}")
                 return jsonify({"has_image": False, "error": str(e)})
 
-        @self.app.route("/preview", methods=["POST"])  # type: ignore[misc]
+        @self.app.route("/preview", methods=["POST"])
         def generate_preview() -> Any:
             """Generate preview image with provided configuration."""
             try:
@@ -85,7 +85,7 @@ class InternalServer:
                 logger.error(f"Error generating preview: {e}")
                 return jsonify({"error": f"Preview error: {e}"}), 500
 
-        @self.app.route("/health")  # type: ignore[misc]
+        @self.app.route("/health")
         def health_check() -> Any:
             """Health check endpoint."""
             return jsonify(
@@ -96,7 +96,7 @@ class InternalServer:
                 }
             )
 
-        @self.app.route("/update-config", methods=["POST"])  # type: ignore[misc]
+        @self.app.route("/update-config", methods=["POST"])
         def update_config() -> Any:
             """Update configuration values in real-time."""
             try:
@@ -132,7 +132,7 @@ class InternalServer:
                 logger.error(f"Error updating config via API: {e}")
                 return jsonify({"success": False, "error": str(e)}), 500
 
-        @self.app.route("/force-refresh", methods=["POST"])  # type: ignore[misc]
+        @self.app.route("/force-refresh", methods=["POST"])
         def force_refresh() -> Any:
             """Force a display refresh with current configuration."""
             try:

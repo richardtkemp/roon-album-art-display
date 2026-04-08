@@ -120,7 +120,7 @@ class MessageRenderer:
             logger.debug(f"Image path absolute: {Path(image_path).absolute()}")
             logger.debug(f"Image path is file: {Path(image_path).is_file()}")
 
-            msg_img = Image.open(image_path)
+            msg_img: Image.Image = Image.open(image_path)
             logger.debug(
                 f"Successfully opened image: {msg_img.size}, mode: {msg_img.mode}"
             )
@@ -312,7 +312,7 @@ class MessageRenderer:
                 temp_img = Image.new("RGB", (1, 1), "white")
                 temp_draw = ImageDraw.Draw(temp_img)
                 bbox = temp_draw.textbbox((0, 0), text, font=font)
-                return bbox[2] - bbox[0]
+                return int(bbox[2] - bbox[0])
             except AttributeError:
                 # Fallback for older Pillow versions
                 temp_img = Image.new("RGB", (1, 1), "white")

@@ -283,7 +283,7 @@ class AnniversaryManager:
         image_area_width = screen_width - (2 * border_size)
         image_area_height = screen_height - border_size - text_area_height
 
-        anniversary_img = Image.open(image_path)
+        anniversary_img: Image.Image = Image.open(image_path)
         img_ratio = anniversary_img.width / anniversary_img.height
         area_ratio = image_area_width / image_area_height
 
@@ -361,7 +361,7 @@ class AnniversaryManager:
         ) // 2 + image_processor.position_offset_y  # type: ignore[attr-defined]
 
         try:
-            anniversary_img = Image.open(image_path)
+            anniversary_img: Image.Image = Image.open(image_path)
             if anniversary_img.mode != "RGB":
                 anniversary_img = anniversary_img.convert("RGB")
 
