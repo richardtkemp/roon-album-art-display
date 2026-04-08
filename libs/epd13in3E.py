@@ -139,17 +139,16 @@ class EPD():
         self.ReadBusyH(f"Write DRF {title}", True)
 
     def updateDisplay(self, title):
-        try:
-            if self.powered_on == False:
-                logger.debug(f"POWER ON = {self.powered_on}")
-                self.writePower(True, title, not self.powered_on)
+        if self.powered_on == False:
+            logger.debug(f"POWER ON = {self.powered_on}")
+            self.writePower(True, title, not self.powered_on)
 
-            epdconfig.delay_ms(50)
+        epdconfig.delay_ms(50)
 
-            self.writeDRF(title)
+        self.writeDRF(title)
 
-            self.writePower(False, title)
-            logger.debug(f"Write to display complete for {title}")
+        self.writePower(False, title)
+        logger.debug(f"Write to display complete for {title}")
 
     def Init(self):
         logger.debug("EPD init...")
@@ -315,27 +314,26 @@ class EPD():
         self.writePower(True, "Clear")
 
     def display(self, image, title):
-        try:
-            Width  = int(self.width / 4)
-            Width1 = int(self.width / 2)
+        Width  = int(self.width / 4)
+        Width1 = int(self.width / 2)
 
-            self.ReadBusyH(f"Starting [[{getParent()}]] {title}")
-            logger.debug(f"Sending data 1 for {title}")
-            self.CS_ALL(1)
-            epdconfig.digital_write(self.EPD_CS_M_PIN, 0)
-            self.SendCommand(0x10)
-            for i in range(self.height):
-                self.SendData2(image[i * Width1 : i * Width1+Width], Width)
-            self.CS_ALL(1)
+        self.ReadBusyH(f"Starting [[{getParent()}]] {title}")
+        logger.debug(f"Sending data 1 for {title}")
+        self.CS_ALL(1)
+        epdconfig.digital_write(self.EPD_CS_M_PIN, 0)
+        self.SendCommand(0x10)
+        for i in range(self.height):
+            self.SendData2(image[i * Width1 : i * Width1+Width], Width)
+        self.CS_ALL(1)
 
-            logger.debug(f"Sending data 2 for {title}")
-            epdconfig.digital_write(self.EPD_CS_S_PIN, 0)
-            self.SendCommand(0x10)
-            for i in range(self.height):
-                self.SendData2(image[i * Width1+Width : i * Width1+Width1], Width)
-            self.CS_ALL(1)
+        logger.debug(f"Sending data 2 for {title}")
+        epdconfig.digital_write(self.EPD_CS_S_PIN, 0)
+        self.SendCommand(0x10)
+        for i in range(self.height):
+            self.SendData2(image[i * Width1+Width : i * Width1+Width1], Width)
+        self.CS_ALL(1)
 
-            self.updateDisplay(title)
+        self.updateDisplay(title)
 
     def sleep(self):
         self.CS_ALL(0)
