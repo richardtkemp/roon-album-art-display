@@ -89,18 +89,15 @@ class TkViewer(BaseViewer):
 
         # Process pending update
         if self.pending_image_data is not None:
-            image_key, image_path, img, title = self.pending_image_data
-            self.display_image(image_key, image_path, img, title)
+            image_key, img, title = self.pending_image_data
+            self.display_image(image_key, img, title)
             logger.info(f"Updated display with {title}")
             self.pending_image_data = None
 
-    def display_image(
-        self, image_key: Any, image_path: Any, img: Any, title: Any
-    ) -> None:
+    def display_image(self, image_key: Any, img: Any, title: Any) -> None:
         """Display image (must be called from main thread)."""
-        # Load and process image using common logic
-        img = self._load_and_process_image(img, image_path, title)
         if img is None:
+            logger.warning(f"No image provided for display: {title}")
             return
 
         try:
@@ -119,7 +116,7 @@ class TkViewer(BaseViewer):
         except Exception as e:
             self._log_render_error(e, title)
 
-    def update(self, image_key: Any, image_path: Any, img: Any, title: Any) -> None:
+    def update(self, image_key: Any, img: Any, title: Any) -> None:
         """Thread-safe method to request image update."""
         # Store update data for main thread to process
-        self.pending_image_data = (image_key, image_path, img, title)
+        self.pending_image_data = (image_key, img, title)

@@ -5,12 +5,10 @@ from __future__ import annotations
 import logging
 from abc import ABC, abstractmethod
 from collections.abc import Callable
-from pathlib import Path
 from typing import TYPE_CHECKING, Any, Optional
 
 from ..health import HealthManager
 from ..image_processing.processor import ImageProcessor
-from ..utils import get_current_image_key, get_saved_image_dir
 
 if TYPE_CHECKING:
     from ..config.config_manager import ConfigManager
@@ -56,29 +54,6 @@ class BaseViewer(ABC):
         if self.on_display_complete is not None:
             self.on_display_complete()
 
-    def _load_and_process_image(
-        self, img: Any, image_path: Optional[Path], title: str
-    ) -> Optional[Any]:
-        """Common logic to load and process images."""
-        if img is None:
-            if image_path is None:
-                logger.warning(f"No image or path provided for display: {title}")
-                return None
-
-            img = self.image_processor.fetch_image(image_path)
-            if img is None:
-                logger.warning(f"Could not load image for display: {image_path}")
-                return None
-
-            # Only apply processing when loading from file (standalone mode).
-            # When img is provided by the render coordinator it has already been
-            # fully processed by create_final_display_image(); re-applying here
-            # would double-apply rotation, scaling, and enhancements.
-            img = self.image_processor.apply_enhancements(img)
-            img = self.image_processor.process_image_position(img)
-
-        return img
-
     def _log_render_error(
         self, error: Exception, title: str, duration: Optional[float] = None
     ) -> None:
@@ -96,13 +71,11 @@ class BaseViewer(ABC):
         pass
 
     @abstractmethod
-    def update(self, image_key: str, image_path: Any, img: Any, title: str) -> None:
+    def update(self, image_key: str, img: Any, title: str) -> None:
         """Update the display with a new image."""
         pass
 
     @abstractmethod
-    def display_image(
-        self, image_key: str, image_path: Any, img: Any, title: str
-    ) -> None:
+    def display_image(self, image_key: str, img: Any, title: str) -> None:
         """Display an image on the device."""
         pass

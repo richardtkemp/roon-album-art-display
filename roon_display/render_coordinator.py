@@ -8,10 +8,11 @@ import time
 from pathlib import Path
 from typing import TYPE_CHECKING, Any, Dict, Optional, Tuple
 
-from PIL import Image, ImageEnhance
+from PIL import Image
 
 if TYPE_CHECKING:
     from .config.config_manager import ConfigManager
+    from .image_processing.processor import ImageProcessor
 
 logger = logging.getLogger(__name__)
 
@@ -22,9 +23,9 @@ class RenderCoordinator:
     def __init__(
         self,
         viewer: Any,
-        image_processor: Any,
+        image_processor: "ImageProcessor",
         message_renderer: Any,
-        config_manager: ConfigManager,
+        config_manager: "ConfigManager",
         anniversary_manager: Any = None,
     ) -> None:
         """Initialize render coordinator."""
@@ -64,154 +65,6 @@ class RenderCoordinator:
         if self.anniversary_manager:
             self.anniversary_manager.start_anniversary_monitor(self)
 
-    def create_final_display_image(
-        self,
-        main_content: Dict[str, Any],
-        config_manager: ConfigManager,
-        overrides: Optional[Dict[str, Any]] = None,
-    ) -> Image.Image:
-        """
-        Create the final display image by compositing main content onto a white canvas.
-
-        This function centralizes all image processing and positioning logic in one place.
-        It handles the complete flow from raw content image to final display-ready image.
-
-        Data Flow:
-        1. Extract screen dimensions and positioning parameters from config_manager
-        2. Allow web interface overrides to take precedence over config values
-        3. Create a white canvas at full screen dimensions
-        4. Process the main content image: scale, rotate, and position
-        5. Composite the processed image onto the canvas, centered with offsets
-        6. Return the final composite image ready for display
-
-        Args:
-            main_content: The source image to be displayed (album art, anniversary, etc.)
-            config_manager: Configuration manager providing default values for all parameters
-            overrides: Optional dict with web interface overrides. Keys can include:
-                            - 'screen_width', 'screen_height': Display dimensions
-                            - 'scale_x', 'scale_y': Scaling factors (1.0 = no scaling)
-                            - 'rotation': Rotation angle (0, 90, 180, 270 degrees)
-                            - 'image_offset_x', 'image_offset_y': Position offsets in pixels
-                            - 'color_enhance', 'contrast', 'brightness', 'sharpness': Image enhancements (1.0 = no change)
-
-        Returns:
-            PIL.Image: Final composite image at screen dimensions, ready for display
-
-        Processing Steps:
-        - Gets screen dimensions from config or overrides
-        - Gets scaling factors (default 1.0 = no scaling)
-        - Gets rotation angle (default 0 = no rotation)
-        - Gets position offsets (default 0 = centered)
-        - Gets image enhancement values (default 1.0 = no change)
-        - Creates white background canvas at screen size
-        - Scales main content image by scale_x and scale_y factors
-        - Rotates image by specified angle
-        - Applies image enhancements (color, contrast, brightness, sharpness)
-        - Positions image at center + offsets on the canvas
-        - Returns final composite ready for viewer
-        """
-        # Extract all configuration parameters
-        screen_width = config_manager.get_config(overrides, "screen_width")
-        screen_height = config_manager.get_config(overrides, "screen_height")
-        scale_x = config_manager.get_config(overrides, "scale_x")
-        scale_y = config_manager.get_config(overrides, "scale_y")
-        rotation = str(config_manager.get_config(overrides, "rotation"))
-        offset_x = config_manager.get_config(overrides, "image_offset_x")
-        offset_y = config_manager.get_config(overrides, "image_offset_y")
-
-        # IMAGE_RENDER configuration parameters
-        color_enhance = config_manager.get_config(overrides, "color_enhance")
-        contrast = config_manager.get_config(overrides, "contrast")
-        brightness = config_manager.get_config(overrides, "brightness")
-        sharpness = config_manager.get_config(overrides, "sharpness")
-
-        # Create white canvas at screen dimensions
-        canvas = Image.new("RGB", (screen_width, screen_height), "white")
-
-        # Process the main content image
-        logger.debug(f"Preview for {main_content}")
-        processed_image = main_content["img"].copy()
-
-        # First, fit the source image to canvas dimensions while preserving aspect ratio
-        original_width, original_height = processed_image.size
-        canvas_size = min(screen_width, screen_height)
-        processed_image = processed_image.resize(
-            (canvas_size, canvas_size), Image.Resampling.LANCZOS
-        )
-        logger.debug(
-            f"Fitted image to canvas size: {original_width}x{original_height} → {canvas_size}x{canvas_size}"
-        )
-
-        # Then apply scaling on top of the fitted image
-        if scale_x != 1.0 or scale_y != 1.0:
-            fitted_width, fitted_height = processed_image.size
-            new_width = int(fitted_width * scale_x)
-            new_height = int(fitted_height * scale_y)
-            processed_image = processed_image.resize(
-                (new_width, new_height), Image.Resampling.LANCZOS
-            )
-            logger.debug(
-                f"Scaled fitted image: {fitted_width}x{fitted_height} → {new_width}x{new_height}"
-            )
-
-        # Apply rotation
-        if rotation == "90":
-            processed_image = processed_image.transpose(Image.Transpose.ROTATE_90)
-        elif rotation == "180":
-            processed_image = processed_image.transpose(Image.Transpose.ROTATE_180)
-        elif rotation == "270":
-            processed_image = processed_image.transpose(Image.Transpose.ROTATE_270)
-
-        if rotation != "0":
-            logger.debug(f"Rotated image by {rotation}°: {processed_image.size}")
-
-        # Apply IMAGE_RENDER enhancements
-        enhancement_applied = False
-
-        if color_enhance != 1.0:
-            processed_image = ImageEnhance.Color(processed_image).enhance(color_enhance)
-            enhancement_applied = True
-
-        if contrast != 1.0:
-            processed_image = ImageEnhance.Contrast(processed_image).enhance(contrast)
-            enhancement_applied = True
-
-        if brightness != 1.0:
-            processed_image = ImageEnhance.Brightness(processed_image).enhance(
-                brightness
-            )
-            enhancement_applied = True
-
-        if sharpness != 1.0:
-            processed_image = ImageEnhance.Sharpness(processed_image).enhance(sharpness)
-            enhancement_applied = True
-
-        if enhancement_applied:
-            logger.debug(
-                f"Applied enhancements: color={color_enhance}, contrast={contrast}, brightness={brightness}, sharpness={sharpness}"
-            )
-
-        # Calculate centered position with offsets
-        img_width, img_height = processed_image.size
-        center_x = (screen_width - img_width) // 2
-        center_y = (screen_height - img_height) // 2
-        final_x = center_x + offset_x
-        final_y = center_y + offset_y
-
-        # Composite onto canvas
-        canvas.paste(processed_image, (final_x, final_y))
-
-        logger.debug(
-            f"Final composite: {screen_width}x{screen_height} canvas, "
-            f"image at ({final_x}, {final_y}), "
-            f"scale=({scale_x}, {scale_y}), rotation={rotation}°, offset=({offset_x}, {offset_y})"
-        )
-
-        # Cache the rendered image for web access
-        self._cache_rendered_image(canvas)
-
-        return canvas
-
     def set_main_content(
         self,
         content_type: str,
@@ -234,9 +87,6 @@ class RenderCoordinator:
                 f"Skipping render - image {image_key} already displayed on e-ink"
             )
             return
-
-        if img is None and image_path is not None:
-            img = self.image_processor.fetch_image(image_path)
 
         # Store main content data
         self.main_content = {
@@ -301,9 +151,14 @@ class RenderCoordinator:
         try:
             # Determine what to render
             if self.main_content:
-                img = self.create_final_display_image(
-                    self.main_content, self.config_manager, None
+                img = self.image_processor.prepare(
+                    self.main_content["img"],
+                    self.main_content["image_path"],
                 )
+                if img is None:
+                    logger.error("Failed to prepare image for render")
+                    return
+                self._cache_rendered_image(img)
             elif self.overlay_content:
                 # No main content — render overlay as full-screen message
                 img = self.message_renderer.create_text_message(
@@ -316,7 +171,6 @@ class RenderCoordinator:
             logger.debug(f"Rendering display content: {self.main_content}")
             self.viewer.update(
                 self.main_content["image_key"] if self.main_content else None,
-                None,
                 img,
                 self.main_content["track_info"] if self.main_content else None,
             )
@@ -413,16 +267,13 @@ class RenderCoordinator:
                 logger.warning("No main content image available for preview")
                 return None
 
-            # Use centralized rendering function with config overrides
-            preview_image = self.create_final_display_image(
-                self.main_content,
-                self.config_manager,
-                config_data,  # Pass config_data directly - no conversion needed
+            preview_image = self.image_processor.prepare(
+                self.main_content["img"],
+                self.main_content["image_path"],
+                overrides=config_data,
             )
 
-            logger.debug(
-                "Preview image generated successfully using centralized renderer"
-            )
+            logger.debug("Preview image generated successfully")
             return preview_image
 
         except Exception as e:

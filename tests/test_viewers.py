@@ -39,11 +39,11 @@ class TestBaseViewer:
                 self.display_calls = []
                 self.anniversary_calls = []
 
-            def update(self, image_key, image_path, img, title):
-                self.update_calls.append((image_key, image_path, img, title))
+            def update(self, image_key, img, title):
+                self.update_calls.append((image_key, img, title))
 
-            def display_image(self, image_key, image_path, img, title):
-                self.display_calls.append((image_key, image_path, img, title))
+            def display_image(self, image_key, img, title):
+                self.display_calls.append((image_key, img, title))
 
             def update_anniversary(self, message, image_path=None):
                 self.anniversary_calls.append((message, image_path))
@@ -66,58 +66,10 @@ class TestBaseViewer:
         assert concrete_viewer.config_manager.get_screen_width() == width
         assert concrete_viewer.config_manager.get_screen_height() == height
 
-    def test_startup_no_existing_image(self, concrete_viewer):
-        """Test startup method when no existing image."""
-        with patch(
-            "roon_display.viewers.base.get_current_image_key", return_value=None
-        ):
-            # Should not call update when no existing image
-            concrete_viewer.startup()
-            assert len(concrete_viewer.update_calls) == 0
-
-    def test_startup_existing_image_no_file(self, concrete_viewer, temp_dir):
-        """Test startup method with existing image key but no file."""
-        image_key = "test_image_123"
-
-        with patch(
-            "roon_display.viewers.base.get_current_image_key", return_value=image_key
-        ), patch(
-            "roon_display.viewers.base.get_saved_image_dir",
-            return_value=temp_dir / "album_art",
-        ):
-            # Should not call update when file doesn't exist
-            concrete_viewer.startup()
-            assert len(concrete_viewer.update_calls) == 0
-
-    def test_startup_existing_image_with_file(
-        self, concrete_viewer, temp_dir, sample_image
-    ):
-        """Test startup is a no-op (image loading handled by RenderCoordinator)."""
-        image_key = "test_image_456"
-        image_dir = temp_dir / "album_art"
-        image_dir.mkdir()
-        image_path = image_dir / f"album_art_{image_key}.jpg"
-        sample_image.save(image_path)
-
-        with patch(
-            "roon_display.viewers.base.get_current_image_key", return_value=image_key
-        ), patch(
-            "roon_display.viewers.base.get_saved_image_dir", return_value=image_dir
-        ):
-            concrete_viewer.startup()
-
-            # Startup is now a no-op; image loading is handled by RenderCoordinator
-            assert len(concrete_viewer.update_calls) == 0
-
-    def test_startup_handles_exceptions(self, concrete_viewer):
-        """Test that startup method handles exceptions gracefully."""
-        with patch(
-            "roon_display.viewers.base.get_current_image_key",
-            side_effect=Exception("Test error"),
-        ):
-            # Should not raise exception
-            concrete_viewer.startup()
-            assert len(concrete_viewer.update_calls) == 0
+    def test_startup_is_noop(self, concrete_viewer):
+        """Test startup is a no-op — image loading is handled by RenderCoordinator."""
+        concrete_viewer.startup()
+        assert len(concrete_viewer.update_calls) == 0
 
 
 class TestEinkViewer:
@@ -146,7 +98,7 @@ class TestEinkViewer:
         image_key = "test_key_123"
         title = "Test Song"
 
-        eink_viewer.display_image(image_key, None, sample_image, title)
+        eink_viewer.display_image(image_key, sample_image, title)
 
         # Verify e-ink display methods were called
         eink_viewer.epd.getbuffer.assert_called_once_with(sample_image)
@@ -160,7 +112,7 @@ class TestEinkViewer:
         image_key = "test_key_456"
         title = "Test Song"
 
-        eink_viewer.display_image(image_key, None, sample_image, title)
+        eink_viewer.display_image(image_key, sample_image, title)
 
         mock_set_key.assert_called_once_with(image_key)
 
@@ -169,15 +121,14 @@ class TestEinkViewer:
         eink_viewer.epd.display.side_effect = Exception("Display error")
 
         # Should not raise exception
-        eink_viewer.display_image("test_key", None, sample_image, "Test Song")
+        eink_viewer.display_image("test_key", sample_image, "Test Song")
 
     def test_update_with_provided_image(self, eink_viewer, sample_image):
         """Test update method with image provided."""
         image_key = "test_key_789"
-        image_path = "/fake/path/image.jpg"
         title = "Test Song"
 
-        eink_viewer.update(image_key, image_path, sample_image, title)
+        eink_viewer.update(image_key, sample_image, title)
 
         # Should start update thread
         assert eink_viewer.update_thread is not None
@@ -187,34 +138,17 @@ class TestEinkViewer:
         # Clean up thread
         eink_viewer.update_thread.join(timeout=1)
 
-    def test_update_loads_image_when_none_provided(
-        self, eink_viewer, temp_dir, sample_image
-    ):
-        """Test update method loads image when none provided."""
-        image_path = temp_dir / "test_image.jpg"
-        sample_image.save(image_path)
+    def test_update_handles_none_image(self, eink_viewer):
+        """Test update method returns early when no image provided."""
+        eink_viewer.update("test_key", None, "Test Song")
 
-        eink_viewer.update("test_key", image_path, None, "Test Song")
-
-        # Should start update thread
-        assert eink_viewer.update_thread is not None
-
-        # Clean up thread
-        eink_viewer.update_thread.join(timeout=1)
-
-    def test_update_handles_missing_image(self, eink_viewer, temp_dir):
-        """Test update method handles missing image file."""
-        image_path = temp_dir / "nonexistent.jpg"
-
-        eink_viewer.update("test_key", image_path, None, "Test Song")
-
-        # Should not start thread for missing image
-        # Note: This depends on the image_processor.fetch_image returning None
+        # Should not start thread when image is None
+        assert eink_viewer.update_thread is None
 
     def test_update_stops_previous_thread(self, eink_viewer, sample_image):
         """Test that update waits for previous thread when partial_refresh is False."""
         # Start first update
-        eink_viewer.update("key1", "/path1", sample_image, "Song 1")
+        eink_viewer.update("key1", sample_image, "Song 1")
         first_thread = eink_viewer.update_thread
 
         # Verify initial state and first thread exists
@@ -222,7 +156,7 @@ class TestEinkViewer:
         assert first_thread is not None, "First update should create a thread"
 
         # Start second update - with partial_refresh=False, should NOT set stop flag
-        eink_viewer.update("key2", "/path2", sample_image, "Song 2")
+        eink_viewer.update("key2", sample_image, "Song 2")
 
         # Should NOT set stop flag with partial_refresh=False
 
@@ -238,7 +172,7 @@ class TestEinkViewer:
 
         # Start multiple updates rapidly
         for i in range(5):
-            eink_viewer.update(f"key_{i}", f"/path_{i}", sample_image, f"Song {i}")
+            eink_viewer.update(f"key_{i}", sample_image, f"Song {i}")
             if eink_viewer.update_thread:
                 threads.append(eink_viewer.update_thread)
 
@@ -271,7 +205,7 @@ class TestEinkViewer:
         # Start multiple rapid updates
         threads = []
         for i in range(3):
-            eink_viewer.update(f"key_{i}", f"/path_{i}", sample_image, f"Song {i}")
+            eink_viewer.update(f"key_{i}", sample_image, f"Song {i}")
             if eink_viewer.update_thread:
                 threads.append(eink_viewer.update_thread)
 
@@ -289,9 +223,7 @@ class TestEinkViewer:
         # (no side_effect override needed — default mock is already "fast")
 
         with caplog.at_level(logging.ERROR):
-            eink_viewer.update(
-                "fast_key", "/fast/path", sample_image, "Fast Render Test"
-            )
+            eink_viewer.update("fast_key", sample_image, "Fast Render Test")
 
             # Wait for thread to complete
             if eink_viewer.update_thread:
@@ -315,9 +247,7 @@ class TestEinkViewer:
         # Set threshold very low so the mock display (0.01s) counts as "normal"
         eink_viewer.config_manager.set_eink_success_threshold("0.001")
         with caplog.at_level(logging.ERROR):
-            eink_viewer.update(
-                "normal_key", "/normal/path", sample_image, "Normal Render Test"
-            )
+            eink_viewer.update("normal_key", sample_image, "Normal Render Test")
 
             # Wait for thread to complete
             if eink_viewer.update_thread:
@@ -417,86 +347,62 @@ class TestTkViewer:
         # No image update should occur
         assert tk_viewer.pending_image_data is None
 
-    def test_check_pending_updates_with_pending(self, tk_viewer):
+    def test_check_pending_updates_with_pending(self, tk_viewer, sample_image):
         """Test check_pending_updates with pending image data."""
-        tk_viewer.pending_image_data = ("test_key", "/test/path", None, "Test Song")
+        tk_viewer.pending_image_data = ("test_key", sample_image, "Test Song")
 
         with patch.object(tk_viewer, "display_image") as mock_display:
             tk_viewer.check_pending_updates()
 
-            mock_display.assert_called_once_with(
-                "test_key", "/test/path", None, "Test Song"
-            )
+            mock_display.assert_called_once_with("test_key", sample_image, "Test Song")
             assert tk_viewer.pending_image_data is None
 
-    def test_display_image_success(self, tk_viewer, temp_dir, sample_image):
+    def test_display_image_success(self, tk_viewer, sample_image):
         """Test successful image display."""
-        image_path = temp_dir / "test_image.jpg"
-        sample_image.save(image_path)
-
         with patch("PIL.ImageTk.PhotoImage") as mock_photo, patch(
             "roon_display.utils.set_current_image_key"
         ) as mock_set_key:
             mock_photo_instance = Mock()
             mock_photo.return_value = mock_photo_instance
 
-            tk_viewer.display_image("test_key", image_path, None, "Test Song")
+            tk_viewer.display_image("test_key", sample_image, "Test Song")
 
             # Verify PhotoImage creation and label update
             mock_photo.assert_called_once()
             tk_viewer.label.configure.assert_called_with(image=mock_photo_instance)
             mock_set_key.assert_called_once_with("test_key")
 
-    def test_display_image_missing_file(self, tk_viewer, temp_dir):
-        """Test display_image with missing file."""
-        image_path = temp_dir / "nonexistent.jpg"
+    def test_display_image_none_image(self, tk_viewer):
+        """Test display_image with no image returns early."""
+        tk_viewer.display_image("test_key", None, "Test Song")
 
-        # Should handle gracefully and not crash
-        tk_viewer.display_image("test_key", image_path, None, "Test Song")
+        # Should not attempt to create PhotoImage
+        tk_viewer.label.configure.assert_not_called()
 
-    def test_display_image_error_handling(self, tk_viewer, temp_dir, sample_image):
+    def test_display_image_error_handling(self, tk_viewer, sample_image):
         """Test error handling in display_image."""
-        image_path = temp_dir / "test_image.jpg"
-        sample_image.save(image_path)
-
         with patch("PIL.ImageTk.PhotoImage", side_effect=Exception("ImageTk error")):
             # Should not raise exception
-            tk_viewer.display_image("test_key", image_path, None, "Test Song")
+            tk_viewer.display_image("test_key", sample_image, "Test Song")
 
     def test_update_sets_pending_data(self, tk_viewer, sample_image):
         """Test that update sets pending image data."""
         image_key = "test_key_update"
-        image_path = "/test/path/image.jpg"
         title = "Test Song Update"
 
-        tk_viewer.update(image_key, image_path, sample_image, title)
+        tk_viewer.update(image_key, sample_image, title)
 
-        assert tk_viewer.pending_image_data == (
-            image_key,
-            image_path,
-            sample_image,
-            title,
-        )
+        assert tk_viewer.pending_image_data == (image_key, sample_image, title)
 
     def test_update_overwrites_pending_data(self, tk_viewer, sample_image):
         """Test that new update overwrites pending data."""
         # Set initial pending data
-        tk_viewer.update("key1", "/path1", sample_image, "Song 1")
-        assert tk_viewer.pending_image_data == (
-            "key1",
-            "/path1",
-            sample_image,
-            "Song 1",
-        )
+        tk_viewer.update("key1", sample_image, "Song 1")
+        assert tk_viewer.pending_image_data == ("key1", sample_image, "Song 1")
 
         # Update with new data
-        tk_viewer.update("key2", "/path2", sample_image, "Song 2")
-        assert tk_viewer.pending_image_data == (
-            "key2",
-            "/path2",
-            sample_image,
-            "Song 2",
-        )
+        tk_viewer.update("key2", sample_image, "Song 2")
+        assert tk_viewer.pending_image_data == ("key2", sample_image, "Song 2")
 
     def test_window_event_handlers(self, config_manager, mock_tk_root, mock_tk_label):
         """Test that window event handlers are set up correctly."""
@@ -521,25 +427,22 @@ class TestTkViewer:
             ]
             assert len(protocol_calls) > 0
 
-    def test_image_reference_handling(self, tk_viewer, temp_dir, sample_image):
+    def test_image_reference_handling(self, tk_viewer, sample_image):
         """Test that image references are properly maintained for GC."""
-        image_path = temp_dir / "test_image.jpg"
-        sample_image.save(image_path)
-
         with patch("PIL.ImageTk.PhotoImage") as mock_photo:
             mock_photo_instance = Mock()
             mock_photo.return_value = mock_photo_instance
 
-            tk_viewer.display_image("test_key", image_path, None, "Test Song")
+            tk_viewer.display_image("test_key", sample_image, "Test Song")
 
             # Verify that image reference is stored to prevent GC
             assert hasattr(tk_viewer.label, "image")
             assert tk_viewer.label.image == mock_photo_instance
 
     @patch("roon_display.viewers.tk_viewer.logger")
-    def test_logging_on_successful_update(self, mock_logger, tk_viewer):
+    def test_logging_on_successful_update(self, mock_logger, tk_viewer, sample_image):
         """Test that successful updates are logged."""
-        tk_viewer.pending_image_data = ("test_key", "/test/path", None, "Test Song")
+        tk_viewer.pending_image_data = ("test_key", sample_image, "Test Song")
 
         with patch.object(tk_viewer, "display_image"):
             tk_viewer.check_pending_updates()
@@ -568,7 +471,7 @@ class TestTkViewer:
             viewer = EinkViewer(config_manager, mock_eink_module)
             viewer.startup = Mock()
 
-            viewer.update("key1", "/path1", sample_image, "Song 1")
+            viewer.update("key1", sample_image, "Song 1")
 
             # Should start an update thread
             assert viewer.update_thread is not None

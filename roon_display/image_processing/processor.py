@@ -5,7 +5,7 @@ from __future__ import annotations
 import logging
 import os
 from pathlib import Path
-from typing import TYPE_CHECKING, Any, Optional
+from typing import TYPE_CHECKING, Any, Dict, Optional
 
 from PIL import Image, ImageEnhance
 
@@ -76,6 +76,94 @@ class ImageProcessor:
             except OSError:
                 pass
             raise FileNotFoundError(f"Could not load image: {e}")
+
+    def prepare(
+        self,
+        img: Optional[Image.Image],
+        image_path: Optional[Any],
+        overrides: Optional[Dict[str, Any]] = None,
+    ) -> Optional[Image.Image]:
+        """Load (if needed) and produce a display-ready canvas.
+
+        Single entry point for turning raw album art into a fully-processed,
+        screen-sized image.  Pass either a PIL Image or a file path; loading,
+        scaling, rotation, enhancements, and canvas composition all happen here.
+
+        Args:
+            img: Pre-loaded PIL Image, or None to load from image_path.
+            image_path: Path to load from when img is None.
+            overrides: Optional config overrides (e.g. from the web preview).
+
+        Returns:
+            A display-ready PIL Image at screen dimensions, or None on failure.
+        """
+        if img is None:
+            if image_path is None:
+                logger.error("prepare(): no image or path provided")
+                return None
+            img = self.fetch_image(image_path)
+            if img is None:
+                return None
+
+        screen_width = self.config_manager.get_config(overrides, "screen_width")
+        screen_height = self.config_manager.get_config(overrides, "screen_height")
+        scale_x = self.config_manager.get_config(overrides, "scale_x")
+        scale_y = self.config_manager.get_config(overrides, "scale_y")
+        rotation = str(self.config_manager.get_config(overrides, "rotation"))
+        offset_x = self.config_manager.get_config(overrides, "image_offset_x")
+        offset_y = self.config_manager.get_config(overrides, "image_offset_y")
+        color_enhance = self.config_manager.get_config(overrides, "color_enhance")
+        contrast = self.config_manager.get_config(overrides, "contrast")
+        brightness = self.config_manager.get_config(overrides, "brightness")
+        sharpness = self.config_manager.get_config(overrides, "sharpness")
+
+        canvas = Image.new("RGB", (screen_width, screen_height), "white")
+
+        # Fit source image into a square of min(screen_width, screen_height)
+        original_width, original_height = img.size
+        canvas_size = min(screen_width, screen_height)
+        processed = img.copy().resize(
+            (canvas_size, canvas_size), Image.Resampling.LANCZOS
+        )
+        logger.debug(
+            f"Fitted image: {original_width}x{original_height} → {canvas_size}x{canvas_size}"
+        )
+
+        if scale_x != 1.0 or scale_y != 1.0:
+            fw, fh = processed.size
+            processed = processed.resize(
+                (int(fw * scale_x), int(fh * scale_y)), Image.Resampling.LANCZOS
+            )
+            logger.debug(f"Scaled: {fw}x{fh} → {processed.size}")
+
+        if rotation == "90":
+            processed = processed.transpose(Image.Transpose.ROTATE_90)
+        elif rotation == "180":
+            processed = processed.transpose(Image.Transpose.ROTATE_180)
+        elif rotation == "270":
+            processed = processed.transpose(Image.Transpose.ROTATE_270)
+        if rotation != "0":
+            logger.debug(f"Rotated {rotation}°: {processed.size}")
+
+        if color_enhance != 1.0:
+            processed = ImageEnhance.Color(processed).enhance(color_enhance)
+        if contrast != 1.0:
+            processed = ImageEnhance.Contrast(processed).enhance(contrast)
+        if brightness != 1.0:
+            processed = ImageEnhance.Brightness(processed).enhance(brightness)
+        if sharpness != 1.0:
+            processed = ImageEnhance.Sharpness(processed).enhance(sharpness)
+
+        iw, ih = processed.size
+        final_x = (screen_width - iw) // 2 + offset_x
+        final_y = (screen_height - ih) // 2 + offset_y
+        canvas.paste(processed, (final_x, final_y))
+
+        logger.debug(
+            f"Canvas: {screen_width}x{screen_height}, image at ({final_x},{final_y}), "
+            f"scale=({scale_x},{scale_y}), rotation={rotation}°, offset=({offset_x},{offset_y})"
+        )
+        return canvas
 
     def apply_rotation(self, img: Image.Image) -> Image.Image:
         """Apply rotation to image based on config."""

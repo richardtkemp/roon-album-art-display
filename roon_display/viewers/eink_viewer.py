@@ -58,9 +58,7 @@ class EinkViewer(BaseViewer):
         except Exception as e:
             logger.error(f"Error during e-ink cleanup: {e}")
 
-    def display_image(
-        self, image_key: str, image_path: Any, img: Any, title: str
-    ) -> None:
+    def display_image(self, image_key: str, img: Any, title: str) -> None:
         """Display an image on the e-ink display."""
         thread_id = threading.current_thread().ident
         logger.debug(f"Starting display update for {title} (thread: {thread_id})")
@@ -112,7 +110,7 @@ class EinkViewer(BaseViewer):
         self._finalize_successful_render(image_key)
 
     @log_performance(threshold=0.5, description="E-ink display update")
-    def update(self, image_key: str, image_path: Any, img: Any, title: str) -> None:
+    def update(self, image_key: str, img: Any, title: str) -> None:
         """Update the display with new image (thread-safe)."""
         update_start = time.time()
         main_thread_id = threading.current_thread().ident
@@ -121,8 +119,8 @@ class EinkViewer(BaseViewer):
             f"UPDATE START: {title} (key: {image_key}, main_thread: {main_thread_id})"
         )
 
-        img = self._load_and_process_image(img, image_path, title)
         if img is None:
+            logger.warning(f"No image provided for display: {title}")
             return
 
         previous_thread_id = None
@@ -157,7 +155,7 @@ class EinkViewer(BaseViewer):
 
         logger.debug(f"Creating new update thread for {title}")
         self.update_thread = threading.Thread(
-            target=self.display_image, args=(image_key, image_path, img, title)
+            target=self.display_image, args=(image_key, img, title)
         )
         self.update_thread.start()
 

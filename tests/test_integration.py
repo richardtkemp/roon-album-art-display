@@ -231,7 +231,7 @@ port = 9330
 
             # Test multiple rapid updates (threading scenario)
             for i in range(3):
-                viewer.update(f"key_{i}", f"/path_{i}", sample_image, f"Song {i}")
+                viewer.update(f"key_{i}", sample_image, f"Song {i}")
 
             # Last thread should be active
             if viewer.update_thread:

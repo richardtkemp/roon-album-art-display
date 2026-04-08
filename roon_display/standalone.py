@@ -63,12 +63,17 @@ def run(image_path: Path) -> None:
 
 def _run_tkinter(viewer: Any, tk_root: Any, image_path: Path) -> None:
     """Display image via TkViewer and exit when rendering is complete."""
+    img = viewer.image_processor.prepare(None, image_path)
+    if img is None:
+        logger.error(f"Failed to load image: {image_path}")
+        sys.exit(1)
+
     # Register completion callback: quit the mainloop once the image is shown.
     viewer.on_display_complete = tk_root.quit
 
     # Kick off the pending-update polling loop, then queue our image.
     viewer.check_pending_updates()
-    viewer.update("standalone", image_path, None, image_path.name)
+    viewer.update("standalone", img, image_path.name)
 
     tk_root.mainloop()
     sys.exit(0)
@@ -76,8 +81,13 @@ def _run_tkinter(viewer: Any, tk_root: Any, image_path: Path) -> None:
 
 def _run_eink(viewer: Any, image_path: Path) -> None:
     """Display image via EinkViewer and exit when rendering is complete."""
+    img = viewer.image_processor.prepare(None, image_path)
+    if img is None:
+        logger.error(f"Failed to load image: {image_path}")
+        sys.exit(1)
+
     try:
-        viewer.update("standalone", image_path, None, image_path.name)
+        viewer.update("standalone", img, image_path.name)
 
         # EinkViewer.update() spawns a thread for the hardware operation; wait for it.
         if viewer.update_thread is not None:
