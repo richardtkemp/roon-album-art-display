@@ -337,10 +337,10 @@ class AnniversaryManager:
         config_manager: ConfigManager,
     ) -> Image.Image:
         """Create anniversary display with custom border percentage."""
-        effective_width = image_processor.image_width  # type: ignore[attr-defined]
-        effective_height = image_processor.image_height  # type: ignore[attr-defined]
         full_screen_width = image_processor.screen_width
         full_screen_height = image_processor.screen_height
+        effective_width = int(full_screen_width * config_manager.get_scale_x())
+        effective_height = int(full_screen_height * config_manager.get_scale_y())
 
         canvas = Image.new("RGB", (full_screen_width, full_screen_height), "white")
 
@@ -355,10 +355,10 @@ class AnniversaryManager:
 
         offset_x = (
             full_screen_width - effective_width
-        ) // 2 + image_processor.position_offset_x  # type: ignore[attr-defined]
+        ) // 2 + config_manager.get_image_offset_x()
         offset_y = (
             full_screen_height - effective_height
-        ) // 2 + image_processor.position_offset_y  # type: ignore[attr-defined]
+        ) // 2 + config_manager.get_image_offset_y()
 
         try:
             anniversary_img: Image.Image = Image.open(image_path)
