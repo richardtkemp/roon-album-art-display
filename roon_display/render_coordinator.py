@@ -235,7 +235,7 @@ class RenderCoordinator:
             )
             return
 
-        if content_type == "last_art":
+        if img is None and image_path is not None:
             img = self.image_processor.fetch_image(image_path)
 
         # Store main content data
@@ -298,31 +298,31 @@ class RenderCoordinator:
                 return  # type: ignore[unreachable]
             self.currently_rendering = True
 
-        # Determine what to render
-        if self.main_content:
-            img = self.create_final_display_image(
-                self.main_content, self.config_manager, None
+        try:
+            # Determine what to render
+            if self.main_content:
+                img = self.create_final_display_image(
+                    self.main_content, self.config_manager, None
+                )
+            elif self.overlay_content:
+                # No main content — render overlay as full-screen message
+                img = self.message_renderer.create_text_message(
+                    self.overlay_content["message"]
+                )
+            else:
+                logger.warning("No content to render")
+                return
+
+            logger.debug(f"Rendering display content: {self.main_content}")
+            self.viewer.update(
+                self.main_content["image_key"] if self.main_content else None,
+                None,
+                img,
+                self.main_content["track_info"] if self.main_content else None,
             )
-        elif self.overlay_content:
-            # No main content — render overlay as full-screen message
-            img = self.message_renderer.create_text_message(
-                self.overlay_content["message"]
-            )
-        else:
-            logger.warning("No content to render")
+        finally:
             with self.render_lock:
                 self.currently_rendering = False
-            return
-
-        logger.debug(f"Rendering display content: {self.main_content}")
-        self.viewer.update(
-            self.main_content["image_key"] if self.main_content else None,
-            None,
-            img,
-            self.main_content["track_info"] if self.main_content else None,
-        )
-        with self.render_lock:
-            self.currently_rendering = False
 
     def force_refresh(self) -> None:
         """Force a re-render of the current display content with updated config values."""

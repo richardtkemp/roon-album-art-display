@@ -70,8 +70,12 @@ class BaseViewer(ABC):
                 logger.warning(f"Could not load image for display: {image_path}")
                 return None
 
-        img = self.image_processor.apply_enhancements(img)
-        img = self.image_processor.process_image_position(img)
+            # Only apply processing when loading from file (standalone mode).
+            # When img is provided by the render coordinator it has already been
+            # fully processed by create_final_display_image(); re-applying here
+            # would double-apply rotation, scaling, and enhancements.
+            img = self.image_processor.apply_enhancements(img)
+            img = self.image_processor.process_image_position(img)
 
         return img
 

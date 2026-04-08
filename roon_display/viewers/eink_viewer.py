@@ -65,6 +65,14 @@ class EinkViewer(BaseViewer):
         thread_id = threading.current_thread().ident
         logger.debug(f"Starting display update for {title} (thread: {thread_id})")
 
+        # Re-initialise the display before every render. The display can enter
+        # a stuck-busy state after periods of inactivity; Init() resets the
+        # hardware (via Reset()) and re-applies register configuration, clearing
+        # the BUSY pin reliably. This is the same sequence that standalone mode
+        # runs implicitly by constructing a fresh EinkViewer.
+        logger.info(f"Re-initialising display before render for {title}")
+        self.epd.Init()
+
         start_time = time.time()
 
         try:
