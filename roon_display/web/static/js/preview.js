@@ -21,20 +21,34 @@ function updateDisplayImage() {
     }
 }
 
+const ROON_STATE_LABELS = {
+    'searching':    'Searching for Roon...',
+    'connecting':   'Connecting to Roon...',
+    'connected':    'Connected to Roon',
+    'disconnected': 'Roon disconnected',
+};
+
 function updateDisplayMetadata() {
     fetch('/display-status')
         .then(response => response.json())
         .then(data => {
             const metadataEl = document.getElementById('display-metadata');
             const connectionEl = document.getElementById('display-connection-status');
+            const roonStatusEl = document.getElementById('roon-status');
 
-            // Update connection status
+            // Update connection dot (internal app reachability)
             if (data.internal_app_connected) {
                 connectionEl.className = 'status-indicator connected';
                 connectionEl.title = 'Connected to display app';
             } else {
                 connectionEl.className = 'status-indicator disconnected';
                 connectionEl.title = 'Display app not connected';
+            }
+
+            // Update Roon connection status heading
+            if (roonStatusEl) {
+                const label = ROON_STATE_LABELS[data.roon_state] || 'Connecting...';
+                roonStatusEl.textContent = label;
             }
 
             // Update metadata

@@ -24,9 +24,14 @@ class InternalServer:
         """Initialize internal server."""
         self.render_coordinator = render_coordinator
         self.config_manager = config_manager
+        self.roon_client: Any = None
         self.app = Flask(__name__)
         self.app.logger.setLevel(logging.WARNING)
         self.setup_routes()
+
+    def set_roon_client(self, roon_client: Any) -> None:
+        """Register the Roon client so its connection state can be exposed."""
+        self.roon_client = roon_client
 
     def setup_routes(self) -> None:
         """Setup internal API routes."""
@@ -52,6 +57,11 @@ class InternalServer:
             """Return current display status metadata."""
             try:
                 image, metadata = self.render_coordinator.get_current_rendered_image()
+                roon_state = (
+                    self.roon_client.connection_state
+                    if self.roon_client
+                    else "disconnected"
+                )
                 return jsonify(
                     {
                         "has_image": image is not None,
@@ -61,6 +71,7 @@ class InternalServer:
                         "track_info": metadata.get("track_info"),
                         "has_overlay": metadata.get("has_overlay", False),
                         "image_size": [image.width, image.height] if image else None,
+                        "roon_state": roon_state,
                     }
                 )
             except Exception as e:

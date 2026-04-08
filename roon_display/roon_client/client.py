@@ -70,6 +70,9 @@ class RoonClient:
 
         # Connection state tracking (combines auth + connection)
         self._is_connected = False
+        self.connection_state: str = (
+            "disconnected"  # searching/connecting/connected/disconnected
+        )
 
         logger.info(f"Allowed zones: {self.allowed_zones}")
         logger.info(f"Forbidden zones: {self.forbidden_zones}")
@@ -135,6 +138,7 @@ class RoonClient:
 
     def _discover_server(self) -> Any:
         """Discover Roon server on network."""
+        self.connection_state = "searching"
         discover = RoonDiscovery(None)
 
         # Wait for server discovery
@@ -181,6 +185,7 @@ class RoonClient:
             logger.info(
                 f"Creating RoonApi with server {server_ip}:{server_port} (extension must be approved in Roon app)"
             )
+            self.connection_state = "connecting"
             api = RoonApi(self.app_info, token, server_ip, server_port)
             logger.debug("RoonApi created successfully")
 
@@ -273,6 +278,7 @@ class RoonClient:
             if not self.is_connected:
                 logger.info("Received zone callback - connection restored")
                 self.is_connected = True
+                self.connection_state = "connected"
 
                 # Clear any overlay errors when connection is restored
                 if self.render_coordinator:
@@ -626,6 +632,7 @@ class RoonClient:
         # Set disconnected state for reconnection attempts
         if self.is_connected:
             self.is_connected = False
+            self.connection_state = "disconnected"
             self.last_reconnect_attempt = time.time()
 
         if failure_type == "auth_revoked":

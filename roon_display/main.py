@@ -118,6 +118,7 @@ def main() -> None:
             viewer.image_processor,
             render_coordinator,
         )
+        internal_server.set_roon_client(roon_client)
 
         # Load any existing image on startup through coordinator
         from .utils import get_current_image_key, get_saved_image_dir
