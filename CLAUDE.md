@@ -20,7 +20,7 @@ This is a Python application that displays full-screen album art from a Roon mus
 
 ## Current Development Status
 
-### Test Suite (200 tests passing)
+### Test Suite (196 tests passing)
 | File | Tests |
 |---|---|
 | test_utils.py | 10 |
@@ -28,7 +28,7 @@ This is a Python application that displays full-screen album art from a Roon mus
 | test_image_processor.py | 29 |
 | test_time_utils.py | 17 |
 | test_health.py | 16 |
-| test_viewers.py | 34 |
+| test_viewers.py | 30 |
 | test_roon_client.py | 41 |
 | test_main.py | 15 |
 | test_integration.py | 11 |
@@ -81,7 +81,6 @@ roon_display/                 # Main package
 - **`libs/epd13in3E.py` `Clear()` is incomplete**: writes data then calls `writePower(True)` only — never issues DRF (display refresh) or powers off. The display is left powered-on with stale image. The screentest version (`libs/screentest/epd13in3E.py`) correctly calls `TurnOnDisplay()` after writing. The main driver needs the same fix.
 
 ## Important TODOs
-- [ ] Validate all quality checks pass
 - [ ] Performance testing on Raspberry Pi
 
 ## Development Workflow
@@ -103,3 +102,14 @@ roon_display/                 # Main package
 - Environment detection works across Mac/Linux/Windows
 - Pre-commit hooks enforce quality standards
 - Type hints are comprehensive throughout
+
+## Key Architectural Patterns
+
+### Image processing pipeline
+`ImageProcessor.prepare(img, image_path, overrides=None)` is the single entry point for all image processing — load, scale, rotate, enhance, composite onto canvas. Viewers receive a fully-processed `PIL.Image` and are pure display devices; they do not load or process images themselves.
+
+### Render coordination
+`RenderCoordinator._render_display()` uses `render_lock.acquire(blocking=False)` + a `_render_pending` dirty flag. Concurrent calls set the flag and return; the running render loops until the flag is clear, so no track change is silently dropped.
+
+### E-ink BUSY pin
+`ReadBusyH` in `libs/epd13in3E.py` raises `TimeoutError` after 60s if the BUSY pin stays LOW. `EinkViewer.display_image` catches it and reports to the health monitor. `epd.Init()` (which calls `Reset()`) is called before every render to clear any stuck-busy state from the previous render powering off.
