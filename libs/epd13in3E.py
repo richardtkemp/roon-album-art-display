@@ -316,7 +316,7 @@ class EPD():
             self.SendData2([color]* int(self.width/2), int(self.width/2))
         self.CS_ALL(1)
 
-        self.writePower(True, "Clear")
+        self.updateDisplay("Clear")
 
     def display(self, image, title):
         Width  = int(self.width / 4)
