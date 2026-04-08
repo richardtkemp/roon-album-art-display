@@ -5,10 +5,13 @@ Usage:
     python -m roon_display.main --image /path/to/images/
 """
 
+from __future__ import annotations
+
 import logging
 import random
 import sys
 from pathlib import Path
+from typing import Any
 
 logger = logging.getLogger(__name__)
 
@@ -58,7 +61,7 @@ def run(image_path: Path) -> None:
         _run_eink(viewer, image_path)
 
 
-def _run_tkinter(viewer, tk_root, image_path: Path) -> None:
+def _run_tkinter(viewer: Any, tk_root: Any, image_path: Path) -> None:
     """Display image via TkViewer and exit when rendering is complete."""
     # Register completion callback: quit the mainloop once the image is shown.
     viewer.on_display_complete = tk_root.quit
@@ -71,7 +74,7 @@ def _run_tkinter(viewer, tk_root, image_path: Path) -> None:
     sys.exit(0)
 
 
-def _run_eink(viewer, image_path: Path) -> None:
+def _run_eink(viewer: Any, image_path: Path) -> None:
     """Display image via EinkViewer and exit when rendering is complete."""
     try:
         viewer.update("standalone", image_path, None, image_path.name)

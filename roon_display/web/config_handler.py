@@ -7,12 +7,12 @@ import platform
 import socket
 import subprocess
 from pathlib import Path
-from typing import Any, Dict, List, Tuple
+from typing import Any, Dict, List, Optional, Tuple
 
 import psutil
 from werkzeug.utils import secure_filename
 
-from ..config.config_manager import CONFIG_SCHEMA, COMPONENT_LOGGERS, ConfigManager
+from ..config.config_manager import COMPONENT_LOGGERS, CONFIG_SCHEMA, ConfigManager
 from ..utils import ensure_anniversary_dir_exists
 from .utils import validate_image_format
 
@@ -22,14 +22,14 @@ logger = logging.getLogger(__name__)
 class WebConfigHandler:
     """Handles configuration loading, saving, and validation for the web interface."""
 
-    def __init__(self, config_path=None):
+    def __init__(self, config_path: Optional[Path] = None) -> None:
         """Initialize with optional config path."""
         self.config_path = config_path or Path("roon.cfg")
         self.config_manager = ConfigManager(self.config_path)
 
     def get_config_sections(self) -> Dict[str, Dict[str, Any]]:
         """Get configuration sections with metadata for dynamic rendering."""
-        sections = {}
+        sections: Dict[str, Any] = {}
 
         # Build sections with current values from CONFIG_SCHEMA
         for section_name, schema_fields in CONFIG_SCHEMA.items():
@@ -142,17 +142,17 @@ class WebConfigHandler:
     def get_system_info(self) -> Dict[str, Dict[str, Any]]:
         """Get read-only system information for display."""
 
-        def get_host_ip():
+        def get_host_ip() -> str:
             """Get the primary host IP address."""
             try:
                 # Connect to a remote address to determine local IP
                 with socket.socket(socket.AF_INET, socket.SOCK_DGRAM) as s:
                     s.connect(("8.8.8.8", 80))
-                    return s.getsockname()[0]
+                    return str(s.getsockname()[0])
             except Exception:
                 return "Unknown"
 
-        def get_wifi_ssid():
+        def get_wifi_ssid() -> str:
             """Get the current WiFi SSID."""
             try:
                 if platform.system() == "Darwin":  # macOS
@@ -184,7 +184,7 @@ class WebConfigHandler:
             except Exception:
                 return "Unknown"
 
-        def get_uptime():
+        def get_uptime() -> str:
             """Get system uptime."""
             try:
                 uptime_seconds = psutil.boot_time()
@@ -198,7 +198,7 @@ class WebConfigHandler:
             except Exception:
                 return "Unknown"
 
-        def get_memory_usage():
+        def get_memory_usage() -> str:
             """Get memory usage percentage."""
             try:
                 memory = psutil.virtual_memory()
@@ -207,7 +207,7 @@ class WebConfigHandler:
             except Exception:
                 return "Unknown"
 
-        def get_disk_usage():
+        def get_disk_usage() -> str:
             """Get root disk usage percentage."""
             try:
                 disk = psutil.disk_usage("/")
@@ -262,7 +262,7 @@ class WebConfigHandler:
         return system_info
 
     def save_config(
-        self, form_data: Dict[str, str], files: Dict[str, Any]
+        self, form_data: Dict[str, str], files: Any
     ) -> Tuple[bool, List[str], Dict[str, str]]:
         """Save configuration from form data and handle image uploads.
 

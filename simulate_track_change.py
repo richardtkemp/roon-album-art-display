@@ -16,7 +16,7 @@ from pathlib import Path
 # Add the project root to the path so we can import our modules
 sys.path.insert(0, str(Path(__file__).parent))
 
-from roon_display.simulation import send_simulation_trigger
+from roon_display.simulation import send_simulation_trigger  # noqa: E402
 
 
 def main():

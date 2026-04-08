@@ -1,9 +1,11 @@
 """Main Flask application for Roon Display web configuration."""
 
+from __future__ import annotations
+
 import io
 import logging
 from pathlib import Path
-from typing import Any, Dict
+from typing import Any, Dict, List, Optional, Tuple, cast
 
 import requests
 from flask import (
@@ -33,20 +35,20 @@ logger = logging.getLogger(__name__)
 class InternalAppClient:
     """HTTP client for communication with the main Roon display app."""
 
-    def __init__(self, config_manager):
+    def __init__(self, config_manager: Any) -> None:
         """Initialize client with config manager."""
         self.config_manager = config_manager
         host = config_manager.get_internal_server_host()
         port = config_manager.get_internal_server_port()
         self.base_url = f"http://{host}:{port}"
 
-    def get_current_image(self) -> bytes:
+    def get_current_image(self) -> Optional[bytes]:
         """Get current display image from main app."""
         try:
             timeout = self.config_manager.get_web_request_timeout()
             response = requests.get(f"{self.base_url}/current-image", timeout=timeout)
             if response.status_code == 200:
-                return response.content
+                return cast(bytes, response.content)
             else:
                 logger.warning(
                     f"Failed to get current image: HTTP {response.status_code}"
@@ -62,7 +64,7 @@ class InternalAppClient:
             timeout = self.config_manager.get_web_request_timeout()
             response = requests.get(f"{self.base_url}/current-status", timeout=timeout)
             if response.status_code == 200:
-                return response.json()
+                return dict(response.json())
             else:
                 logger.warning(
                     f"Failed to get current status: HTTP {response.status_code}"
@@ -72,7 +74,7 @@ class InternalAppClient:
             logger.debug(f"Failed to get current status: {e}")
             return {}
 
-    def generate_preview(self, config_data: Dict) -> bytes:
+    def generate_preview(self, config_data: Dict[str, Any]) -> Optional[bytes]:
         """Generate preview image with config changes."""
         try:
             response = requests.post(
@@ -81,7 +83,7 @@ class InternalAppClient:
                 timeout=self.config_manager.get_web_request_timeout() * 2,
             )
             if response.status_code == 200:
-                return response.content
+                return cast(bytes, response.content)
             else:
                 logger.warning(
                     f"Failed to generate preview: HTTP {response.status_code}"
@@ -96,7 +98,7 @@ class InternalAppClient:
         try:
             timeout = max(2, self.config_manager.get_web_request_timeout() // 2)
             response = requests.get(f"{self.base_url}/health", timeout=timeout)
-            return response.status_code == 200
+            return bool(response.status_code == 200)
         except requests.RequestException:
             return False
 
@@ -108,7 +110,7 @@ class InternalAppClient:
                 f"{self.base_url}/update-config", json=config_updates, timeout=timeout
             )
             if response.status_code == 200:
-                return response.json()
+                return dict(response.json())
             else:
                 logger.warning(f"Failed to update config: HTTP {response.status_code}")
                 return {"success": False, "error": f"HTTP {response.status_code}"}
@@ -133,29 +135,33 @@ class InternalAppClient:
             return {"success": False, "error": str(e)}
 
 
-def create_app(config_path=None, port=None):
+def create_app(config_path: Optional[str] = None, port: Optional[int] = None) -> Flask:
     """Create and configure the Flask application."""
     app = Flask(__name__, template_folder="templates", static_folder="static")
     app.secret_key = "roon-display-config-key"
 
     # Initialize configuration handler
-    config_handler = WebConfigHandler(config_path)
+    config_handler = WebConfigHandler(Path(config_path) if config_path else None)
     internal_client = InternalAppClient(config_handler.config_manager)
 
     # Store instances for route access
     app.config["config_handler"] = config_handler
     app.config["internal_client"] = internal_client
 
-    def _process_config_save(form_data, files):
+    def _process_config_save(
+        form_data: Any, files: Any
+    ) -> Tuple[bool, str, List[str], bool]:
         """Common function to process configuration save."""
-        success, error_messages, config_updates = config_handler.save_config(form_data, files)
-        
+        success, error_messages, config_updates = config_handler.save_config(
+            form_data, files
+        )
+
         message = ""
         live_update_success = False
-        
+
         if success:
             message = "Configuration updated successfully!"
-            
+
             # Send config updates to main process for immediate effect
             if config_updates:
                 update_result = internal_client.update_config(config_updates)
@@ -163,21 +169,27 @@ def create_app(config_path=None, port=None):
                     message = f'Configuration saved but live update failed: {update_result.get("error", "Unknown error")}'
                     logger.warning(f"Live config update failed: {update_result}")
                 else:
-                    logger.info(f"Live config update successful: {update_result.get('updated_keys', [])}")
+                    logger.info(
+                        f"Live config update successful: {update_result.get('updated_keys', [])}"
+                    )
                     live_update_success = True
-                    
+
                     # Trigger display refresh after successful config update
                     refresh_result = internal_client.force_refresh()
                     if refresh_result.get("success"):
                         logger.info("Display refresh triggered successfully")
                     else:
-                        logger.warning(f"Display refresh failed: {refresh_result.get('error', 'Unknown error')}")
+                        logger.warning(
+                            f"Display refresh failed: {refresh_result.get('error', 'Unknown error')}"
+                        )
             else:
                 message = "Configuration saved successfully!"
-                
+
         return success, message, error_messages, live_update_success
 
-    def _handle_ajax_response(success, message, error_messages):
+    def _handle_ajax_response(
+        success: bool, message: str, error_messages: List[str]
+    ) -> Any:
         """Common function to handle AJAX responses."""
         if success:
             # Include any image upload warnings in the message
@@ -191,13 +203,15 @@ def create_app(config_path=None, port=None):
                 error_text = "; ".join([error_text] + error_messages)
             return jsonify({"success": False, "message": error_text})
 
-    def _handle_traditional_response(success, message, error_messages, form_data):
+    def _handle_traditional_response(
+        success: bool, message: str, error_messages: List[str], form_data: Any
+    ) -> Any:
         """Common function to handle traditional form responses."""
         if success:
             flash(message, "success")
         else:
             flash("Error saving configuration!", "error")
-            
+
         # Show any image upload warnings/errors
         for error_msg in error_messages:
             flash(error_msg, "error")
@@ -205,25 +219,29 @@ def create_app(config_path=None, port=None):
         # Store current tab and scroll position for redirect
         current_tab = form_data.get("current_tab", "Image")
         scroll_position = form_data.get("scroll_position", "0")
-        return redirect(url_for("config_interface", tab=current_tab, scroll=scroll_position))
+        return redirect(
+            url_for("config_interface", tab=current_tab, scroll=scroll_position)
+        )
 
-    @app.route("/", methods=["GET", "POST"])
-    def config_interface():
+    @app.route("/", methods=["GET", "POST"])  # type: ignore[misc]
+    def config_interface() -> Any:
         """Main configuration interface."""
         if request.method == "POST":
             # Check if this is an AJAX request
             is_ajax = request.headers.get("X-Requested-With") == "XMLHttpRequest"
 
             # Process the configuration save using common function
-            success, message, error_messages, live_update_success = _process_config_save(
-                request.form, request.files
+            success, message, error_messages, live_update_success = (
+                _process_config_save(request.form, request.files)
             )
 
             # Handle response based on request type
             if is_ajax:
                 return _handle_ajax_response(success, message, error_messages)
             else:
-                return _handle_traditional_response(success, message, error_messages, request.form)
+                return _handle_traditional_response(
+                    success, message, error_messages, request.form
+                )
 
         # GET request - show form
         sections = config_handler.get_config_sections()
@@ -292,8 +310,8 @@ def create_app(config_path=None, port=None):
             * 1000,  # Convert to milliseconds
         )
 
-    @app.route("/thumbnail/<anniversary_name>/<filename>")
-    def serve_thumbnail(anniversary_name, filename):
+    @app.route("/thumbnail/<anniversary_name>/<filename>")  # type: ignore[misc]
+    def serve_thumbnail(anniversary_name: str, filename: str) -> Any:
         """Serve thumbnail images for anniversary photos."""
         try:
             # Validate the anniversary name and filename for security
@@ -329,8 +347,8 @@ def create_app(config_path=None, port=None):
             logger.error(f"Error serving thumbnail {anniversary_name}/{filename}: {e}")
             return "Internal server error", 500
 
-    @app.route("/delete-image", methods=["POST"])
-    def delete_image():
+    @app.route("/delete-image", methods=["POST"])  # type: ignore[misc]
+    def delete_image() -> Any:
         """Delete an anniversary image."""
         try:
             data = request.get_json()
@@ -361,8 +379,8 @@ def create_app(config_path=None, port=None):
             logger.error(f"Error in delete image endpoint: {e}")
             return jsonify({"success": False, "error": str(e)})
 
-    @app.route("/display-status")
-    def display_status():
+    @app.route("/display-status")  # type: ignore[misc]
+    def display_status() -> Any:
         """Get current display status from main app."""
         try:
             status_data = internal_client.get_current_status()
@@ -381,8 +399,8 @@ def create_app(config_path=None, port=None):
                 }
             )
 
-    @app.route("/current-display-image")
-    def serve_current_display_image():
+    @app.route("/current-display-image")  # type: ignore[misc]
+    def serve_current_display_image() -> Any:
         """Proxy current display image from main app."""
         try:
             image_data = internal_client.get_current_image()
@@ -413,8 +431,8 @@ def create_app(config_path=None, port=None):
             else:
                 return jsonify({"error": "No image available"}), 404
 
-    @app.route("/preview-image", methods=["POST"])
-    def generate_preview_image():
+    @app.route("/preview-image", methods=["POST"])  # type: ignore[misc]
+    def generate_preview_image() -> Any:
         """Generate preview image with form changes."""
         try:
             # Parse form data into config format, excluding file uploads for now
@@ -433,7 +451,7 @@ def create_app(config_path=None, port=None):
             logger.error(f"Error generating preview: {e}")
             return jsonify({"error": str(e)}), 500
 
-    def _parse_form_to_config_for_preview(form_data, files) -> Dict[str, Any]:
+    def _parse_form_to_config_for_preview(form_data: Any, files: Any) -> Dict[str, Any]:
         """Parse form data for preview generation, excluding non-serializable file objects."""
         config = {}
 
@@ -480,7 +498,7 @@ def create_app(config_path=None, port=None):
     return app
 
 
-def main():
+def main() -> None:
     """Main entry point for web config server."""
     import argparse
 

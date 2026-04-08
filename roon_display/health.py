@@ -1,5 +1,7 @@
 """Health monitoring and script execution for the Roon display application."""
 
+from __future__ import annotations
+
 import logging
 import os
 import stat
@@ -7,7 +9,10 @@ import subprocess
 import time
 from datetime import datetime, timedelta
 from pathlib import Path
-from typing import Optional
+from typing import TYPE_CHECKING, Any, Optional, Tuple
+
+if TYPE_CHECKING:
+    from .config.config_manager import ConfigManager
 
 logger = logging.getLogger(__name__)
 
@@ -17,25 +22,23 @@ class HealthManager:
 
     def __init__(
         self,
-        config_manager,
+        config_manager: ConfigManager,
         health_script_path: Optional[str] = None,
         recheck_interval_seconds: Optional[int] = None,
-    ):
+    ) -> None:
         """Initialize health manager with config manager and optional overrides."""
         self.config_manager = config_manager
 
-        # Use provided path or get from config
         script_path = health_script_path or config_manager.get_health_script()
         self.health_script_path = self._resolve_script_path(script_path)
 
-        # Use provided interval or get from config
         interval_seconds = (
             recheck_interval_seconds or config_manager.get_health_recheck_interval()
         )
         self.recheck_interval = timedelta(seconds=interval_seconds)
 
-        self.last_timestamp = None
-        self.last_params = None
+        self.last_timestamp: Optional[datetime] = None
+        self.last_params: Optional[Tuple[str, str]] = None
 
         logger.info(
             f"HealthManager initialized with script: {self.health_script_path}, recheck interval: {interval_seconds}s"
@@ -48,12 +51,9 @@ class HealthManager:
 
         path = Path(script_path)
 
-        # If absolute path, use as-is
         if path.is_absolute():
             return str(path)
 
-        # For relative paths, resolve relative to current working directory
-        # This assumes the application is run from the project root
         resolved_path = Path.cwd() / path
         return str(resolved_path)
 
@@ -71,35 +71,30 @@ class HealthManager:
             logger.debug("No health script configured, skipping health call")
             return False
 
-        # Update tracked status
         self.last_timestamp = datetime.now()
         self.last_params = (status, additional_info)
 
         try:
-            # Check if script exists and make it executable if needed
             script_path = Path(self.health_script_path)
             if not script_path.exists():
                 logger.error(f"Health script not found: {self.health_script_path}")
                 return False
 
-            # Check if script is executable, make it executable if not
             if not os.access(script_path, os.X_OK):
                 logger.info(
                     f"Health script is not executable, making it executable: {script_path}"
                 )
                 try:
-                    # Add execute permission for owner, group, and others
                     current_permissions = script_path.stat().st_mode
                     new_permissions = (
                         current_permissions | stat.S_IXUSR | stat.S_IXGRP | stat.S_IXOTH
                     )
                     script_path.chmod(new_permissions)
-                    logger.info(f"Successfully made health script executable")
+                    logger.info("Successfully made health script executable")
                 except Exception as e:
                     logger.error(f"Failed to make health script executable: {e}")
                     return False
 
-            # Execute the health script with the parameters
             cmd = [self.health_script_path, status, additional_info]
 
             timeout = self.config_manager.get_health_script_timeout()
@@ -128,11 +123,13 @@ class HealthManager:
 
     def report_render_success(
         self, additional_info: str = "Display render completed successfully"
-    ):
+    ) -> bool:
         """Report successful render to health script."""
         return self.call_health_script("good", additional_info)
 
-    def report_render_failure(self, additional_info: str = "Display render failed"):
+    def report_render_failure(
+        self, additional_info: str = "Display render failed"
+    ) -> bool:
         """Report render failure to health script."""
         return self.call_health_script("bad", additional_info)
 

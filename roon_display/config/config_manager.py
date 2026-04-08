@@ -1,9 +1,12 @@
 """Configuration management for the Roon display application."""
 
+from __future__ import annotations
+
 import configparser
 import logging
 import sys
 from pathlib import Path
+from typing import Any, Dict, List, Optional, Tuple, Union
 
 from ..time_utils import parse_time_to_minutes, parse_time_to_seconds
 from ..utils import get_extra_images_dir
@@ -20,7 +23,7 @@ APP_INFO = {
 }
 
 # Complete configuration schema - single source of truth
-CONFIG_SCHEMA = {
+CONFIG_SCHEMA: Dict[str, Any] = {
     "NETWORK": {
         "internal_server_port": {
             "default": "9090",
@@ -420,18 +423,18 @@ COMPONENT_LOGGERS = [
 class ConfigManager:
     """Manages configuration loading and default config creation."""
 
-    def __init__(self, config_path=None):
+    def __init__(self, config_path: Optional[Path] = None) -> None:
         """Initialize config manager with optional config path."""
         if config_path is None:
             config_path = Path("roon.cfg")
         self.config_path = Path(config_path)
         self._config = self._load_config()
 
-    def get_app_info(self):
+    def get_app_info(self) -> Dict[str, str]:
         """Get app information for Roon API (hardcoded values)."""
         return APP_INFO.copy()
 
-    def _load_config(self):
+    def _load_config(self) -> configparser.ConfigParser:
         """Load configuration from file, creating default if needed."""
         needs_default = False
 
@@ -465,7 +468,7 @@ class ConfigManager:
         logger.info("Configuration loaded")
         return config
 
-    def _create_default_config(self):
+    def _create_default_config(self) -> None:
         """Create a default configuration file using CONFIG_SCHEMA."""
         config = configparser.ConfigParser()
 
@@ -528,10 +531,7 @@ class ConfigManager:
 
         logger.info(f"Default configuration created at {self.config_path}")
 
-        """Get app information for Roon API (hardcoded values)."""
-        return APP_INFO.copy()
-
-    def get_config(config_manager, overrides: dict, key: str):
+    def get_config(self, overrides: Optional[Dict[str, Any]], key: str) -> Any:
         """
         Get configuration value with override support and proper type casting.
 
@@ -587,17 +587,17 @@ class ConfigManager:
                 return str(override_value)
 
         # Fall back to config manager method
-        return getattr(config_manager, f"get_{key}")()
+        return getattr(self, f"get_{key}")()
 
-    def get_display_type(self):
+    def get_display_type(self) -> str:
         """Get display type."""
         return self._config.get("DISPLAY", "type", fallback="system_display")
 
-    def set_display_type(self, value):
+    def set_display_type(self, value: str) -> None:
         """Set display type."""
         self.update_config_values({"DISPLAY.type": str(value)})
 
-    def get_server_config(self):
+    def get_server_config(self) -> Tuple[Optional[str], Optional[int]]:
         """Get server configuration as (ip, port) tuple, or (None, None) if not set."""
         if "ROON_SERVER" not in self._config:
             return None, None
@@ -610,7 +610,7 @@ class ConfigManager:
         except ValueError:
             return None, None
 
-    def get_display_config(self):
+    def get_display_config(self) -> Dict[str, Any]:
         """Get display configuration as a dict with type and partial_refresh."""
         return {
             "type": self.get_display_type(),
@@ -619,15 +619,15 @@ class ConfigManager:
             ),
         }
 
-    def get_zone_config(self):
+    def get_zone_config(self) -> Tuple[List[str], List[str]]:
         """Get zone configuration as (allowed_list, forbidden_list) tuple."""
-        allowed_str = self.get_allowed_zone_names()
-        forbidden_str = self.get_forbidden_zone_names()
-        allowed = [z.strip() for z in allowed_str.split(",") if z.strip()]
-        forbidden = [z.strip() for z in forbidden_str.split(",") if z.strip()]
+        allowed_str = self._get_typed_value("ZONES", "allowed_zone_names", "string")
+        forbidden_str = self._get_typed_value("ZONES", "forbidden_zone_names", "string")
+        allowed = [z.strip() for z in str(allowed_str).split(",") if z.strip()]
+        forbidden = [z.strip() for z in str(forbidden_str).split(",") if z.strip()]
         return allowed, forbidden
 
-    def save_server_config(self, server_ip, server_port):
+    def save_server_config(self, server_ip: str, server_port: int) -> None:
         """Save server details to config file."""
         try:
             if "ROON_SERVER" not in self._config:
@@ -643,7 +643,7 @@ class ConfigManager:
         except Exception as e:
             logger.error(f"Error saving server details to config: {e}")
 
-    def get_log_level(self):
+    def get_log_level(self) -> int:
         """Get logging level from config."""
         log_level_str = self._config.get(
             "MONITORING", "log_level", fallback="INFO"
@@ -659,7 +659,7 @@ class ConfigManager:
 
         return level_map.get(log_level_str, logging.INFO)
 
-    def configure_component_log_levels(self):
+    def configure_component_log_levels(self) -> None:
         """Configure log levels for individual components."""
         # Map string to logging constants
         level_map = {
@@ -698,7 +698,7 @@ class ConfigManager:
                     )
                     sub_logger.setLevel(level)
 
-    def get_performance_logging(self):
+    def get_performance_logging(self) -> str:
         """Get performance logging setting from config.
 
         Returns:
@@ -731,11 +731,11 @@ class ConfigManager:
             perf_logging, perf_logging
         )  # Return as-is if not in mapping
 
-    def get_loop_time(self):
+    def get_loop_time(self) -> float:
         """Get main loop interval in seconds."""
         return self._config.getfloat("DISPLAY_TIMING", "loop_time", fallback=2.5)
 
-    def get_anniversaries_config(self):
+    def get_anniversaries_config(self) -> Dict[str, Any]:
         """Get anniversary configuration."""
         if "ANNIVERSARIES" not in self._config:
             return {"enabled": False, "anniversaries": []}
@@ -781,7 +781,7 @@ class ConfigManager:
 
         return {"enabled": True, "anniversaries": anniversaries}
 
-    def get_health_script(self):
+    def get_health_script(self) -> Optional[str]:
         """Get health script configuration."""
         if "MONITORING" not in self._config:
             return None
@@ -791,7 +791,7 @@ class ConfigManager:
         ).strip()
         return script_path if script_path else None
 
-    def get_health_recheck_interval(self):
+    def get_health_recheck_interval(self) -> int:
         """Get health recheck interval in seconds."""
         if "MONITORING" not in self._config:
             return 1800  # Default 30 minutes
@@ -814,12 +814,12 @@ class ConfigManager:
     # Display Timing Configuration Methods
 
     # Layout Configuration Methods
-    def get_overlay_size_x_percent(self):
+    def get_overlay_size_x_percent(self) -> int:
         """Get overlay width percentage."""
         size = self._config.getint("LAYOUT", "overlay_size_x_percent", fallback=33)
         return max(5, min(50, size))  # Clamp to reasonable range
 
-    def get_overlay_size_y_percent(self):
+    def get_overlay_size_y_percent(self) -> int:
         """Get overlay height percentage."""
         size = self._config.getint("LAYOUT", "overlay_size_y_percent", fallback=25)
         return max(5, min(50, size))  # Clamp to reasonable range
@@ -833,32 +833,32 @@ class ConfigManager:
     # Monitoring Configuration Methods
 
     # Anniversary Configuration Methods
-    def get_anniversaries_enabled(self):
+    def get_anniversaries_enabled(self) -> bool:
         """Get anniversaries enabled setting."""
         return self._config.getboolean("ANNIVERSARIES", "enabled", fallback=False)
 
-    def get_anniversaries_list(self):
+    def get_anniversaries_list(self) -> List[Dict[str, Any]]:
         """Get list of configured anniversaries."""
         anniversaries_config = self.get_anniversaries_config()
-        return anniversaries_config.get("anniversaries", [])
+        return anniversaries_config.get("anniversaries", [])  # type: ignore[no-any-return]
 
-    def set_screen_width(self, width):
+    def set_screen_width(self, width: int) -> None:
         """Set screen width for runtime use."""
         self.screen_width = width
 
-    def set_screen_height(self, height):
+    def set_screen_height(self, height: int) -> None:
         """Set screen height for runtime use."""
         self.screen_height = height
 
-    def get_screen_width(self):
+    def get_screen_width(self) -> int:
         """Get current screen width."""
         return getattr(self, "screen_width", 800)  # Default fallback
 
-    def get_screen_height(self):
+    def get_screen_height(self) -> int:
         """Get current screen height."""
         return getattr(self, "screen_height", 600)  # Default fallback
 
-    def get_config_diff(self, new_config_dict: dict) -> dict:
+    def get_config_diff(self, new_config_dict: Dict[str, Any]) -> Dict[str, Any]:
         """Compare new config with current config and return differences.
 
         Args:
@@ -871,8 +871,8 @@ class ConfigManager:
         differences = {}
 
         # First, transform anniversary form fields into proper config format
-        transformed_config = {}
-        anniversary_entries = {}
+        transformed_config: Dict[str, Any] = {}
+        anniversary_entries: Dict[str, Dict[str, str]] = {}
 
         for key, value in new_config_dict.items():
             if key.startswith("anniversary_name_"):
@@ -934,7 +934,7 @@ class ConfigManager:
 
         return differences
 
-    def update_config_values(self, config_updates: dict) -> bool:
+    def update_config_values(self, config_updates: Dict[str, Any]) -> bool:
         """Update configuration values in memory and persist to file.
 
         Args:
@@ -970,7 +970,7 @@ class ConfigManager:
             logger.error(f"Error updating configuration: {e}")
             return False
 
-    def _write_config_file(self):
+    def _write_config_file(self) -> None:
         """Write current configuration to file."""
         try:
             with open(self.config_path, "w") as f:
@@ -980,7 +980,18 @@ class ConfigManager:
             logger.error(f"Error writing config file: {e}")
             raise
 
-    def _get_typed_value(self, section_name, field_name, field_type):
+    def __getattr__(self, name: str) -> Any:
+        """Handle dynamically-generated getter/setter methods from CONFIG_SCHEMA.
+
+        This allows mypy to accept calls to auto-generated methods (e.g.
+        get_font_size, get_rotation) without listing each one explicitly.
+        At runtime, the actual methods are added by _generate_getter_methods().
+        """
+        raise AttributeError(f"'ConfigManager' object has no attribute {name!r}")
+
+    def _get_typed_value(
+        self, section_name: str, field_name: str, field_type: str
+    ) -> Any:
         """Get a configuration value with appropriate type conversion."""
         raw_value = self._config.get(section_name, field_name, fallback="")
 
@@ -1005,7 +1016,7 @@ class ConfigManager:
 
 
 # Auto-generate getter methods from CONFIG_SCHEMA
-def _generate_getter_methods():
+def _generate_getter_methods() -> None:
     """Generate getter methods for all fields in CONFIG_SCHEMA.
 
     Skips fields where a manual getter already exists on the class,
@@ -1019,8 +1030,8 @@ def _generate_getter_methods():
                 continue  # Don't override manually-defined getters
             field_type = field_config["type"]
 
-            def make_getter(section, field, ftype):
-                def getter(self):
+            def make_getter(section: str, field: str, ftype: str) -> Any:
+                def getter(self: Any) -> Any:
                     return self._get_typed_value(section, field, ftype)
 
                 getter.__name__ = method_name
@@ -1040,7 +1051,7 @@ _generate_getter_methods()
 
 
 # Auto-generate setter methods from CONFIG_SCHEMA
-def _generate_setter_methods():
+def _generate_setter_methods() -> None:
     """Generate setter methods for all fields in CONFIG_SCHEMA.
 
     Skips fields where a manual setter already exists on the class.
@@ -1052,8 +1063,8 @@ def _generate_setter_methods():
             if method_name in existing:
                 continue  # Don't override manually-defined setters
 
-            def make_setter(section, field):
-                def setter(self, value):
+            def make_setter(section: str, field: str) -> Any:
+                def setter(self: Any, value: Any) -> None:
                     self.update_config_values({f"{section}.{field}": str(value)})
 
                 setter.__name__ = f"set_{field}"

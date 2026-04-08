@@ -5,7 +5,9 @@ import logging
 import os
 import time
 from pathlib import Path
-from typing import Optional
+from typing import Any, Callable, Optional, TypeVar
+
+_F = TypeVar("_F", bound=Callable[..., Any])
 
 logger = logging.getLogger(__name__)
 
@@ -98,7 +100,9 @@ def set_performance_logging(level: str) -> None:
     _performance_logging_enabled = bool(level)  # Any non-empty string enables it
 
 
-def log_performance(threshold: float = 0.5, description: str = None):
+def log_performance(
+    threshold: float = 0.5, description: Optional[str] = None
+) -> Callable[[_F], _F]:
     """Decorator to log function execution time if performance logging is enabled.
 
     Args:
@@ -106,9 +110,9 @@ def log_performance(threshold: float = 0.5, description: str = None):
         description: Optional custom description for the operation
     """
 
-    def decorator(func):
+    def decorator(func: _F) -> _F:
         @functools.wraps(func)
-        def wrapper(*args, **kwargs):
+        def wrapper(*args: Any, **kwargs: Any) -> Any:
             if not _performance_logging_enabled:
                 return func(*args, **kwargs)
 
@@ -122,6 +126,6 @@ def log_performance(threshold: float = 0.5, description: str = None):
                     operation_desc = description or f"{func.__module__}.{func.__name__}"
                     logger.info(f"⏱️  PERF: {operation_desc} took {elapsed_time:.2f}s")
 
-        return wrapper
+        return wrapper  # type: ignore[return-value]
 
     return decorator

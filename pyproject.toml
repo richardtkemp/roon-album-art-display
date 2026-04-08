@@ -60,6 +60,7 @@ skip = ["libs"]
 # mypy configuration
 [tool.mypy]
 python_version = "3.8"
+exclude = ["test\\.py"]
 warn_return_any = true
 warn_unused_configs = true
 disallow_untyped_defs = true
@@ -78,7 +79,9 @@ module = [
     "roonapi.*",
     "PIL.*",
     "numpy.*",
-    "libs.*"
+    "libs.*",
+    "requests.*",
+    "psutil.*"
 ]
 ignore_missing_imports = true
 

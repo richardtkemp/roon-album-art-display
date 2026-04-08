@@ -3,13 +3,16 @@
 Test runner script for the Roon Display project.
 Provides comprehensive testing with various options.
 """
+from __future__ import annotations
+
 import argparse
 import subprocess
 import sys
 from pathlib import Path
+from typing import List
 
 
-def run_command(cmd, description):
+def run_command(cmd: List[str], description: str) -> bool:
     """Run a command and return success status."""
     print(f"\n{'='*60}")
     print(f"Running: {description}")
@@ -34,7 +37,7 @@ def run_command(cmd, description):
         return False
 
 
-def main():
+def main() -> int:
     """Main test runner function."""
     parser = argparse.ArgumentParser(description="Run tests and code quality checks")
     parser.add_argument("--quick", action="store_true", help="Run only basic tests")
@@ -57,7 +60,6 @@ def main():
     success_count = 0
     total_count = 0
 
-    # Install dependencies if requested
     if args.install:
         total_count += 1
         if run_command(
@@ -66,7 +68,6 @@ def main():
         ):
             success_count += 1
 
-    # Run basic tests
     test_cmd = [sys.executable, "-m", "pytest", "tests/"]
     if args.verbose:
         test_cmd.append("-v")
@@ -79,9 +80,7 @@ def main():
     if run_command(test_cmd, "Running tests"):
         success_count += 1
 
-    # Skip quality checks if requested or in quick mode
     if not args.no_quality and not args.quick:
-        # Code formatting check
         total_count += 1
         if run_command(
             [sys.executable, "-m", "black", "--check", "roon_display", "tests"],
@@ -89,7 +88,6 @@ def main():
         ):
             success_count += 1
 
-        # Import sorting check
         total_count += 1
         if run_command(
             [sys.executable, "-m", "isort", "--check-only", "roon_display", "tests"],
@@ -97,21 +95,18 @@ def main():
         ):
             success_count += 1
 
-        # Linting
         total_count += 1
         if run_command(
             [sys.executable, "-m", "flake8", "roon_display", "tests"], "Running linter"
         ):
             success_count += 1
 
-        # Type checking
         total_count += 1
         if run_command(
             [sys.executable, "-m", "mypy", "roon_display"], "Running type checker"
         ):
             success_count += 1
 
-        # Security scan
         total_count += 1
         if run_command(
             [sys.executable, "-m", "bandit", "-r", "roon_display"],
@@ -119,7 +114,6 @@ def main():
         ):
             success_count += 1
 
-    # Summary
     print(f"\n{'='*60}")
     print("📊 TEST SUMMARY")
     print("=" * 60)

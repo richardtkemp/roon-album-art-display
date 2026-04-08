@@ -1,13 +1,17 @@
 """Centralized render coordinator that manages main content and overlay display."""
 
+from __future__ import annotations
+
 import logging
 import threading
 import time
-from datetime import datetime
 from pathlib import Path
-from typing import Any, Dict, Optional, Tuple
+from typing import TYPE_CHECKING, Any, Dict, Optional, Tuple
 
 from PIL import Image, ImageEnhance
+
+if TYPE_CHECKING:
+    from .config.config_manager import ConfigManager
 
 logger = logging.getLogger(__name__)
 
@@ -17,12 +21,12 @@ class RenderCoordinator:
 
     def __init__(
         self,
-        viewer,
-        image_processor,
-        message_renderer,
-        config_manager,
-        anniversary_manager=None,
-    ):
+        viewer: Any,
+        image_processor: Any,
+        message_renderer: Any,
+        config_manager: ConfigManager,
+        anniversary_manager: Any = None,
+    ) -> None:
         """Initialize render coordinator."""
         self.viewer = viewer
         self.image_processor = image_processor
@@ -31,9 +35,13 @@ class RenderCoordinator:
         self.config_manager = config_manager
 
         # Content slots
-        self.main_content = None  # Art or anniversary content (fullscreen)
-        self.overlay_content = None  # Errors or temporary messages (bottom-right)
-        self.overlay_timeout = None  # When overlay should auto-clear
+        self.main_content: Optional[Dict[str, Any]] = (
+            None  # Art or anniversary content (fullscreen)
+        )
+        self.overlay_content: Optional[Dict[str, Any]] = (
+            None  # Errors or temporary messages (bottom-right)
+        )
+        self.overlay_timeout: Optional[float] = None  # When overlay should auto-clear
 
         # Rendering control
         self.currently_rendering = False
@@ -41,11 +49,11 @@ class RenderCoordinator:
 
         # E-ink display persistence tracking
         self.eink_display_persistent = hasattr(viewer, "epd")  # Check if this is e-ink
-        self.current_display_image_key = None
+        self.current_display_image_key: Optional[str] = None
 
         # Image caching for web access
-        self.last_rendered_image = None
-        self.last_render_metadata = {}
+        self.last_rendered_image: Optional[Image.Image] = None
+        self.last_render_metadata: Dict[str, Any] = {}
 
         logger.info("RenderCoordinator initialized with main/overlay slots")
 
@@ -57,7 +65,10 @@ class RenderCoordinator:
             self.anniversary_manager.start_anniversary_monitor(self)
 
     def create_final_display_image(
-        self, main_content, config_manager, overrides: Optional[Dict[str, Any]] = None
+        self,
+        main_content: Dict[str, Any],
+        config_manager: ConfigManager,
+        overrides: Optional[Dict[str, Any]] = None,
     ) -> Image.Image:
         """
         Create the final display image by compositing main content onto a white canvas.
@@ -145,11 +156,11 @@ class RenderCoordinator:
 
         # Apply rotation
         if rotation == "90":
-            processed_image = processed_image.transpose(Image.ROTATE_90)
+            processed_image = processed_image.transpose(Image.Transpose.ROTATE_90)
         elif rotation == "180":
-            processed_image = processed_image.transpose(Image.ROTATE_180)
+            processed_image = processed_image.transpose(Image.Transpose.ROTATE_180)
         elif rotation == "270":
-            processed_image = processed_image.transpose(Image.ROTATE_270)
+            processed_image = processed_image.transpose(Image.Transpose.ROTATE_270)
 
         if rotation != "0":
             logger.debug(f"Rotated image by {rotation}°: {processed_image.size}")
@@ -158,23 +169,21 @@ class RenderCoordinator:
         enhancement_applied = False
 
         if color_enhance != 1.0:
-            enhancer = ImageEnhance.Color(processed_image)
-            processed_image = enhancer.enhance(color_enhance)
+            processed_image = ImageEnhance.Color(processed_image).enhance(color_enhance)
             enhancement_applied = True
 
         if contrast != 1.0:
-            enhancer = ImageEnhance.Contrast(processed_image)
-            processed_image = enhancer.enhance(contrast)
+            processed_image = ImageEnhance.Contrast(processed_image).enhance(contrast)
             enhancement_applied = True
 
         if brightness != 1.0:
-            enhancer = ImageEnhance.Brightness(processed_image)
-            processed_image = enhancer.enhance(brightness)
+            processed_image = ImageEnhance.Brightness(processed_image).enhance(
+                brightness
+            )
             enhancement_applied = True
 
         if sharpness != 1.0:
-            enhancer = ImageEnhance.Sharpness(processed_image)
-            processed_image = enhancer.enhance(sharpness)
+            processed_image = ImageEnhance.Sharpness(processed_image).enhance(sharpness)
             enhancement_applied = True
 
         if enhancement_applied:
@@ -206,12 +215,12 @@ class RenderCoordinator:
     def set_main_content(
         self,
         content_type: str,
-        image_key: str = None,
-        image_path: Path = None,
+        image_key: Optional[str] = None,
+        image_path: Optional[Path] = None,
         img: Optional[Image.Image] = None,
-        track_info: str = None,
-        **kwargs,
-    ):
+        track_info: Optional[str] = None,
+        **kwargs: Any,
+    ) -> None:
         """Set main content (art or anniversary) for fullscreen display."""
         logger.info(f"Setting main content: {content_type}")
 
@@ -247,7 +256,7 @@ class RenderCoordinator:
         # Trigger render
         self._render_display()
 
-    def set_overlay(self, message: str, timeout: Optional[float] = None):
+    def set_overlay(self, message: str, timeout: Optional[float] = None) -> None:
         """Set overlay content (errors, messages) for bottom-right display."""
         logger.warning(f"Setting overlay: {message}")
 
@@ -266,7 +275,7 @@ class RenderCoordinator:
         # Trigger render
         self._render_display()
 
-    def clear_overlay(self):
+    def clear_overlay(self) -> None:
         """Clear overlay content."""
         if self.overlay_content:
             logger.info("Clearing overlay")
@@ -274,7 +283,7 @@ class RenderCoordinator:
             self.overlay_timeout = None
             self._render_display()
 
-    def _render_display(self):
+    def _render_display(self) -> None:
         """Render the current state to the display."""
         if self.currently_rendering:
             return
@@ -286,7 +295,7 @@ class RenderCoordinator:
 
         with self.render_lock:
             if self.currently_rendering:
-                return
+                return  # type: ignore[unreachable]
             self.currently_rendering = True
 
         # Determine what to render
@@ -295,24 +304,32 @@ class RenderCoordinator:
                 self.main_content, self.config_manager, None
             )
         elif self.overlay_content:
-            img = self._render_overlay_fullscreen()
+            # No main content — render overlay as full-screen message
+            img = self.message_renderer.create_text_message(
+                self.overlay_content["message"]
+            )
         else:
             logger.warning("No content to render")
-            return None
+            with self.render_lock:
+                self.currently_rendering = False
+            return
 
         logger.debug(f"Rendering display content: {self.main_content}")
         self.viewer.update(
-            self.main_content["image_key"], None, img, self.main_content["track_info"]
+            self.main_content["image_key"] if self.main_content else None,
+            None,
+            img,
+            self.main_content["track_info"] if self.main_content else None,
         )
         with self.render_lock:
             self.currently_rendering = False
 
-    def force_refresh(self):
+    def force_refresh(self) -> None:
         """Force a re-render of the current display content with updated config values."""
         logger.info("Force refresh triggered from web interface")
         self._render_display()
 
-    def _initialize_current_display_state(self):
+    def _initialize_current_display_state(self) -> None:
         """Initialize coordinator with current display state (e-ink persistence)."""
         if self.eink_display_persistent:
             # Try to get current image key from utils
@@ -327,12 +344,12 @@ class RenderCoordinator:
             except Exception as e:
                 logger.debug(f"Could not get current image key: {e}")
 
-    def set_current_display_image_key(self, image_key: str):
+    def set_current_display_image_key(self, image_key: str) -> None:
         """Update the current display image key (called by viewers after successful renders)."""
         self.current_display_image_key = image_key
         logger.debug(f"Updated current display image key: {image_key}")
 
-    def _cache_rendered_image(self, image: Optional[Image.Image]):
+    def _cache_rendered_image(self, image: Optional[Image.Image]) -> None:
         """Cache the rendered image for internal server access."""
         if image:
             self.last_rendered_image = image.copy()

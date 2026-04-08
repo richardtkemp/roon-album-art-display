@@ -37,7 +37,7 @@ websocket_logger = logging.getLogger("websocket")
 websocket_logger.setLevel(logging.WARNING)
 
 
-def main():
+def main() -> None:
     """Main application entry point."""
     parser = argparse.ArgumentParser(description="Roon Album Art Display")
     parser.add_argument(
@@ -143,7 +143,7 @@ def main():
             # so the GUI can show authorization messages
             import threading
 
-            def connect_and_run():
+            def connect_and_run() -> None:
                 """Connect to Roon and start event loop in background."""
                 try:
                     roon_client.connect()
@@ -156,7 +156,7 @@ def main():
             roon_thread.start()
 
             # Start Tkinter main loop immediately (blocks here)
-            viewer.check_pending_updates()
+            viewer.check_pending_updates()  # type: ignore[attr-defined]
             tk_root.mainloop()
 
         else:

@@ -1,9 +1,15 @@
 """Tkinter-based viewer for system displays."""
 
+from __future__ import annotations
+
 import logging
+from typing import TYPE_CHECKING, Any, Optional
 
 from ..utils import set_current_image_key
 from .base import BaseViewer
+
+if TYPE_CHECKING:
+    from ..config.config_manager import ConfigManager
 
 logger = logging.getLogger(__name__)
 
@@ -11,7 +17,7 @@ logger = logging.getLogger(__name__)
 class TkViewer(BaseViewer):
     """Viewer for system displays using Tkinter."""
 
-    def __init__(self, config_manager, root):
+    def __init__(self, config_manager: ConfigManager, root: Any) -> None:
         """Initialize with Tkinter root window."""
         super().__init__(config_manager)
         self.root = root
@@ -36,14 +42,14 @@ class TkViewer(BaseViewer):
         self._setup_window_behavior()
 
         # Track pending updates for thread safety
-        self.pending_image_data = None
+        self.pending_image_data: Optional[tuple] = None
 
         self.startup()
 
-    def _configure_window_size(self):
+    def _configure_window_size(self) -> bool:
         """Configure window size and fullscreen mode. Returns fullscreen state."""
         # Set fullscreen mode based on config
-        fullscreen = self.config_manager.get_tkinter_fullscreen()
+        fullscreen = bool(self.config_manager.get_tkinter_fullscreen())
         self.root.attributes("-fullscreen", fullscreen)
 
         # If not fullscreen, set a reasonable window size
@@ -52,7 +58,7 @@ class TkViewer(BaseViewer):
 
         return fullscreen
 
-    def _setup_window_appearance(self):
+    def _setup_window_appearance(self) -> None:
         """Configure window appearance."""
         # Force light theme
         self.root.tk_setPalette(
@@ -68,7 +74,7 @@ class TkViewer(BaseViewer):
         self.label = tk.Label(self.root)
         self.label.pack(fill=tk.BOTH, expand=True)
 
-    def _setup_window_behavior(self):
+    def _setup_window_behavior(self) -> None:
         """Configure window event handling."""
         # Escape key to close
         self.root.bind("<Escape>", lambda e: self.root.destroy())
@@ -76,7 +82,7 @@ class TkViewer(BaseViewer):
         # Handle window close
         self.root.protocol("WM_DELETE_WINDOW", self.root.destroy)
 
-    def check_pending_updates(self):
+    def check_pending_updates(self) -> None:
         """Check for pending image updates (call from main thread)."""
         # Schedule next check
         self.root.after(100, self.check_pending_updates)
@@ -88,7 +94,9 @@ class TkViewer(BaseViewer):
             logger.info(f"Updated display with {title}")
             self.pending_image_data = None
 
-    def display_image(self, image_key, image_path, img, title):
+    def display_image(
+        self, image_key: Any, image_path: Any, img: Any, title: Any
+    ) -> None:
         """Display image (must be called from main thread)."""
         # Load and process image using common logic
         img = self._load_and_process_image(img, image_path, title)
@@ -103,7 +111,7 @@ class TkViewer(BaseViewer):
 
             # Update label
             self.label.configure(image=self.photo)
-            self.label.image = self.photo  # Keep reference for GC
+            self.label.image = self.photo  # type: ignore[attr-defined]  # Keep reference for GC
 
             # Finalize successful render (update tracking and notify coordinator)
             self._finalize_successful_render(image_key)
@@ -111,7 +119,7 @@ class TkViewer(BaseViewer):
         except Exception as e:
             self._log_render_error(e, title)
 
-    def update(self, image_key, image_path, img, title):
+    def update(self, image_key: Any, image_path: Any, img: Any, title: Any) -> None:
         """Thread-safe method to request image update."""
         # Store update data for main thread to process
         self.pending_image_data = (image_key, image_path, img, title)

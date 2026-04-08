@@ -1,13 +1,18 @@
 """Internal HTTP server for communication between main app and web config."""
 
+from __future__ import annotations
+
 import io
 import logging
 import threading
 import time
-from typing import Any, Dict, Optional, Tuple
+from typing import TYPE_CHECKING, Any
 
 from flask import Flask, jsonify, request, send_file
 from PIL import Image
+
+if TYPE_CHECKING:
+    from .config.config_manager import ConfigManager
 
 logger = logging.getLogger(__name__)
 
@@ -15,24 +20,23 @@ logger = logging.getLogger(__name__)
 class InternalServer:
     """Internal HTTP server for render coordinator communication."""
 
-    def __init__(self, render_coordinator, config_manager):
+    def __init__(self, render_coordinator: Any, config_manager: ConfigManager) -> None:
         """Initialize internal server."""
         self.render_coordinator = render_coordinator
         self.config_manager = config_manager
         self.app = Flask(__name__)
-        self.app.logger.setLevel(logging.WARNING)  # Reduce Flask logging
+        self.app.logger.setLevel(logging.WARNING)
         self.setup_routes()
 
-    def setup_routes(self):
+    def setup_routes(self) -> None:
         """Setup internal API routes."""
 
-        @self.app.route("/current-image")
-        def get_current_image():
+        @self.app.route("/current-image")  # type: ignore[misc]
+        def get_current_image() -> Any:
             """Return the exact image currently on display."""
             try:
                 image, metadata = self.render_coordinator.get_current_rendered_image()
                 if image:
-                    # Convert PIL image to bytes
                     img_io = io.BytesIO()
                     image.save(img_io, "JPEG", quality=85)
                     img_io.seek(0)
@@ -43,8 +47,8 @@ class InternalServer:
                 logger.error(f"Error serving current image: {e}")
                 return self._create_error_image(str(e))
 
-        @self.app.route("/current-status")
-        def get_current_status():
+        @self.app.route("/current-status")  # type: ignore[misc]
+        def get_current_status() -> Any:
             """Return current display status metadata."""
             try:
                 image, metadata = self.render_coordinator.get_current_rendered_image()
@@ -63,8 +67,8 @@ class InternalServer:
                 logger.error(f"Error getting current status: {e}")
                 return jsonify({"has_image": False, "error": str(e)})
 
-        @self.app.route("/preview", methods=["POST"])
-        def generate_preview():
+        @self.app.route("/preview", methods=["POST"])  # type: ignore[misc]
+        def generate_preview() -> Any:
             """Generate preview image with provided configuration."""
             try:
                 config_data = request.get_json()
@@ -81,8 +85,8 @@ class InternalServer:
                 logger.error(f"Error generating preview: {e}")
                 return jsonify({"error": f"Preview error: {e}"}), 500
 
-        @self.app.route("/health")
-        def health_check():
+        @self.app.route("/health")  # type: ignore[misc]
+        def health_check() -> Any:
             """Health check endpoint."""
             return jsonify(
                 {
@@ -92,8 +96,8 @@ class InternalServer:
                 }
             )
 
-        @self.app.route("/update-config", methods=["POST"])
-        def update_config():
+        @self.app.route("/update-config", methods=["POST"])  # type: ignore[misc]
+        def update_config() -> Any:
             """Update configuration values in real-time."""
             try:
                 config_updates = request.get_json()
@@ -103,7 +107,6 @@ class InternalServer:
                         400,
                     )
 
-                # Update configuration
                 success = self.config_manager.update_config_values(config_updates)
 
                 if success:
@@ -129,8 +132,8 @@ class InternalServer:
                 logger.error(f"Error updating config via API: {e}")
                 return jsonify({"success": False, "error": str(e)}), 500
 
-        @self.app.route("/force-refresh", methods=["POST"])
-        def force_refresh():
+        @self.app.route("/force-refresh", methods=["POST"])  # type: ignore[misc]
+        def force_refresh() -> Any:
             """Force a display refresh with current configuration."""
             try:
                 self.render_coordinator.force_refresh()
@@ -141,14 +144,10 @@ class InternalServer:
                 logger.error(f"Error forcing display refresh: {e}")
                 return jsonify({"success": False, "error": str(e)}), 500
 
-    def _create_placeholder_image(self):
+    def _create_placeholder_image(self) -> Any:
         """Create placeholder when no image available."""
         try:
-            # Create simple placeholder image
             placeholder = Image.new("RGB", (400, 300), color=(128, 128, 128))
-
-            # Add simple text (basic approach without fonts)
-            # For now, just return gray placeholder
             img_io = io.BytesIO()
             placeholder.save(img_io, "JPEG", quality=85)
             img_io.seek(0)
@@ -157,7 +156,7 @@ class InternalServer:
             logger.error(f"Error creating placeholder: {e}")
             return jsonify({"error": "No image available"}), 404
 
-    def _create_error_image(self, error_msg: str):
+    def _create_error_image(self, error_msg: str) -> Any:
         """Create error image when something goes wrong."""
         try:
             error_img = Image.new("RGB", (400, 300), color=(200, 100, 100))
@@ -168,13 +167,12 @@ class InternalServer:
         except Exception:
             return jsonify({"error": error_msg}), 500
 
-    def start(self):
+    def start(self) -> None:
         """Start the internal server in a background thread."""
 
-        def run_server():
+        def run_server() -> None:
             try:
-                # Disable Flask's startup messages
-                import werkzeug
+                import werkzeug  # noqa: F401
 
                 werkzeug_logger = logging.getLogger("werkzeug")
                 werkzeug_logger.setLevel(logging.WARNING)
@@ -194,5 +192,4 @@ class InternalServer:
         port = self.config_manager.get_internal_server_port()
         logger.info(f"Internal server started on http://{host}:{port}")
 
-        # Give server a moment to start
         time.sleep(0.5)

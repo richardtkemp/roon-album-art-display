@@ -1,10 +1,15 @@
 """Reusable message rendering for displaying text and images on screen."""
 
+from __future__ import annotations
+
 import logging
 from pathlib import Path
-from typing import Optional
+from typing import TYPE_CHECKING, Any, Optional, Tuple
 
 from PIL import Image, ImageDraw, ImageFont
+
+if TYPE_CHECKING:
+    from .config.config_manager import ConfigManager
 
 logger = logging.getLogger(__name__)
 
@@ -12,7 +17,7 @@ logger = logging.getLogger(__name__)
 class MessageRenderer:
     """Handles creation of message display images with text and optional images."""
 
-    def __init__(self, config_manager):
+    def __init__(self, config_manager: ConfigManager) -> None:
         """Initialize with config manager."""
         self.config_manager = config_manager
 
@@ -36,7 +41,7 @@ class MessageRenderer:
             logger.debug(f"Image path exists, creating image with text: {image_path}")
             return self._create_image_with_text(image_path, message)
         else:
-            logger.debug(f"Creating text-only image (no image path or doesn't exist)")
+            logger.debug("Creating text-only image (no image path or doesn't exist)")
             if image_path:
                 logger.debug(
                     f"Image path check failed - path: {image_path}, exists: {Path(image_path).exists()}"
@@ -61,8 +66,8 @@ class MessageRenderer:
         logger.debug(f"Loading font: path='{font_path}', size={font_size}")
 
         try:
-            font = ImageFont.truetype(font_path, font_size)
-            logger.debug(f"Successfully loaded font")
+            font: Any = ImageFont.truetype(font_path, font_size)
+            logger.debug("Successfully loaded font")
         except Exception as e:
             logger.debug(f"Failed to load font: {e}, falling back to default")
             font = ImageFont.load_default()
@@ -79,11 +84,7 @@ class MessageRenderer:
             max_line_width = max(max_line_width, line_width)
 
         # Calculate total text block height (including line spacing)
-        line_spacing = (
-            self.config_manager.get_line_spacing_ratio()
-            if font
-            else self.config_manager.get_line_spacing_ratio()
-        )
+        line_spacing = self.config_manager.get_line_spacing_ratio()
         total_height = sum(line_heights) + (len(lines) - 1) * line_spacing
 
         # Center the text block
@@ -91,7 +92,7 @@ class MessageRenderer:
 
         # Draw each line centered
         current_y = start_y
-        for i, line in enumerate(lines):
+        for line in lines:
             line_width, line_height = self._get_text_size(draw, line, font)
             x = (screen_width - line_width) // 2
             draw.text((x, current_y), line, fill="black", font=font)
@@ -126,7 +127,7 @@ class MessageRenderer:
 
             if msg_img.mode != "RGB":
                 msg_img = msg_img.convert("RGB")
-                logger.debug(f"Converted image to RGB mode")
+                logger.debug("Converted image to RGB mode")
 
             # Calculate scaling to fit image area
             img_width, img_height = msg_img.size
@@ -184,7 +185,7 @@ class MessageRenderer:
     def create_error_overlay(
         self,
         error_message: str,
-        background_size: tuple,
+        background_size: tuple[int, int],
         size_x_percent: int = 33,
         size_y_percent: int = 25,
     ) -> Image.Image:
@@ -219,7 +220,7 @@ class MessageRenderer:
         # Add red border
         border_width = 2
         draw.rectangle(
-            [0, 0, overlay_width - 1, overlay_height - 1],
+            (0, 0, overlay_width - 1, overlay_height - 1),
             outline=(255, 0, 0, 255),
             width=border_width,
         )
@@ -259,7 +260,7 @@ class MessageRenderer:
 
         return rgb_overlay
 
-    def _wrap_text_for_overlay(self, text: str, font, max_width: int) -> str:
+    def _wrap_text_for_overlay(self, text: str, font: Any, max_width: int) -> str:
         """Wrap text to fit within overlay width."""
         if not font:
             # Simple character-based wrapping fallback
@@ -303,7 +304,7 @@ class MessageRenderer:
 
         return "\n".join(lines)
 
-    def _get_text_size_width(self, text: str, font) -> int:
+    def _get_text_size_width(self, text: str, font: Any) -> int:
         """Get text width using font metrics."""
         if font:
             try:
@@ -316,20 +317,19 @@ class MessageRenderer:
                 # Fallback for older Pillow versions
                 temp_img = Image.new("RGB", (1, 1), "white")
                 temp_draw = ImageDraw.Draw(temp_img)
-                return temp_draw.textsize(text, font=font)[0]
+                return temp_draw.textsize(text, font=font)[0]  # type: ignore[attr-defined,no-any-return]
         else:
             # Estimate text width without font
             return len(text) * 8
 
     def _text_fits_in_bounds(
-        self, message: str, font, available_width: int, available_height: int
+        self, message: str, font: Any, available_width: int, available_height: int
     ) -> bool:
         """Check if text with given font fits within the available space."""
         if not font:
             return True  # Can't measure without font, assume it fits
 
         # For this check, we'll use the text as-is since wrapping could cause recursion
-        # The actual rendering will handle wrapping
         lines = message.split("\n")
         line_heights = []
         max_line_width = 0
@@ -348,16 +348,12 @@ class MessageRenderer:
             return False
 
         # Check if height fits (including line spacing)
-        line_spacing = (
-            self.config_manager.get_line_spacing_ratio()
-            if hasattr(font, "size")
-            else self.config_manager.get_line_spacing_ratio()
-        )
+        line_spacing = self.config_manager.get_line_spacing_ratio()
         total_height = sum(line_heights) + (len(lines) - 1) * line_spacing
 
-        return total_height <= available_height
+        return bool(total_height <= available_height)
 
-    def _wrap_text_for_screen(self, message: str, font) -> str:
+    def _wrap_text_for_screen(self, message: str, font: Any) -> str:
         """Wrap text to fit screen width, respecting existing line breaks."""
         if not font:
             # Simple character-based wrapping fallback
@@ -389,7 +385,9 @@ class MessageRenderer:
 
         return "\n".join(wrapped_paragraphs)
 
-    def _wrap_paragraph_to_width(self, paragraph: str, font, max_width: int) -> str:
+    def _wrap_paragraph_to_width(
+        self, paragraph: str, font: Any, max_width: int
+    ) -> str:
         """Wrap a single paragraph to fit within the specified width."""
         words = paragraph.split()
         if not words:
@@ -412,7 +410,6 @@ class MessageRenderer:
                 else:
                     # Single word is too long - break it if possible
                     if len(word) > 20:  # Only break very long words
-                        # Split long word across lines
                         while word:
                             chars_that_fit = self._find_max_chars_that_fit(
                                 word, font, max_width
@@ -430,7 +427,7 @@ class MessageRenderer:
 
         return "\n".join(lines)
 
-    def _find_max_chars_that_fit(self, text: str, font, max_width: int) -> int:
+    def _find_max_chars_that_fit(self, text: str, font: Any, max_width: int) -> int:
         """Find maximum number of characters that fit within max_width."""
         for i in range(len(text), 0, -1):
             if self._get_text_size_width(text[:i], font) <= max_width:
@@ -467,7 +464,7 @@ class MessageRenderer:
 
         return "\n".join(wrapped_paragraphs)
 
-    def _get_text_size(self, draw, text: str, font):
+    def _get_text_size(self, draw: Any, text: str, font: Any) -> Tuple[int, int]:
         """Get text dimensions with fallback for different Pillow versions."""
         if font:
             try:
@@ -476,7 +473,7 @@ class MessageRenderer:
                 return bbox[2] - bbox[0], bbox[3] - bbox[1]
             except AttributeError:
                 # Fallback for older Pillow versions
-                return draw.textsize(text, font=font)
+                return draw.textsize(text, font=font)  # type: ignore[no-any-return]
         else:
             # Estimate text size without font
             return len(text) * 10, 20

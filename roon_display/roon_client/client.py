@@ -1,9 +1,12 @@
 """Roon API client for album art display."""
 
+from __future__ import annotations
+
 import logging
 import threading
 import time
 from pathlib import Path
+from typing import Any, Dict, List, Optional, Tuple, Union
 
 import requests
 from PIL import Image
@@ -25,11 +28,11 @@ class RoonClient:
 
     def __init__(
         self,
-        config_manager,
-        viewer,
-        image_processor,
-        render_coordinator=None,
-    ):
+        config_manager: Any,
+        viewer: Any,
+        image_processor: Any,
+        render_coordinator: Any = None,
+    ) -> None:
         """Initialize Roon client."""
         self.config_manager = config_manager
         self.viewer = viewer
@@ -52,14 +55,17 @@ class RoonClient:
         # Token storage in current directory
         self.token_file = Path(".roon_album_display_token.txt")
 
+        # Roon API instance (set during connect())
+        self.roon: Any = None
+
         # State tracking
-        self.last_event = None
+        self.last_event: Any = None
         # Initialize with current image key to prevent startup flash
         self.last_image_key = get_current_image_key()
         self.running = False
-        self.connection_monitor_thread = None
+        self.connection_monitor_thread: Optional[threading.Thread] = None
         self.last_connection_check = time.time()
-        self.last_reconnect_attempt = 0
+        self.last_reconnect_attempt: float = 0.0
         # Reconnect interval will be read from config when needed
 
         # Connection state tracking (combines auth + connection)
@@ -70,12 +76,12 @@ class RoonClient:
         logger.info(f"Event loop time: {self.loop_time} seconds")
 
     @property
-    def is_connected(self):
+    def is_connected(self) -> bool:
         """Get connection status (combines auth + connection state)."""
         return self._is_connected
 
     @is_connected.setter
-    def is_connected(self, value):
+    def is_connected(self, value: bool) -> None:
         """Set connection status with state change logging."""
         if self._is_connected != value:
             logger.warning(
@@ -83,7 +89,7 @@ class RoonClient:
             )
             self._is_connected = value
 
-    def connect(self):
+    def connect(self) -> Any:
         """Connect to Roon server."""
         logger.info("Connecting to Roon server...")
 
@@ -123,11 +129,11 @@ class RoonClient:
         logger.info("Successfully connected to Roon server")
         return self.roon
 
-    def _get_server_details(self):
+    def _get_server_details(self) -> Any:
         """Get saved server details if available."""
         return self.config_manager.get_server_config()
 
-    def _discover_server(self):
+    def _discover_server(self) -> Any:
         """Discover Roon server on network."""
         discover = RoonDiscovery(None)
 
@@ -143,7 +149,7 @@ class RoonClient:
         discover.stop()
         return servers[0]  # Return first server found
 
-    def _test_connectivity(self, server_ip, server_port):
+    def _test_connectivity(self, server_ip: str, server_port: int) -> bool:
         """Test if server port is reachable."""
         import socket
 
@@ -160,7 +166,9 @@ class RoonClient:
             logger.warning(f"Connectivity test exception: {e}")
             return False
 
-    def _create_roon_connection(self, server_ip, server_port):
+    def _create_roon_connection(
+        self, server_ip: str, server_port: int
+    ) -> Optional[Any]:
         """Create RoonApi connection."""
         token = self._get_token()
 
@@ -213,7 +221,7 @@ class RoonClient:
             self._report_health_failure(f"Roon connection failed: {e}")
             return None
 
-    def _get_token(self):
+    def _get_token(self) -> Optional[str]:
         """Get saved authentication token."""
         logger.info(f"Looking for token file at: {self.token_file}")
         if self.token_file.exists():
@@ -229,7 +237,7 @@ class RoonClient:
             logger.info("No existing auth token found")
             return None
 
-    def _validate_connection(self):
+    def _validate_connection(self) -> None:
         """Validate the Roon connection."""
         if not hasattr(self.roon, "_roonsocket"):
             raise ConnectionError("Invalid Roon connection: no socket")
@@ -240,14 +248,14 @@ class RoonClient:
         if self.roon._roonsocket.failed_state:
             raise ConnectionError("Roon connection is in failed state")
 
-    def _process_initial_zones(self):
+    def _process_initial_zones(self) -> None:
         """Process current zones for initial state."""
         for zone_id, zone_data in self.roon.zones.items():
             result = self._process_zone_data(zone_id, zone_data)
             if result:
                 break
 
-    def subscribe_to_events(self):
+    def subscribe_to_events(self) -> None:
         """Subscribe to Roon zone change events."""
         logger.debug("Subscribing to Roon events...")
         try:
@@ -256,7 +264,7 @@ class RoonClient:
         except Exception as e:
             logger.error(f"Error subscribing to events: {e}")
 
-    def _zone_event_callback(self, zone_name, data):
+    def _zone_event_callback(self, zone_name: str, data: Any) -> None:
         """Handle zone change events."""
         try:
             # Update connection tracking - receiving callbacks means fully connected
@@ -282,7 +290,7 @@ class RoonClient:
         except Exception as e:
             logger.error(f"Error in zone event callback: {e}")
 
-    def _process_zone_data(self, zone_id, zone_data):
+    def _process_zone_data(self, zone_id: str, zone_data: Any) -> Any:
         """Process zone data and update display if needed."""
         try:
             name = zone_data.get("display_name", "")
@@ -305,7 +313,7 @@ class RoonClient:
             logger.error(f"Error processing zone data: {e}")
             return False
 
-    def _extract_now_playing(self, zone_data):
+    def _extract_now_playing(self, zone_data: Any) -> Optional[Any]:
         """Extract now_playing data from zone data structure."""
         if not isinstance(zone_data, dict):
             return None
@@ -333,7 +341,7 @@ class RoonClient:
 
         return None
 
-    def _process_now_playing(self, now_playing):
+    def _process_now_playing(self, now_playing: Any) -> Any:
         """Process now_playing data for image updates."""
         try:
             # Skip duplicate events
@@ -369,7 +377,7 @@ class RoonClient:
             logger.error(f"Error processing now_playing: {e}")
             return False
 
-    def _extract_track_info(self, now_playing):
+    def _extract_track_info(self, now_playing: Any) -> str:
         """Extract track information from now_playing data."""
         if not isinstance(now_playing, dict):
             return "Unknown Track"
@@ -391,12 +399,12 @@ class RoonClient:
 
         # Try one_line structure
         if "one_line" in now_playing and isinstance(now_playing["one_line"], dict):
-            return now_playing["one_line"].get("line1", "Unknown Track")
+            return str(now_playing["one_line"].get("line1", "Unknown Track"))
 
         return "Unknown Track"
 
     @log_performance(threshold=0.5, description="Fetch and display album art")
-    def _fetch_and_display_album_art(self, image_key, track_info):
+    def _fetch_and_display_album_art(self, image_key: str, track_info: str) -> None:
         """Fetch album art and update display."""
         try:
             image_path = get_saved_image_dir() / f"album_art_{image_key}.jpg"
@@ -421,7 +429,9 @@ class RoonClient:
             logger.error(f"Error fetching/displaying album art: {e}")
 
     @log_performance(threshold=0.5, description="Album art download")
-    def _download_album_art(self, image_key, image_path):
+    def _download_album_art(
+        self, image_key: str, image_path: Path
+    ) -> Optional[Image.Image]:
         """Download album art from Roon server."""
         try:
             # Get image URL from Roon
@@ -455,7 +465,7 @@ class RoonClient:
             logger.error(f"Error downloading album art: {e}")
             return None
 
-    def run(self):
+    def run(self) -> threading.Thread:
         """Start the Roon client event loop."""
         self.subscribe_to_events()
         self.running = True
@@ -472,7 +482,7 @@ class RoonClient:
 
         return event_thread
 
-    def _event_loop(self):
+    def _event_loop(self) -> None:
         """Main event loop."""
         try:
             logger.debug("Roon client event loop started")
@@ -492,7 +502,9 @@ class RoonClient:
         finally:
             self.cleanup()
 
-    def _save_connection_details(self, api, server_ip, server_port):
+    def _save_connection_details(
+        self, api: Any, server_ip: str, server_port: int
+    ) -> None:
         """Save token and server details after successful connection."""
         if not api or not api.token:
             logger.error("Cannot save connection details - no valid API or token")
@@ -521,7 +533,7 @@ class RoonClient:
         # Save server details
         self.config_manager.save_server_config(server_ip, server_port)
 
-    def _report_health_success(self, message: str):
+    def _report_health_success(self, message: str) -> None:
         """Report success to health manager."""
         if (
             self.viewer
@@ -530,7 +542,7 @@ class RoonClient:
         ):
             self.viewer.health_manager.report_render_success(message)
 
-    def _report_health_failure(self, message: str):
+    def _report_health_failure(self, message: str) -> None:
         """Report failure to health manager."""
         if (
             self.viewer
@@ -539,7 +551,7 @@ class RoonClient:
         ):
             self.viewer.health_manager.report_render_failure(message)
 
-    def _monitor_connection(self):
+    def _monitor_connection(self) -> None:
         """Monitor connection status and detect different failure types."""
         logger.debug("Starting connection monitoring")
         while self.running:
@@ -605,7 +617,7 @@ class RoonClient:
                 logger.error(f"Error in connection monitoring: {e}")
                 time.sleep(10)
 
-    def _handle_connection_failure(self, failure_type: str):
+    def _handle_connection_failure(self, failure_type: str) -> None:
         """Handle different types of connection failures."""
         logger.error(f"Connection failure detected: {failure_type}")
 
@@ -643,11 +655,11 @@ class RoonClient:
         # Push host down error to coordinator
         self.render_coordinator.set_overlay(msg2, timeout=120)
 
-    def stop(self):
+    def stop(self) -> None:
         """Stop the client."""
         self.running = False
 
-    def cleanup(self):
+    def cleanup(self) -> None:
         """Clean up resources."""
         logger.info("Cleaning up Roon client...")
         if hasattr(self, "roon") and self.roon:

@@ -3,7 +3,7 @@
 import logging
 import tempfile
 from pathlib import Path
-from typing import Dict, List, Tuple
+from typing import Dict, List, Optional, Tuple
 
 from PIL import Image
 from werkzeug.utils import secure_filename
@@ -79,7 +79,9 @@ def get_anniversary_images() -> Dict[str, List[str]]:
     return anniversary_images
 
 
-def create_thumbnail(image_path: Path, max_size: Tuple[int, int] = (150, 150)) -> bytes:
+def create_thumbnail(
+    image_path: Path, max_size: Tuple[int, int] = (150, 150)
+) -> Optional[bytes]:
     """Create a thumbnail from an image file."""
     try:
         with Image.open(image_path) as img:
@@ -136,7 +138,7 @@ def delete_anniversary_image(anniversary_name: str, filename: str) -> bool:
         return False
 
 
-def create_placeholder_image() -> bytes:
+def create_placeholder_image() -> Optional[bytes]:
     """Create placeholder image when main app not available."""
     try:
         # Create simple placeholder image

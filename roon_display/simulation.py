@@ -1,9 +1,15 @@
 """Simulation support for testing track changes."""
 
+from __future__ import annotations
+
 import logging
 import socket
 import threading
 from pathlib import Path
+from typing import TYPE_CHECKING, Any, Optional
+
+if TYPE_CHECKING:
+    from .config.config_manager import ConfigManager
 
 logger = logging.getLogger(__name__)
 
@@ -41,13 +47,13 @@ TRACK_INDEX_FILE = Path("simulation_track_index.txt")
 class SimulationServer:
     """Simple TCP server to receive simulation triggers."""
 
-    def __init__(self, roon_client, config_manager):
+    def __init__(self, roon_client: Any, config_manager: ConfigManager) -> None:
         self.roon_client = roon_client
         self.config_manager = config_manager
-        self.server = None
+        self.server: Optional[socket.socket] = None
         self.running = False
 
-    def start(self):
+    def start(self) -> None:
         """Start the simulation server."""
         try:
             self.server = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
@@ -66,10 +72,11 @@ class SimulationServer:
         except Exception as e:
             logger.error(f"Failed to start simulation server: {e}")
 
-    def _server_loop(self):
+    def _server_loop(self) -> None:
         """Main server loop."""
         while self.running:
             try:
+                assert self.server is not None
                 self.server.settimeout(1.0)  # Add timeout to prevent hanging
                 client, addr = self.server.accept()
                 logger.debug(f"Simulation trigger received from {addr}")
@@ -111,7 +118,7 @@ class SimulationServer:
                 if self.running:
                     logger.error(f"Simulation server error: {e}")
 
-    def _simulate_track_change(self, track_index):
+    def _simulate_track_change(self, track_index: int) -> None:
         """Simulate a track change with the given track using exact log data structure."""
         track_data = SAMPLE_TRACKS[track_index % len(SAMPLE_TRACKS)]
 
@@ -199,7 +206,7 @@ class SimulationServer:
 
             logger.error(f"Traceback: {traceback.format_exc()}")
 
-    def stop(self):
+    def stop(self) -> None:
         """Stop the simulation server."""
         self.running = False
         if self.server:
@@ -209,7 +216,7 @@ class SimulationServer:
                 pass
 
 
-def get_next_track_index():
+def get_next_track_index() -> int:
     """Get the next track index to use."""
     try:
         if TRACK_INDEX_FILE.exists():
@@ -230,7 +237,7 @@ def get_next_track_index():
         return 0
 
 
-def send_simulation_trigger():
+def send_simulation_trigger() -> bool:
     """Send a simulation trigger to the running display."""
     track_index = get_next_track_index()
 

@@ -1,14 +1,20 @@
 """Factory for creating viewer instances based on configuration."""
 
+from __future__ import annotations
+
 import importlib
 import logging
 import sys
 from pathlib import Path
+from typing import TYPE_CHECKING, Any, Optional, Tuple
+
+if TYPE_CHECKING:
+    from .base import BaseViewer
 
 logger = logging.getLogger(__name__)
 
 
-def create_viewer(config_manager):
+def create_viewer(config_manager: Any) -> Tuple[BaseViewer, Optional[Any]]:
     """Create appropriate viewer based on configuration.
 
     Returns a tuple of (viewer, tk_root) where tk_root is None for non-Tkinter viewers.
@@ -22,7 +28,7 @@ def create_viewer(config_manager):
         from .tk_viewer import TkViewer
 
         root = tk.Tk()
-        viewer = TkViewer(config_manager, root)
+        viewer: BaseViewer = TkViewer(config_manager, root)
         return viewer, root
 
     elif display_type == "epd13in3E":
