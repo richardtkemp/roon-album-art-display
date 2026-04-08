@@ -69,12 +69,17 @@ class EinkViewer(BaseViewer):
         # the BUSY pin reliably. This is the same sequence that standalone mode
         # runs implicitly by constructing a fresh EinkViewer.
         logger.info(f"Re-initialising display before render for {title}")
-        self.epd.Init()
 
         start_time = time.time()
 
         try:
+            self.epd.Init()
             self.epd.display(self.epd.getbuffer(img), title)
+        except TimeoutError as e:
+            logger.error(f"E-ink BUSY pin timeout for {title}: {e}")
+            if self.health_manager:
+                self.health_manager.report_render_failure(str(e))
+            return
         except Exception as e:
             logger.error(f"Error during e-ink display: {e}")
             return

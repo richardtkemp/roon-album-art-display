@@ -104,13 +104,18 @@ class EPD():
     def SendData2(self, buf, Len):
         epdconfig.spi_writebyte2(buf, Len)
 
-    def ReadBusyH(self, where, observe_stop_flag=True):
+    def ReadBusyH(self, where, timeout_s=60):
         logger.debug(f"e-Paper busy H checking at {where}")
-        while(epdconfig.digital_read(self.EPD_BUSY_PIN) == 0):      # 0: busy, 1: idle
+        start = time.time()
+        while epdconfig.digital_read(self.EPD_BUSY_PIN) == 0:      # 0: busy, 1: idle
+            if time.time() - start > timeout_s:
+                raise TimeoutError(
+                    f"e-Paper BUSY pin stuck LOW at {where} after {timeout_s}s"
+                )
             epdconfig.delay_ms(100)
         logger.debug(f"e-Paper busy H released at {where}")
 
-    def writePower(self, state, title, stop=True):
+    def writePower(self, state, title):
         if state == True:
             name = "on"
             cmd  = 0x04
@@ -127,7 +132,7 @@ class EPD():
         if state == False:
             self.SendData(0x00)
         self.CS_ALL(1)
-        self.ReadBusyH(f"[[{getParent()}]] for {title}", stop)
+        self.ReadBusyH(f"[[{getParent()}]] for {title}")
         self.powered_on = state
 
     def writeDRF(self, title):
@@ -136,12 +141,12 @@ class EPD():
         self.SendCommand(0x12)
         self.SendData(0x00)
         self.CS_ALL(1)
-        self.ReadBusyH(f"Write DRF {title}", True)
+        self.ReadBusyH(f"Write DRF {title}")
 
     def updateDisplay(self, title):
         if self.powered_on == False:
             logger.debug(f"POWER ON = {self.powered_on}")
-            self.writePower(True, title, not self.powered_on)
+            self.writePower(True, title)
 
         epdconfig.delay_ms(50)
 
