@@ -176,10 +176,6 @@ class ImageProcessor:
             return img
 
         try:
-            # TODO: This copy may be unnecessary since PIL enhance() methods return new images
-            # Consider removing after testing - would improve performance and memory usage
-            img = img.copy()
-
             # Apply enhancements using live config values
             color_enhance = self.config_manager.get_color_enhance()
             if color_enhance != 1:
