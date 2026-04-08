@@ -2,7 +2,9 @@
 
 import logging
 from abc import ABC, abstractmethod
+from collections.abc import Callable
 from pathlib import Path
+from typing import Optional
 
 from ..health import HealthManager
 from ..image_processing.processor import ImageProcessor
@@ -25,6 +27,10 @@ class BaseViewer(ABC):
         # Render coordinator callback for tracking display state
         self.render_coordinator = None
 
+        # Optional callback invoked after each successful render completes.
+        # Set by callers that need to react to display completion (e.g. standalone mode).
+        self.on_display_complete: Optional[Callable[[], None]] = None
+
     def set_render_coordinator(self, coordinator):
         """Set the render coordinator for display state tracking."""
         self.render_coordinator = coordinator
@@ -43,6 +49,10 @@ class BaseViewer(ABC):
 
         # Notify render coordinator of successful render
         self._notify_render_complete(image_key)
+
+        # Invoke completion callback if registered (e.g. standalone mode)
+        if self.on_display_complete is not None:
+            self.on_display_complete()
 
     def _load_and_process_image(self, img, image_path, title):
         """Common logic to load and process images."""

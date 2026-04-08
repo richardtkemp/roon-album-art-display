@@ -131,12 +131,26 @@ forbidden_zone_names = Bedroom
 ### Running the Application
 
 ```bash
-# Run with default configuration
+# Run with default configuration (connects to Roon)
 make run
 
 # Or run directly
 python -m roon_display.main
 ```
+
+### Standalone Image Display (no Roon required)
+
+Send a single image to the configured display and exit immediately after rendering:
+
+```bash
+# Display a specific image
+python -m roon_display.main --image /path/to/image.jpg
+
+# Pick a random image from a directory
+python -m roon_display.main --image /path/to/images/
+```
+
+This mode bypasses the Roon client entirely — useful for testing hardware, previewing display output, or displaying images independently of Roon. All configured image processing (rotation, scaling, enhancements) still applies. Supported formats: JPEG, PNG, BMP, GIF, WebP, TIFF.
 
 ### Development Commands
 

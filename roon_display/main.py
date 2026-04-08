@@ -1,6 +1,6 @@
 """Main application entry point for Roon Album Art Display."""
 
-import importlib
+import argparse
 import logging
 import sys
 from pathlib import Path
@@ -14,8 +14,7 @@ from .utils import (
     ensure_image_dir_exists,
     set_performance_logging,
 )
-from .viewers.eink_viewer import EinkViewer
-from .viewers.tk_viewer import TkViewer
+from .viewers import create_viewer
 
 # Configure logging format (level will be set after config is loaded)
 log_format = "%(asctime)s [%(levelname)-7s] %(name)-12s: %(message)s [[%(funcName)s]]"
@@ -38,41 +37,24 @@ websocket_logger = logging.getLogger("websocket")
 websocket_logger.setLevel(logging.WARNING)
 
 
-def create_viewer(config_manager):
-    """Create appropriate viewer based on configuration."""
-    display_type = config_manager.get_display_type()
-
-    if display_type == "system_display":
-        logger.info("Creating Tkinter system display viewer")
-        import tkinter as tk
-
-        from PIL import ImageTk
-
-        root = tk.Tk()
-        viewer = TkViewer(config_manager, root)
-        return viewer, root
-
-    elif display_type == "epd13in3E":
-        logger.info(f"Creating e-ink viewer for {display_type}")
-
-        # Add libs directory to path for e-ink modules
-        libs_dir = Path(__file__).parent.parent / "libs"
-        if libs_dir.exists():
-            sys.path.insert(0, str(libs_dir))
-
-        try:
-            eink_module = importlib.import_module(f"libs.{display_type}")
-            viewer = EinkViewer(config_manager, eink_module)
-            return viewer, None
-        except ImportError as e:
-            logger.error(f"Could not import e-ink module {display_type}: {e}")
-            raise
-    else:
-        raise ValueError(f"Unknown display type: {display_type}")
-
-
 def main():
     """Main application entry point."""
+    parser = argparse.ArgumentParser(description="Roon Album Art Display")
+    parser.add_argument(
+        "--image",
+        type=Path,
+        default=None,
+        metavar="PATH",
+        help="Image file or directory to display without Roon (exits after display)",
+    )
+    args = parser.parse_args()
+
+    if args.image is not None:
+        from .standalone import run as run_standalone
+
+        run_standalone(args.image)
+        return  # run_standalone calls sys.exit(), but be explicit
+
     try:
         logger.info("Starting Roon Album Art Display")
 
