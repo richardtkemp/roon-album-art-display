@@ -25,6 +25,33 @@ class ImageProcessor:
             logger.error("Scale must not be set to zero! Check config file")
             raise ValueError("Scale values cannot be zero")
 
+    @property
+    def screen_width(self):
+        """Current screen width from config manager."""
+        return self.config_manager.get_screen_width()
+
+    @property
+    def screen_height(self):
+        """Current screen height from config manager."""
+        return self.config_manager.get_screen_height()
+
+    def set_screen_size(self, width, height):
+        """Set screen dimensions in config manager."""
+        self.config_manager.set_screen_width(width)
+        self.config_manager.set_screen_height(height)
+
+    def needs_enhancement(self):
+        """Return True if any image enhancement value differs from 1.0."""
+        return any(
+            v != 1.0
+            for v in [
+                self.config_manager.get_color_enhance(),
+                self.config_manager.get_contrast(),
+                self.config_manager.get_brightness(),
+                self.config_manager.get_sharpness(),
+            ]
+        )
+
     @log_performance(threshold=0.5, description="Image file loading")
     def fetch_image(self, image_path):
         """Load an image from file path."""
@@ -104,8 +131,8 @@ class ImageProcessor:
         # Get live config values
         screen_width = self.config_manager.get_screen_width()
         screen_height = self.config_manager.get_screen_height()
-        offset_x = self.config_manager.get_position_offset_x()
-        offset_y = self.config_manager.get_position_offset_y()
+        offset_x = self.config_manager.get_image_offset_x()
+        offset_y = self.config_manager.get_image_offset_y()
 
         # Create new white background
         new_image = Image.new("RGB", (screen_width, screen_height), color="white")

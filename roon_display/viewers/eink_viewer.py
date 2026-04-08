@@ -59,8 +59,12 @@ class EinkViewer(BaseViewer):
 
         start_time = time.time()
 
-        # Send to e-ink display
-        self.epd.display(self.epd.getbuffer(img), title)
+        try:
+            # Send to e-ink display
+            self.epd.display(self.epd.getbuffer(img), title)
+        except Exception as e:
+            logger.error(f"Error during e-ink display: {e}")
+            return
 
         elapsed_time = time.time() - start_time
 

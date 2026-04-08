@@ -42,15 +42,15 @@ def sample_config():
     config["DISPLAY"] = {"type": "system_display", "partial_refresh": "false"}
 
     config["IMAGE_RENDER"] = {
-        "colour_balance_adjustment": "1.0",
-        "contrast_adjustment": "1.2",
-        "sharpness_adjustment": "1.1",
-        "brightness_adjustment": "0.9",
+        "color_enhance": "1.0",
+        "contrast": "1.2",
+        "sharpness": "1.1",
+        "brightness": "0.9",
     }
 
     config["IMAGE_POSITION"] = {
-        "position_offset_x": "10",
-        "position_offset_y": "20",
+        "image_offset_x": "10",
+        "image_offset_y": "20",
         "scale_x": "0.8",
         "scale_y": "0.9",
         "rotation": "90",
@@ -61,7 +61,7 @@ def sample_config():
         "forbidden_zone_names": "Bedroom",
     }
 
-    config["SERVER"] = {"ip": "192.168.1.100", "port": "9330"}
+    config["ROON_SERVER"] = {"ip": "192.168.1.100", "port": "9330"}
 
     return config
 
@@ -118,8 +118,6 @@ def mock_eink_module():
     """Create a mock e-ink module for testing."""
     import time
 
-    from timing_config import timing_config
-
     mock_module = Mock()
     mock_module.EPD_WIDTH = 800
     mock_module.EPD_HEIGHT = 600
@@ -128,9 +126,9 @@ def mock_eink_module():
     mock_epd = MagicMock()
     mock_epd.Init = Mock()
 
-    # Mock display method that simulates slow e-ink update
+    # Mock display method that simulates a brief e-ink update
     def slow_display(*args, **kwargs):
-        time.sleep(timing_config.mock_success_delay)  # Use configurable delay
+        time.sleep(0.01)
 
     mock_epd.display = Mock(side_effect=slow_display)
     mock_epd.getbuffer = Mock(return_value=b"test_buffer")

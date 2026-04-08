@@ -14,10 +14,10 @@ class TestMainApplication:
 
     def test_create_viewer_system_display(self, config_manager):
         """Test creating system display viewer."""
-        config_manager.config.set("DISPLAY", "type", "system_display")
+        config_manager.set_display_type("system_display")
 
         with patch("tkinter.Tk") as mock_tk, patch(
-            "roon_display.main.TkViewer"
+            "roon_display.viewers.tk_viewer.TkViewer"
         ) as mock_viewer:
             mock_root = Mock()
             mock_tk.return_value = mock_root
@@ -29,11 +29,11 @@ class TestMainApplication:
             assert viewer == mock_viewer_instance
             assert root == mock_root
             mock_tk.assert_called_once()
-            mock_viewer.assert_called_once_with(config_manager.config, mock_root)
+            mock_viewer.assert_called_once_with(config_manager, mock_root)
 
     def test_create_viewer_eink_display(self, config_manager):
         """Test creating e-ink display viewer."""
-        config_manager.config.set("DISPLAY", "type", "epd13in3E")
+        config_manager.set_display_type("epd13in3E")
 
         with patch("importlib.import_module") as mock_import, patch(
             "roon_display.main.sys.path"
@@ -55,22 +55,23 @@ class TestMainApplication:
 
     def test_create_viewer_unknown_type(self, config_manager):
         """Test creating viewer with unknown display type."""
-        config_manager.config.set("DISPLAY", "type", "unknown_display")
+        config_manager.set_display_type("unknown_display")
 
         with pytest.raises(ValueError, match="Unknown display type"):
             main.create_viewer(config_manager)
 
     def test_create_viewer_eink_import_error(self, config_manager):
         """Test e-ink viewer creation with import error."""
-        config_manager.config.set("DISPLAY", "type", "epd13in3E")
+        config_manager.set_display_type("epd13in3E")
 
-        with patch("roon_display.main.sys.path"), patch(
-            "roon_display.main.importlib.import_module",
+        with patch("roon_display.viewers.factory.sys.path"), patch(
+            "roon_display.viewers.factory.importlib.import_module",
             side_effect=ImportError("Module not found"),
         ):
             with pytest.raises(ImportError):
                 main.create_viewer(config_manager)
 
+    @patch("sys.argv", ["roon-display"])
     @patch("roon_display.main.ensure_image_dir_exists")
     @patch("roon_display.main.ConfigManager")
     @patch("roon_display.main.create_viewer")
@@ -82,6 +83,7 @@ class TestMainApplication:
         # Setup mocks
         mock_config_manager_instance = Mock()
         mock_config_manager_instance.get_log_level.return_value = "INFO"
+        mock_config_manager_instance.get_anniversaries_list.return_value = []
         mock_config_manager_instance.get_anniversaries_config.return_value = {
             "enabled": False,
             "anniversaries": [],
@@ -116,6 +118,7 @@ class TestMainApplication:
         mock_viewer.check_pending_updates.assert_called_once()
         mock_tk_root.mainloop.assert_called_once()
 
+    @patch("sys.argv", ["roon-display"])
     @patch("roon_display.main.ensure_image_dir_exists")
     @patch("roon_display.main.ConfigManager")
     @patch("roon_display.main.create_viewer")
@@ -127,6 +130,7 @@ class TestMainApplication:
         # Setup mocks
         mock_config_manager_instance = Mock()
         mock_config_manager_instance.get_log_level.return_value = "INFO"
+        mock_config_manager_instance.get_anniversaries_list.return_value = []
         mock_config_manager_instance.get_anniversaries_config.return_value = {
             "enabled": False,
             "anniversaries": [],
@@ -149,6 +153,7 @@ class TestMainApplication:
         # Should not call tk-specific methods
         mock_viewer.check_pending_updates.assert_not_called()
 
+    @patch("sys.argv", ["roon-display"])
     @patch("roon_display.main.ensure_image_dir_exists")
     @patch("roon_display.main.ConfigManager")
     @patch("roon_display.main.create_viewer")
@@ -160,6 +165,7 @@ class TestMainApplication:
         # Setup mocks
         mock_config_manager_instance = Mock()
         mock_config_manager_instance.get_log_level.return_value = "INFO"
+        mock_config_manager_instance.get_anniversaries_list.return_value = []
         mock_config_manager_instance.get_anniversaries_config.return_value = {
             "enabled": False,
             "anniversaries": [],
@@ -180,6 +186,7 @@ class TestMainApplication:
         # Should still call stop on client
         mock_client.stop.assert_called_once()
 
+    @patch("sys.argv", ["roon-display"])
     @patch("roon_display.main.ensure_image_dir_exists")
     @patch("roon_display.main.ConfigManager")
     @patch("roon_display.main.create_viewer")
@@ -190,6 +197,7 @@ class TestMainApplication:
         # Setup mocks
         mock_config_manager_instance = Mock()
         mock_config_manager_instance.get_log_level.return_value = "INFO"
+        mock_config_manager_instance.get_anniversaries_list.return_value = []
         mock_config_manager_instance.get_anniversaries_config.return_value = {
             "enabled": False,
             "anniversaries": [],
@@ -201,6 +209,7 @@ class TestMainApplication:
         with pytest.raises(Exception, match="Application error"):
             main.main()
 
+    @patch("sys.argv", ["roon-display"])
     @patch("roon_display.main.ensure_image_dir_exists")
     @patch("roon_display.main.ConfigManager")
     @patch("roon_display.main.create_viewer")
@@ -212,6 +221,7 @@ class TestMainApplication:
         # Setup mocks
         mock_config_manager_instance = Mock()
         mock_config_manager_instance.get_log_level.return_value = "INFO"
+        mock_config_manager_instance.get_anniversaries_list.return_value = []
         mock_config_manager_instance.get_anniversaries_config.return_value = {
             "enabled": False,
             "anniversaries": [],
@@ -219,8 +229,8 @@ class TestMainApplication:
         mock_config_manager.return_value = mock_config_manager_instance
 
         mock_viewer = Mock()
-        mock_tk_root = Mock()
-        mock_create_viewer.return_value = (mock_viewer, mock_tk_root)
+        # Use e-ink path (no tk_root) so connect() is called directly and errors propagate
+        mock_create_viewer.return_value = (mock_viewer, None)
 
         mock_client = Mock()
         mock_client.connect.side_effect = Exception("Connection error")
@@ -261,7 +271,7 @@ class TestMainApplication:
     def test_libs_path_addition(self, mock_path):
         """Test that libs directory is added to Python path for e-ink."""
         config_manager = Mock()
-        config_manager.config.get.return_value = "epd13in3E"
+        config_manager.get_display_type.return_value = "epd13in3E"
 
         with patch("importlib.import_module") as _mock_import, patch(  # noqa: F841
             "roon_display.main.EinkViewer"
@@ -285,6 +295,7 @@ class TestMainApplication:
             # Should attempt to add libs to path
             # Note: This is a simplified test - actual path manipulation is complex
 
+    @patch("sys.argv", ["roon-display"])
     @patch("roon_display.main.ensure_image_dir_exists")
     @patch("roon_display.main.ConfigManager")
     @patch("roon_display.main.create_viewer")
@@ -296,6 +307,7 @@ class TestMainApplication:
         # Setup mocks for e-ink flow
         mock_config_manager_instance = Mock()
         mock_config_manager_instance.get_log_level.return_value = "INFO"
+        mock_config_manager_instance.get_anniversaries_list.return_value = []
         mock_config_manager_instance.get_anniversaries_config.return_value = {
             "enabled": False,
             "anniversaries": [],

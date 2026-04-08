@@ -5,11 +5,20 @@ import tempfile
 import time
 from datetime import datetime, timedelta
 from pathlib import Path
-from unittest.mock import MagicMock, patch
+from unittest.mock import MagicMock, Mock, patch
 
 import pytest
 
 from roon_display.health import HealthManager
+
+
+def make_config(script=None, interval=1800, timeout=30):
+    """Create a mock config_manager for HealthManager tests."""
+    m = Mock()
+    m.get_health_script.return_value = script
+    m.get_health_recheck_interval.return_value = interval
+    m.get_health_script_timeout.return_value = timeout
+    return m
 
 
 class TestHealthManager:
@@ -17,9 +26,8 @@ class TestHealthManager:
 
     def test_init_without_script(self):
         """Test initialization without health script."""
-        health_manager = HealthManager()
+        health_manager = HealthManager(make_config())
         assert health_manager.health_script_path is None
-        assert health_manager.last_status is None
         assert health_manager.last_timestamp is None
         assert health_manager.last_params is None
         assert health_manager.recheck_interval == timedelta(seconds=1800)
@@ -28,13 +36,15 @@ class TestHealthManager:
         """Test initialization with health script and custom interval."""
         script_path = "/path/to/script.sh"
         interval = 3600  # 1 hour
-        health_manager = HealthManager(script_path, interval)
+        health_manager = HealthManager(
+            make_config(), health_script_path=script_path, recheck_interval_seconds=interval
+        )
         assert health_manager.health_script_path == script_path
         assert health_manager.recheck_interval == timedelta(seconds=interval)
 
     def test_call_health_script_no_script_configured(self):
         """Test calling health script when none configured."""
-        health_manager = HealthManager()
+        health_manager = HealthManager(make_config())
         result = health_manager.call_health_script("good", "test info")
         assert result is False
 
@@ -52,11 +62,10 @@ class TestHealthManager:
             f.write('#!/bin/bash\necho "Script executed successfully"')
 
         try:
-            health_manager = HealthManager(script_path)
+            health_manager = HealthManager(make_config(), health_script_path=script_path)
             result = health_manager.call_health_script("good", "test info")
 
             assert result is True
-            assert health_manager.last_status == "good"
             assert health_manager.last_params == ("good", "test info")
             assert health_manager.last_timestamp is not None
 
@@ -79,12 +88,11 @@ class TestHealthManager:
         mock_result.stderr = "Script failed"
         mock_run.return_value = mock_result
 
-        health_manager = HealthManager("/path/to/script.sh")
+        health_manager = HealthManager(make_config(), health_script_path="/path/to/script.sh")
         result = health_manager.call_health_script("bad", "error info")
 
         assert result is False
-        # Status should still be tracked even on failure
-        assert health_manager.last_status == "bad"
+        # Params should still be tracked even on failure
         assert health_manager.last_params == ("bad", "error info")
 
     @patch("subprocess.run")
@@ -92,7 +100,7 @@ class TestHealthManager:
         """Test health script timeout."""
         mock_run.side_effect = subprocess.TimeoutExpired("cmd", 30)
 
-        health_manager = HealthManager("/path/to/script.sh")
+        health_manager = HealthManager(make_config(), health_script_path="/path/to/script.sh")
         result = health_manager.call_health_script("good", "test info")
 
         assert result is False
@@ -102,14 +110,14 @@ class TestHealthManager:
         """Test health script file not found."""
         mock_run.side_effect = FileNotFoundError()
 
-        health_manager = HealthManager("/nonexistent/script.sh")
+        health_manager = HealthManager(make_config(), health_script_path="/nonexistent/script.sh")
         result = health_manager.call_health_script("good", "test info")
 
         assert result is False
 
     def test_report_render_success(self):
         """Test reporting render success."""
-        health_manager = HealthManager()
+        health_manager = HealthManager(make_config())
         with patch.object(health_manager, "call_health_script") as mock_call:
             mock_call.return_value = True
             result = health_manager.report_render_success("Custom success message")
@@ -119,7 +127,7 @@ class TestHealthManager:
 
     def test_report_render_failure(self):
         """Test reporting render failure."""
-        health_manager = HealthManager()
+        health_manager = HealthManager(make_config())
         with patch.object(health_manager, "call_health_script") as mock_call:
             mock_call.return_value = True
             result = health_manager.report_render_failure("Custom failure message")
@@ -129,35 +137,41 @@ class TestHealthManager:
 
     def test_should_recheck_health_no_script(self):
         """Test should_recheck_health with no script configured."""
-        health_manager = HealthManager()
+        health_manager = HealthManager(make_config())
         assert health_manager.should_recheck_health() is False
 
     def test_should_recheck_health_no_previous_call(self):
         """Test should_recheck_health with no previous call."""
-        health_manager = HealthManager("/path/to/script.sh")
+        health_manager = HealthManager(make_config(), health_script_path="/path/to/script.sh")
         assert health_manager.should_recheck_health() is False
 
     def test_should_recheck_health_too_soon(self):
         """Test should_recheck_health when called too soon."""
-        health_manager = HealthManager("/path/to/script.sh", 3600)  # 1 hour
+        health_manager = HealthManager(
+            make_config(), health_script_path="/path/to/script.sh", recheck_interval_seconds=3600
+        )
         health_manager.last_timestamp = datetime.now()
         assert health_manager.should_recheck_health() is False
 
     def test_should_recheck_health_time_passed(self):
         """Test should_recheck_health when enough time has passed."""
-        health_manager = HealthManager("/path/to/script.sh", 60)  # 1 minute
+        health_manager = HealthManager(
+            make_config(), health_script_path="/path/to/script.sh", recheck_interval_seconds=60
+        )
         health_manager.last_timestamp = datetime.now() - timedelta(seconds=61)
         assert health_manager.should_recheck_health() is True
 
     def test_recheck_health_not_needed(self):
         """Test recheck_health when not needed."""
-        health_manager = HealthManager()
+        health_manager = HealthManager(make_config())
         result = health_manager.recheck_health()
         assert result is False
 
     def test_recheck_health_success(self):
         """Test successful recheck_health."""
-        health_manager = HealthManager("/path/to/script.sh", 60)
+        health_manager = HealthManager(
+            make_config(), health_script_path="/path/to/script.sh", recheck_interval_seconds=60
+        )
         health_manager.last_timestamp = datetime.now() - timedelta(seconds=61)
         health_manager.last_params = ("good", "previous message")
 
@@ -182,7 +196,9 @@ class TestHealthManagerIntegration:
             # Make script executable
             Path(script_path).chmod(0o755)
 
-            health_manager = HealthManager(script_path, 1)  # 1 second interval
+            health_manager = HealthManager(
+                make_config(), health_script_path=script_path, recheck_interval_seconds=1
+            )
 
             # First call
             with patch("subprocess.run") as mock_run:
@@ -192,7 +208,6 @@ class TestHealthManagerIntegration:
 
                 result = health_manager.report_render_success("First render")
                 assert result is True
-                assert health_manager.last_status == "good"
 
             # Wait a bit and check recheck
             time.sleep(1.1)

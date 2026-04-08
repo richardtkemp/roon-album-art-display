@@ -14,15 +14,14 @@ class TestConfigManager:
 
     def test_init_with_existing_config(self, config_manager):
         """Test initialization with existing config file."""
-        assert config_manager.config is not None
+        assert config_manager.get_display_type() is not None
         assert config_manager.config_path.exists()
 
     def test_init_creates_default_config(self, temp_dir):
         """Test that default config is created when file doesn't exist."""
         config_path = temp_dir / "new_config.cfg"
 
-        with pytest.raises(SystemExit):  # create_default_config calls sys.exit(0)
-            ConfigManager(config_path)
+        ConfigManager(config_path)
 
         # Config file should be created
         assert config_path.exists()
@@ -38,8 +37,8 @@ class TestConfigManager:
         assert "publisher" in app_info
         assert "email" in app_info
 
-        assert app_info["extension_id"] == "test_extension"
-        assert app_info["display_name"] == "Test Display"
+        assert app_info["extension_id"] == "python_roon_album_display"
+        assert app_info["display_name"] == "Album Art Display"
 
     def test_get_zone_config(self, config_manager):
         """Test getting zone configuration."""
@@ -100,14 +99,13 @@ class TestConfigManager:
 
         config_manager.save_server_config(server_ip, server_port)
 
-        # Verify config was updated
-        assert config_manager.config.get("SERVER", "ip") == server_ip
-        assert config_manager.config.getint("SERVER", "port") == server_port
+        ip, port = config_manager.get_server_config()
+        assert ip == server_ip
+        assert port == server_port
 
     def test_save_server_config_creates_section(self, temp_dir, sample_config):
-        """Test that SERVER section is created if it doesn't exist."""
-        # Remove SERVER section
-        sample_config.remove_section("SERVER")
+        """Test that ROON_SERVER section is created if it doesn't exist."""
+        sample_config.remove_section("ROON_SERVER")
 
         config_path = temp_dir / "no_server.cfg"
         with open(config_path, "w") as f:
@@ -116,8 +114,9 @@ class TestConfigManager:
         config_manager = ConfigManager(config_path)
         config_manager.save_server_config("192.168.1.50", 9330)
 
-        assert config_manager.config.has_section("SERVER")
-        assert config_manager.config.get("SERVER", "ip") == "192.168.1.50"
+        ip, port = config_manager.get_server_config()
+        assert ip == "192.168.1.50"
+        assert port == 9330
 
     @patch("builtins.open", side_effect=OSError("Permission denied"))
     def test_save_server_config_error_handling(self, mock_file, config_manager):
@@ -126,7 +125,8 @@ class TestConfigManager:
         config_manager.save_server_config("192.168.1.100", 9330)
 
         # Config object should still be updated even if file write fails
-        assert config_manager.config.get("SERVER", "ip") == "192.168.1.100"
+        ip, port = config_manager.get_server_config()
+        assert ip == "192.168.1.100"
 
     def test_get_server_config(self, config_manager):
         """Test getting server configuration."""
@@ -136,8 +136,8 @@ class TestConfigManager:
         assert port == 9330
 
     def test_get_server_config_no_section(self, temp_dir, sample_config):
-        """Test getting server config when SERVER section doesn't exist."""
-        sample_config.remove_section("SERVER")
+        """Test getting server config when ROON_SERVER section doesn't exist."""
+        sample_config.remove_section("ROON_SERVER")
 
         config_path = temp_dir / "no_server.cfg"
         with open(config_path, "w") as f:
@@ -151,7 +151,7 @@ class TestConfigManager:
 
     def test_get_server_config_missing_values(self, temp_dir, sample_config):
         """Test getting server config with missing values."""
-        sample_config["SERVER"] = {}  # Empty section
+        sample_config["ROON_SERVER"] = {}  # Empty section
 
         config_path = temp_dir / "empty_server.cfg"
         with open(config_path, "w") as f:
@@ -197,8 +197,7 @@ class TestConfigManager:
         """Test that default config has all required sections."""
         config_path = temp_dir / "default_test.cfg"
 
-        with pytest.raises(SystemExit):
-            ConfigManager(config_path)
+        ConfigManager(config_path)
 
         # Read the created config
         import configparser
@@ -208,7 +207,6 @@ class TestConfigManager:
 
         # Verify all required sections exist
         required_sections = [
-            "APP",
             "DISPLAY",
             "IMAGE_RENDER",
             "IMAGE_POSITION",
@@ -217,11 +215,10 @@ class TestConfigManager:
         for section in required_sections:
             assert config.has_section(section)
 
-        # Verify some key values
-        assert config.get("APP", "extension_id") == "python_roon_album_display"
-        assert config.get("DISPLAY", "type") == "epd13in3E"
+        # Verify some key values from the current CONFIG_SCHEMA defaults
+        assert config.get("DISPLAY", "type") == "system_display"
         assert config.get("DISPLAY", "tkinter_fullscreen") == "false"
-        assert config.get("IMAGE_RENDER", "contrast_adjustment") == "1"
+        assert config.get("IMAGE_RENDER", "contrast") == "1.0"
 
     def test_config_path_storage(self, config_file):
         """Test that config path is stored correctly."""
@@ -237,8 +234,8 @@ class TestConfigManager:
 
             os.chdir(temp_dir)
 
-            with pytest.raises(SystemExit):
-                ConfigManager()  # No path provided, should use default
+            cm = ConfigManager()  # Creates default config at roon.cfg
+            assert cm.config_path == Path("roon.cfg")
         finally:
             os.chdir(original_cwd)
 
@@ -281,50 +278,41 @@ class TestConfigManager:
 
     def test_get_health_script_configured(self, config_manager):
         """Test getting health script when configured."""
-        # Add health script to config
-        config_manager.config["MONITORING"] = {"health_script": "/path/to/health.sh"}
+        config_manager.set_health_script("/path/to/health.sh")
 
         script_path = config_manager.get_health_script()
         assert script_path == "/path/to/health.sh"
 
     def test_get_health_script_empty(self, config_manager):
         """Test getting health script when empty."""
-        # Add empty health script to config
-        config_manager.config["MONITORING"] = {"health_script": ""}
+        config_manager.set_health_script("")
 
         script_path = config_manager.get_health_script()
         assert script_path is None
 
     def test_get_health_script_not_configured(self, config_manager):
         """Test getting health script when section doesn't exist."""
-        # Remove MONITORING section if it exists
-        if "MONITORING" in config_manager.config:
-            del config_manager.config["MONITORING"]
-
+        # sample_config fixture has no MONITORING section, so no setup needed
         script_path = config_manager.get_health_script()
         assert script_path is None
 
     def test_get_health_recheck_interval_configured(self, config_manager):
         """Test getting health recheck interval when configured."""
-        # Add health recheck interval to config
-        config_manager.config["MONITORING"] = {"health_recheck_interval": "3600"}
+        config_manager.set_health_recheck_interval("3600")
 
         interval = config_manager.get_health_recheck_interval()
         assert interval == 3600
 
     def test_get_health_recheck_interval_default(self, config_manager):
         """Test getting health recheck interval with default value."""
-        # Remove MONITORING section if it exists
-        if "MONITORING" in config_manager.config:
-            del config_manager.config["MONITORING"]
-
+        # sample_config fixture has no MONITORING section, so no setup needed
         interval = config_manager.get_health_recheck_interval()
         assert interval == 1800  # Default 30 minutes
 
     def test_get_health_recheck_interval_fallback(self, config_manager):
         """Test getting health recheck interval with fallback value."""
-        # Add MONITORING section without recheck interval
-        config_manager.config["MONITORING"] = {"health_script": "/path/to/script.sh"}
+        # Set health_script but not health_recheck_interval
+        config_manager.set_health_script("/path/to/script.sh")
 
         interval = config_manager.get_health_recheck_interval()
         assert interval == 1800  # Default 30 minutes

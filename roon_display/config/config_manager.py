@@ -238,6 +238,11 @@ CONFIG_SCHEMA = {
             "type": "boolean",
             "comment": "Enable fullscreen mode for tkinter display",
         },
+        "partial_refresh": {
+            "default": "false",
+            "type": "boolean",
+            "comment": "Enable partial refresh mode for e-ink displays",
+        },
     },
     "IMAGE_RENDER": {
         "color_enhance": {
@@ -298,7 +303,7 @@ CONFIG_SCHEMA = {
         },
         "rotation": {
             "default": "0",
-            "type": "select",
+            "type": "number",
             "options": ["0", "90", "180", "270"],
             "comment": "Image rotation angle (degrees)",
         },
@@ -587,6 +592,40 @@ class ConfigManager:
     def get_display_type(self):
         """Get display type."""
         return self._config.get("DISPLAY", "type", fallback="system_display")
+
+    def set_display_type(self, value):
+        """Set display type."""
+        self.update_config_values({"DISPLAY.type": str(value)})
+
+    def get_server_config(self):
+        """Get server configuration as (ip, port) tuple, or (None, None) if not set."""
+        if "ROON_SERVER" not in self._config:
+            return None, None
+        ip = self._config.get("ROON_SERVER", "ip", fallback=None) or None
+        port_str = self._config.get("ROON_SERVER", "port", fallback=None) or None
+        if not ip or not port_str:
+            return None, None
+        try:
+            return ip, int(port_str)
+        except ValueError:
+            return None, None
+
+    def get_display_config(self):
+        """Get display configuration as a dict with type and partial_refresh."""
+        return {
+            "type": self.get_display_type(),
+            "partial_refresh": self._config.getboolean(
+                "DISPLAY", "partial_refresh", fallback=False
+            ),
+        }
+
+    def get_zone_config(self):
+        """Get zone configuration as (allowed_list, forbidden_list) tuple."""
+        allowed_str = self.get_allowed_zone_names()
+        forbidden_str = self.get_forbidden_zone_names()
+        allowed = [z.strip() for z in allowed_str.split(",") if z.strip()]
+        forbidden = [z.strip() for z in forbidden_str.split(",") if z.strip()]
+        return allowed, forbidden
 
     def save_server_config(self, server_ip, server_port):
         """Save server details to config file."""
@@ -967,10 +1006,17 @@ class ConfigManager:
 
 # Auto-generate getter methods from CONFIG_SCHEMA
 def _generate_getter_methods():
-    """Generate getter methods for all fields in CONFIG_SCHEMA."""
+    """Generate getter methods for all fields in CONFIG_SCHEMA.
+
+    Skips fields where a manual getter already exists on the class,
+    so hand-crafted methods with special logic are never overridden.
+    """
+    existing = set(ConfigManager.__dict__)
     for section_name, fields in CONFIG_SCHEMA.items():
         for field_name, field_config in fields.items():
             method_name = f"get_{field_name}"
+            if method_name in existing:
+                continue  # Don't override manually-defined getters
             field_type = field_config["type"]
 
             def make_getter(section, field, ftype):
@@ -991,3 +1037,35 @@ def _generate_getter_methods():
 
 # Generate all getter methods
 _generate_getter_methods()
+
+
+# Auto-generate setter methods from CONFIG_SCHEMA
+def _generate_setter_methods():
+    """Generate setter methods for all fields in CONFIG_SCHEMA.
+
+    Skips fields where a manual setter already exists on the class.
+    """
+    existing = set(ConfigManager.__dict__)
+    for section_name, fields in CONFIG_SCHEMA.items():
+        for field_name, field_config in fields.items():
+            method_name = f"set_{field_name}"
+            if method_name in existing:
+                continue  # Don't override manually-defined setters
+
+            def make_setter(section, field):
+                def setter(self, value):
+                    self.update_config_values({f"{section}.{field}": str(value)})
+
+                setter.__name__ = f"set_{field}"
+                setter.__doc__ = f"Set {field} in {section} section."
+                return setter
+
+            setattr(
+                ConfigManager,
+                method_name,
+                make_setter(section_name, field_name),
+            )
+
+
+# Generate all setter methods
+_generate_setter_methods()

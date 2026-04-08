@@ -58,101 +58,58 @@ class TestRoonClient:
             assert client.token_file == temp_dir / ".roon_album_display_token_test.txt"
             assert client.running is False
 
+    def test_get_server_details_with_config(self, roon_client):
+        """Test getting server details when config exists."""
+        ip, port = roon_client._get_server_details()
+        assert ip == "192.168.1.100"
+        assert port == 9330
+
+    def test_get_server_details_no_config(self, roon_client):
+        """Test getting server details when no config."""
+        with patch.object(
+            roon_client.config_manager, "get_server_config", return_value=(None, None)
+        ):
+            ip, port = roon_client._get_server_details()
+
+        assert ip is None
+        assert port is None
+
     @patch("roon_display.roon_client.client.RoonApi")
-    def test_try_saved_connection_success(self, mock_roon_api, roon_client):
-        """Test successful connection using saved server details."""
-        # Setup mocks
-        mock_api = Mock()
-        mock_api.host = "192.168.1.100"
-        mock_api.zones = {"zone1": {"name": "test"}}
-        mock_roon_api.return_value = mock_api
+    def test_create_roon_connection_failure(self, mock_roon_api, roon_client):
+        """Test roon connection creation failure."""
+        mock_roon_api.side_effect = Exception("Connection failed")
 
-        with patch.object(roon_client, "_get_token", return_value="test_token"):
-            result = roon_client._try_saved_connection()
-
-            assert result == mock_api
-            mock_roon_api.assert_called_once_with(
-                roon_client.app_info, "test_token", "192.168.1.100", 9330
-            )
-
-    def test_try_saved_connection_no_config(self, roon_client):
-        """Test saved connection when no server config exists."""
-        roon_client.config_manager.get_server_config = Mock(return_value=(None, None))
-
-        result = roon_client._try_saved_connection()
+        with patch.object(roon_client, "_test_connectivity", return_value=True):
+            result = roon_client._create_roon_connection("192.168.1.100", 9330)
 
         assert result is None
 
-    @patch("roon_display.roon_client.client.RoonApi")
-    def test_try_saved_connection_failure(self, mock_roon_api, roon_client):
-        """Test saved connection failure."""
-        mock_roon_api.side_effect = Exception("Connection failed")
+    @patch("roon_display.roon_client.client.RoonDiscovery")
+    def test_discover_server_success(self, mock_discovery, roon_client):
+        """Test successful server discovery after initial wait."""
+        mock_discover = Mock()
+        mock_discover.all.side_effect = [[], [("192.168.1.50", 9330)]]
+        mock_discover.stop = Mock()
+        mock_discovery.return_value = mock_discover
 
-        with patch.object(roon_client, "_get_token", return_value="test_token"):
-            result = roon_client._try_saved_connection()
+        with patch("time.sleep"):
+            result = roon_client._discover_server()
 
-            assert result is None
+        assert result == ("192.168.1.50", 9330)
+        mock_discover.stop.assert_called_once()
 
     @patch("roon_display.roon_client.client.RoonDiscovery")
-    @patch("roon_display.roon_client.client.RoonApi")
-    def test_discover_and_connect_success(
-        self, mock_roon_api, mock_discovery, roon_client
-    ):
-        """Test successful server discovery and connection."""
-        # Setup discovery mock
+    def test_discover_server_first_try(self, mock_discovery, roon_client):
+        """Test server discovery succeeds on first try."""
         mock_discover = Mock()
         mock_discover.all.return_value = [("192.168.1.50", 9330)]
         mock_discover.stop = Mock()
         mock_discovery.return_value = mock_discover
 
-        # Setup API mock
-        mock_api = Mock()
-        mock_api.token = "existing_token"
-        mock_roon_api.return_value = mock_api
+        result = roon_client._discover_server()
 
-        with patch.object(
-            roon_client, "_get_token", return_value="existing_token"
-        ), patch.object(roon_client.config_manager, "save_server_config") as mock_save:
-            result = roon_client._discover_and_connect()
-
-            assert result == mock_api
-            mock_discover.stop.assert_called_once()
-            mock_save.assert_called_once()
-
-    @patch("roon_display.roon_client.client.RoonDiscovery")
-    @patch("roon_display.roon_client.client.RoonApi")
-    def test_discover_and_connect_authorization_flow(
-        self, mock_roon_api, mock_discovery, roon_client
-    ):
-        """Test discovery with authorization flow."""
-        # Setup discovery
-        mock_discover = Mock()
-        mock_discover.all.return_value = [("192.168.1.50", 9330)]
-        mock_discover.stop = Mock()
-        mock_discovery.return_value = mock_discover
-
-        # Setup API mock for authorization flow
-        mock_api = Mock()
-        mock_api.token = None  # Initially no token
-        mock_roon_api.return_value = mock_api
-
-        mock_token_file = Mock()
-        with patch.object(roon_client, "_get_token", return_value=None), patch(
-            "time.sleep"
-        ), patch.object(roon_client, "token_file", mock_token_file), patch.object(
-            roon_client.config_manager, "save_server_config"
-        ):
-            # Simulate authorization success after one iteration
-            def side_effect():
-                mock_api.token = "new_token"
-
-            # Mock the authorization loop
-            _original_token = mock_api.token  # noqa: F841
-            mock_api.token = "new_token"  # Simulate successful authorization
-
-            result = roon_client._discover_and_connect()
-
-            assert result == mock_api
+        assert result == ("192.168.1.50", 9330)
+        mock_discover.stop.assert_called_once()
 
     def test_get_token_exists(self, roon_client):
         """Test getting existing token."""
@@ -402,14 +359,19 @@ class TestRoonClient:
         """Test fetch and display when image file already exists."""
         image_path = temp_dir / "album_art_existing_key.jpg"
         sample_image.save(image_path)
+        roon_client.render_coordinator = Mock()
 
         with patch(
             "roon_display.roon_client.client.get_saved_image_dir", return_value=temp_dir
         ):
             roon_client._fetch_and_display_album_art("existing_key", "Test Track")
 
-            roon_client.viewer.update.assert_called_once_with(
-                "existing_key", image_path, None, "Test Track"
+            roon_client.render_coordinator.set_main_content.assert_called_once_with(
+                content_type="art",
+                image_key="existing_key",
+                image_path=image_path,
+                img=None,
+                track_info="Test Track",
             )
 
     def test_fetch_and_display_album_art_new_download(
@@ -417,14 +379,19 @@ class TestRoonClient:
     ):
         """Test fetch and display with new image download."""
         image_path = temp_dir / "album_art_new_key.jpg"
+        roon_client.render_coordinator = Mock()
 
         with patch(
             "roon_display.roon_client.client.get_saved_image_dir", return_value=temp_dir
         ), patch.object(roon_client, "_download_album_art", return_value=sample_image):
             roon_client._fetch_and_display_album_art("new_key", "New Track")
 
-            roon_client.viewer.update.assert_called_once_with(
-                "new_key", image_path, sample_image, "New Track"
+            roon_client.render_coordinator.set_main_content.assert_called_once_with(
+                content_type="art",
+                image_key="new_key",
+                image_path=image_path,
+                img=sample_image,
+                track_info="New Track",
             )
 
     def test_fetch_and_display_album_art_download_failure(self, roon_client, temp_dir):
@@ -464,7 +431,7 @@ class TestRoonClient:
         roon_client.subscribe_to_events()
 
         roon_client.roon.register_state_callback.assert_called_once_with(
-            roon_client._zone_event_callback, "zones_changed"
+            roon_client._zone_event_callback
         )
 
     def test_subscribe_to_events_error(self, roon_client):
@@ -488,8 +455,9 @@ class TestRoonClient:
             result = roon_client.run()
 
             assert roon_client.running is True
-            mock_thread.assert_called_once()
-            mock_thread_instance.start.assert_called_once()
+            # run() creates 2 threads: connection monitor + event loop
+            assert mock_thread.call_count == 2
+            mock_thread_instance.start.assert_called()
             assert result == mock_thread_instance
 
     def test_stop(self, roon_client):

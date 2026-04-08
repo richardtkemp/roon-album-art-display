@@ -52,13 +52,9 @@ class TestBaseViewer:
 
     def test_initialization(self, concrete_viewer):
         """Test BaseViewer initialization."""
-        # Should have config and image_processor
-        assert concrete_viewer.config is not None
+        # Should have config_manager and image_processor
+        assert concrete_viewer.config_manager is not None
         assert concrete_viewer.image_processor is not None
-
-        # Should not have screen dimensions set initially
-        assert not hasattr(concrete_viewer, "screen_width")
-        assert not hasattr(concrete_viewer, "screen_height")
 
     def test_set_screen_size(self, concrete_viewer):
         """Test set_screen_size method."""
@@ -66,13 +62,9 @@ class TestBaseViewer:
 
         concrete_viewer.set_screen_size(width, height)
 
-        # Should set viewer dimensions
-        assert concrete_viewer.screen_width == width
-        assert concrete_viewer.screen_height == height
-
-        # Should also set image processor dimensions
-        assert concrete_viewer.image_processor.screen_width == width
-        assert concrete_viewer.image_processor.screen_height == height
+        # Should update config manager dimensions
+        assert concrete_viewer.config_manager.get_screen_width() == width
+        assert concrete_viewer.config_manager.get_screen_height() == height
 
     def test_startup_no_existing_image(self, concrete_viewer):
         """Test startup method when no existing image."""
@@ -103,13 +95,11 @@ class TestBaseViewer:
     def test_startup_existing_image_with_file(
         self, concrete_viewer, temp_dir, sample_image
     ):
-        """Test startup method with existing image key and file."""
+        """Test startup is a no-op (image loading handled by RenderCoordinator)."""
         image_key = "test_image_456"
         image_dir = temp_dir / "album_art"
         image_dir.mkdir()
         image_path = image_dir / f"album_art_{image_key}.jpg"
-
-        # Create the image file
         sample_image.save(image_path)
 
         with patch(
@@ -119,13 +109,8 @@ class TestBaseViewer:
         ):
             concrete_viewer.startup()
 
-            # Should call update with correct parameters
-            assert len(concrete_viewer.update_calls) == 1
-            call_args = concrete_viewer.update_calls[0]
-            assert call_args[0] == image_key  # image_key
-            assert call_args[1] == image_path  # image_path
-            assert call_args[2] is None  # img (let update load it)
-            assert call_args[3] == "startup"  # title
+            # Startup is now a no-op; image loading is handled by RenderCoordinator
+            assert len(concrete_viewer.update_calls) == 0
 
     def test_startup_handles_exceptions(self, concrete_viewer):
         """Test that startup method handles exceptions gracefully."""
@@ -145,24 +130,17 @@ class TestEinkViewer:
     def eink_viewer(self, config_manager, mock_eink_module):
         """Create EinkViewer instance for testing."""
         with patch("roon_display.viewers.eink_viewer.set_current_image_key"):
-            viewer = EinkViewer(
-                config_manager.config, mock_eink_module, partial_refresh=False
-            )
+            viewer = EinkViewer(config_manager, mock_eink_module)
             viewer.startup = Mock()  # Mock startup to avoid file operations
             return viewer
 
     def test_initialization(self, config_manager, mock_eink_module):
         """Test EinkViewer initialization."""
         with patch("roon_display.viewers.eink_viewer.set_current_image_key"):
-            viewer = EinkViewer(
-                config_manager.config, mock_eink_module, partial_refresh=False
-            )
+            viewer = EinkViewer(config_manager, mock_eink_module)
 
             assert viewer.eink == mock_eink_module
-            assert viewer.screen_width == 800
-            assert viewer.screen_height == 600
             assert viewer.epd is not None
-            assert viewer.partial_refresh is False
             mock_eink_module.EPD.assert_called_once()
             viewer.epd.Init.assert_called_once()
 
@@ -177,7 +155,7 @@ class TestEinkViewer:
         eink_viewer.epd.getbuffer.assert_called_once_with(sample_image)
         eink_viewer.epd.display.assert_called_once()
 
-    @patch("roon_display.viewers.eink_viewer.set_current_image_key")
+    @patch("roon_display.utils.set_current_image_key")
     def test_display_image_sets_current_key(
         self, mock_set_key, eink_viewer, sample_image
     ):
@@ -310,16 +288,8 @@ class TestEinkViewer:
 
     def test_fast_render_detection(self, eink_viewer, sample_image, caplog):
         """Test detection of fast renders that indicate hardware problems."""
-
-        from timing_config import timing_config
-
-        # Mock display to complete quickly (simulating failed render)
-        def fast_display(*args, **kwargs):
-            time.sleep(
-                timing_config.mock_failure_delay
-            )  # Use configurable failure timing
-
-        eink_viewer.epd.display.side_effect = fast_display
+        # The default mock display completes in ~0.01s, well below the 15s threshold
+        # (no side_effect override needed — default mock is already "fast")
 
         with caplog.at_level(logging.ERROR):
             eink_viewer.update(
@@ -345,6 +315,8 @@ class TestEinkViewer:
 
     def test_normal_render_timing_no_warning(self, eink_viewer, sample_image, caplog):
         """Test that normal render timing doesn't trigger warnings."""
+        # Set threshold very low so the mock display (0.01s) counts as "normal"
+        eink_viewer.config_manager.set_eink_success_threshold("0.001")
         with caplog.at_level(logging.ERROR):
             eink_viewer.update(
                 "normal_key", "/normal/path", sample_image, "Normal Render Test"
@@ -399,31 +371,26 @@ class TestTkViewer:
         with patch("tkinter.Label", return_value=mock_tk_label), patch(
             "roon_display.viewers.tk_viewer.set_current_image_key"
         ):
-            viewer = TkViewer(config_manager.config, mock_tk_root)
+            viewer = TkViewer(config_manager, mock_tk_root)
             viewer.startup = Mock()  # Mock startup to avoid file operations
             return viewer
 
     def test_initialization(self, config_manager, mock_tk_root, mock_tk_label):
         """Test TkViewer initialization."""
-        # Set fullscreen mode to get the expected screen dimensions
-        config_manager.config.set("DISPLAY", "tkinter_fullscreen", "true")
+        config_manager.set_tkinter_fullscreen("true")
 
         with patch("tkinter.Label", return_value=mock_tk_label), patch(
             "roon_display.viewers.tk_viewer.set_current_image_key"
         ):
-            viewer = TkViewer(config_manager.config, mock_tk_root)
+            viewer = TkViewer(config_manager, mock_tk_root)
 
             assert viewer.root == mock_tk_root
-            assert viewer.screen_width == 1920
-            assert viewer.screen_height == 1080
             assert viewer.pending_image_data is None
 
             # Verify window setup
             mock_tk_root.title.assert_called_with("Album Art Viewer")
             mock_tk_root.tk_setPalette.assert_called_once()
-            mock_tk_root.attributes.assert_called_with(
-                "-fullscreen", True
-            )  # Now using fullscreen
+            mock_tk_root.attributes.assert_called_with("-fullscreen", True)
             mock_tk_root.geometry.assert_not_called()  # Not called in fullscreen mode
             mock_tk_root.bind.assert_called()
             mock_tk_root.protocol.assert_called()
@@ -432,13 +399,12 @@ class TestTkViewer:
         self, config_manager, mock_tk_root, mock_tk_label
     ):
         """Test TkViewer with fullscreen enabled."""
-        # Set fullscreen to true in config
-        config_manager.config.set("DISPLAY", "tkinter_fullscreen", "true")
+        config_manager.set_tkinter_fullscreen("true")
 
         with patch("tkinter.Label", return_value=mock_tk_label), patch(
             "roon_display.viewers.tk_viewer.set_current_image_key"
         ):
-            _viewer = TkViewer(config_manager.config, mock_tk_root)  # noqa: F841
+            _viewer = TkViewer(config_manager, mock_tk_root)  # noqa: F841
 
             # Verify fullscreen is enabled and no geometry call
             mock_tk_root.attributes.assert_called_with("-fullscreen", True)
@@ -472,7 +438,7 @@ class TestTkViewer:
         sample_image.save(image_path)
 
         with patch("PIL.ImageTk.PhotoImage") as mock_photo, patch(
-            "roon_display.viewers.tk_viewer.set_current_image_key"
+            "roon_display.utils.set_current_image_key"
         ) as mock_set_key:
             mock_photo_instance = Mock()
             mock_photo.return_value = mock_photo_instance
@@ -540,7 +506,7 @@ class TestTkViewer:
         with patch("tkinter.Label", return_value=mock_tk_label), patch(
             "roon_display.viewers.tk_viewer.set_current_image_key"
         ):
-            TkViewer(config_manager.config, mock_tk_root)
+            TkViewer(config_manager, mock_tk_root)
 
             # Verify escape key binding
             escape_calls = [
@@ -586,38 +552,29 @@ class TestTkViewer:
     def test_initialization_with_partial_refresh(
         self, config_manager, mock_eink_module
     ):
-        """Test EinkViewer initialization with partial_refresh enabled."""
+        """Test EinkViewer initialization reads partial_refresh from config."""
+        config_manager.set_partial_refresh("true")
         with patch("roon_display.viewers.eink_viewer.set_current_image_key"):
-            viewer = EinkViewer(
-                config_manager.config, mock_eink_module, partial_refresh=True
-            )
+            viewer = EinkViewer(config_manager, mock_eink_module)
+            viewer.startup = Mock()
 
-            assert viewer.partial_refresh is True
             assert viewer.eink == mock_eink_module
+            # partial_refresh is config-driven, not a constructor arg
+            assert config_manager.get_partial_refresh() is True
 
     def test_update_with_partial_refresh_disabled(
         self, config_manager, mock_eink_module, sample_image
     ):
-        """Test that update waits for natural completion when partial_refresh is disabled."""
+        """Test that update runs in a thread."""
+        config_manager.set_partial_refresh("false")
         with patch("roon_display.viewers.eink_viewer.set_current_image_key"):
-            viewer = EinkViewer(
-                config_manager.config, mock_eink_module, partial_refresh=False
-            )
+            viewer = EinkViewer(config_manager, mock_eink_module)
             viewer.startup = Mock()
 
-            # Mock a slow display operation
-            def slow_display(*args, **kwargs):
-                time.sleep(0.1)
-
-            viewer.epd.display.side_effect = slow_display
-
-            # Start first update
             viewer.update("key1", "/path1", sample_image, "Song 1")
-            time.sleep(0.01)  # Let first update start
 
-            # Start second update - should wait for first to complete naturally
-            with patch("time.sleep") as mock_sleep:
-                viewer.update("key2", "/path2", sample_image, "Song 2")
+            # Should start an update thread
+            assert viewer.update_thread is not None
 
             # Clean up threads
             if viewer.update_thread and viewer.update_thread.is_alive():

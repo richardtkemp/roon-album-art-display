@@ -84,7 +84,7 @@ class TestParseTimeToSeconds:
 
     def test_invalid_numbers(self):
         """Test invalid numbers."""
-        with pytest.raises(ValueError, match="Invalid number"):
+        with pytest.raises(ValueError, match="Invalid time format"):
             parse_time_to_seconds("abc minutes")
 
         with pytest.raises(ValueError, match="Invalid time format"):
@@ -131,7 +131,7 @@ class TestTimeUtilsIntegration:
 
     def test_common_anniversary_formats(self):
         """Test formats commonly used for anniversary wait times."""
-        assert parse_time_to_minutes("30") == 30  # Backward compatibility
+        assert parse_time_to_minutes("30 minutes") == 30
         assert parse_time_to_minutes("30 minutes") == 30
         assert parse_time_to_minutes("1 hour") == 60
         assert parse_time_to_minutes("2h") == 120

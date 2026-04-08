@@ -123,9 +123,7 @@ class RoonClient:
 
     def _get_server_details(self):
         """Get saved server details if available."""
-        ip = self.config_manager.get_roon_server_ip()
-        port = self.config_manager.get_roon_server_port()
-        return ip, port
+        return self.config_manager.get_server_config()
 
     def _discover_server(self):
         """Discover Roon server on network."""
