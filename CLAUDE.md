@@ -76,6 +76,10 @@ roon_display/                 # Main package
 - **Commands**: `make setup`, `make check-env`, `make test-quick`
 - **Local Development Python**: Always use `./bin/python` (not `python` or `python3`) to ensure virtual environment is used
 
+## Known Bugs
+
+- **`libs/epd13in3E.py` `Clear()` is incomplete**: writes data then calls `writePower(True)` only — never issues DRF (display refresh) or powers off. The display is left powered-on with stale image. The screentest version (`libs/screentest/epd13in3E.py`) correctly calls `TurnOnDisplay()` after writing. The main driver needs the same fix.
+
 ## Important TODOs
 - [ ] Validate all quality checks pass
 - [ ] Performance testing on Raspberry Pi

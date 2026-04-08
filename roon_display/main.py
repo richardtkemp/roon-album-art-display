@@ -179,6 +179,8 @@ def main():
             roon_client.stop()
         if "simulation_server" in locals():
             simulation_server.stop()
+        if "viewer" in locals() and hasattr(viewer, "cleanup"):
+            viewer.cleanup()
         logger.info("Application stopped")
 
 

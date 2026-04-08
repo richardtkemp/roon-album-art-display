@@ -73,10 +73,14 @@ def _run_tkinter(viewer, tk_root, image_path: Path) -> None:
 
 def _run_eink(viewer, image_path: Path) -> None:
     """Display image via EinkViewer and exit when rendering is complete."""
-    viewer.update("standalone", image_path, None, image_path.name)
+    try:
+        viewer.update("standalone", image_path, None, image_path.name)
 
-    # EinkViewer.update() spawns a thread for the hardware operation; wait for it.
-    if viewer.update_thread is not None:
-        viewer.update_thread.join()
+        # EinkViewer.update() spawns a thread for the hardware operation; wait for it.
+        if viewer.update_thread is not None:
+            viewer.update_thread.join()
+    finally:
+        if hasattr(viewer, "cleanup"):
+            viewer.cleanup()
 
     sys.exit(0)

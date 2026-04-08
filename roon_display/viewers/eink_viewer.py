@@ -52,6 +52,13 @@ class EinkViewer(BaseViewer):
 
         logger.info("EinkViewer initialized")
 
+    def cleanup(self):
+        """Put display to sleep and cut power. Call on exit to avoid stuck-busy state."""
+        try:
+            self.epd.sleep()
+        except Exception as e:
+            logger.error(f"Error during e-ink cleanup: {e}")
+
     def display_image(self, image_key, image_path, img, title):
         """Display an image on the e-ink display."""
         thread_id = threading.current_thread().ident
