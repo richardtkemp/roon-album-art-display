@@ -178,7 +178,9 @@ class RoonClient:
             return None
 
         try:
-            logger.info(f"Creating RoonApi with server {server_ip}:{server_port}")
+            logger.info(
+                f"Creating RoonApi with server {server_ip}:{server_port} (extension must be approved in Roon app)"
+            )
             api = RoonApi(self.app_info, token, server_ip, server_port)
             logger.debug("RoonApi created successfully")
 
