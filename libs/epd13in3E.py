@@ -152,8 +152,6 @@ class EPD():
 
     def Init(self):
         logger.debug("EPD init...")
-        epdconfig.module_exit()  # ensure clean state if previously left powered on
-        epdconfig.delay_ms(100)
         epdconfig.module_init()
 
         self.Reset()
