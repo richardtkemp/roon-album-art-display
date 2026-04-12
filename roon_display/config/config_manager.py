@@ -850,16 +850,6 @@ class ConfigManager:
 
         return {"enabled": True, "anniversaries": anniversaries}
 
-    def get_health_script(self) -> Optional[str]:
-        """Get health script configuration."""
-        if "MONITORING" not in self._config:
-            return None
-
-        script_path = self._config.get(
-            "MONITORING", "health_script", fallback=""
-        ).strip()
-        return script_path if script_path else None
-
     def get_health_recheck_interval(self) -> int:
         """Get health recheck interval in seconds."""
         if "MONITORING" not in self._config:

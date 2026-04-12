@@ -288,13 +288,13 @@ class TestConfigManager:
         config_manager.set_health_script("")
 
         script_path = config_manager.get_health_script()
-        assert script_path is None
+        assert script_path == ""
 
     def test_get_health_script_not_configured(self, config_manager):
         """Test getting health script when section doesn't exist."""
         # sample_config fixture has no MONITORING section, so no setup needed
         script_path = config_manager.get_health_script()
-        assert script_path is None
+        assert script_path == ""
 
     def test_get_health_recheck_interval_configured(self, config_manager):
         """Test getting health recheck interval when configured."""
