@@ -119,22 +119,15 @@ class ImageProcessor:
 
         canvas = Image.new("RGB", (screen_width, screen_height), "white")
 
-        # Fit source image into a square of min(screen_width, screen_height)
+        # Fit source image into the target size in one LANCZOS pass
         original_width, original_height = img.size
         canvas_size = min(screen_width, screen_height)
-        processed = img.copy().resize(
-            (canvas_size, canvas_size), Image.Resampling.LANCZOS
-        )
+        target_w = int(canvas_size * scale_x)
+        target_h = int(canvas_size * scale_y)
+        processed = img.copy().resize((target_w, target_h), Image.Resampling.LANCZOS)
         logger.debug(
-            f"Fitted image: {original_width}x{original_height} → {canvas_size}x{canvas_size}"
+            f"Fitted image: {original_width}x{original_height} → {target_w}x{target_h}"
         )
-
-        if scale_x != 1.0 or scale_y != 1.0:
-            fw, fh = processed.size
-            processed = processed.resize(
-                (int(fw * scale_x), int(fh * scale_y)), Image.Resampling.LANCZOS
-            )
-            logger.debug(f"Scaled: {fw}x{fh} → {processed.size}")
 
         if rotation == "90":
             processed = processed.transpose(Image.Transpose.ROTATE_90)
