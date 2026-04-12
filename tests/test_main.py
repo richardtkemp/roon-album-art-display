@@ -88,6 +88,8 @@ class TestMainApplication:
             "enabled": False,
             "anniversaries": [],
         }
+        mock_config_manager_instance.get_anniversary_check_interval.return_value = 60
+        mock_config_manager_instance.get_reconnection_interval.return_value = 30
         mock_config_manager.return_value = mock_config_manager_instance
 
         mock_viewer = Mock()
@@ -135,6 +137,8 @@ class TestMainApplication:
             "enabled": False,
             "anniversaries": [],
         }
+        mock_config_manager_instance.get_anniversary_check_interval.return_value = 60
+        mock_config_manager_instance.get_reconnection_interval.return_value = 30
         mock_config_manager.return_value = mock_config_manager_instance
 
         mock_viewer = Mock()
@@ -170,6 +174,8 @@ class TestMainApplication:
             "enabled": False,
             "anniversaries": [],
         }
+        mock_config_manager_instance.get_anniversary_check_interval.return_value = 60
+        mock_config_manager_instance.get_reconnection_interval.return_value = 30
         mock_config_manager.return_value = mock_config_manager_instance
 
         mock_viewer = Mock()
@@ -226,6 +232,8 @@ class TestMainApplication:
             "enabled": False,
             "anniversaries": [],
         }
+        mock_config_manager_instance.get_anniversary_check_interval.return_value = 60
+        mock_config_manager_instance.get_reconnection_interval.return_value = 30
         mock_config_manager.return_value = mock_config_manager_instance
 
         mock_viewer = Mock()
@@ -312,6 +320,8 @@ class TestMainApplication:
             "enabled": False,
             "anniversaries": [],
         }
+        mock_config_manager_instance.get_anniversary_check_interval.return_value = 60
+        mock_config_manager_instance.get_reconnection_interval.return_value = 30
         mock_config_manager.return_value = mock_config_manager_instance
 
         mock_viewer = Mock()
