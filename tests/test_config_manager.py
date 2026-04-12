@@ -38,7 +38,7 @@ class TestConfigManager:
         assert "email" in app_info
 
         assert app_info["extension_id"] == "python_roon_album_display"
-        assert app_info["display_name"] == "Album Art Display"
+        assert app_info["display_name"] == "Roon Display"
 
     def test_get_zone_config(self, config_manager):
         """Test getting zone configuration."""

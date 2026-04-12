@@ -16,7 +16,6 @@ logger = logging.getLogger(__name__)
 # Hardcoded app information (moved from config file)
 APP_INFO = {
     "extension_id": "python_roon_album_display",
-    "display_name": "Album Art Display",
     "display_version": "1.0.0",
     "publisher": "Richard Kemp",
     "email": "richardtkemp@gmail.com",
@@ -230,6 +229,11 @@ CONFIG_SCHEMA: Dict[str, Any] = {
         },
     },
     "DISPLAY": {
+        "display_name": {
+            "default": "Roon Display",
+            "type": "string",
+            "comment": "Name shown in Roon settings (useful if you have multiple displays)",
+        },
         "type": {
             "default": "system_display",
             "type": "select",
@@ -431,8 +435,13 @@ class ConfigManager:
         self._config = self._load_config()
 
     def get_app_info(self) -> Dict[str, str]:
-        """Get app information for Roon API (hardcoded values)."""
-        return APP_INFO.copy()
+        """Get app information for Roon API."""
+        info = APP_INFO.copy()
+        display_name = self._get_typed_value("DISPLAY", "display_name", "string")
+        info["display_name"] = (
+            display_name or CONFIG_SCHEMA["DISPLAY"]["display_name"]["default"]
+        )
+        return info
 
     def _load_config(self) -> configparser.ConfigParser:
         """Load configuration from file, creating default if needed."""

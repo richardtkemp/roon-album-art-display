@@ -3,11 +3,11 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>{% block title %}Roon Display Configuration{% endblock %}</title>
+    <title>{% block title %}{{ display_name | default('Roon Display') }} Configuration{% endblock %}</title>
     <link rel="stylesheet" href="{{ url_for('static', filename='css/styles.css') }}">
 </head>
 <body>
-    <h1>{% block header %}Roon Display Configuration{% endblock %}</h1>
+    <h1>{% block header %}{{ display_name | default('Roon Display') }} Configuration{% endblock %}</h1>
 
     {% block content %}{% endblock %}
 

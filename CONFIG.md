@@ -12,24 +12,11 @@ All time values support natural language formats:
 
 ## Configuration Sections
 
-### [APP] - Application Settings
-
-NB if you change the first five of these, you will have to reauthorise on roon
-
-| Setting | Default | Description |
-|---------|---------|-------------|
-| `extension_id` | `python_roon_album_display` | Unique identifier for Roon API |
-| `display_name` | `Album Art Display` | Name shown in Roon settings |
-| `display_version` | `1.0.0` | Version number |
-| `publisher` | `Richard Kemp` | Publisher name |
-| `email` | `richardtkemp@gmail.com` | Contact email |
-| `log_level` | `INFO` | Logging level: `DEBUG`, `INFO`, `WARNING`, `ERROR` |
-| `loop_time` | `10 minutes` | Event loop sleep interval |
-
 ### [DISPLAY] - Display Hardware
 
 | Setting | Default | Description |
 |---------|---------|-------------|
+| `display_name` | `Roon Display` | Name shown in Roon settings and web UI title — change if you have multiple displays |
 | `type` | `epd13in3E` | Display type: `epd13in3E` or `system_display` |
 | `tkinter_fullscreen` | `false` | Fullscreen mode (system_display only) |
 | `interrupt_on_skip` | `false` | Cancel current render and start new one when track changes |

@@ -84,7 +84,7 @@ port = 9330
             # Verify app info
             app_info = client.app_info
             assert app_info["extension_id"] == "python_roon_album_display"
-            assert app_info["display_name"] == "Album Art Display"
+            assert app_info["display_name"] == "Roon Display"
 
             # Verify zone configuration
             assert client.allowed_zones == ["Test Zone", "Living Room"]
@@ -259,13 +259,6 @@ port = 9330
         # Create minimal valid config
         config_path = temp_dir / "minimal_config.cfg"
         config_content = """
-[APP]
-extension_id = test
-display_name = Test
-display_version = 1.0.0
-publisher = Test
-email = test@test.com
-
 [DISPLAY]
 type = system_display
 

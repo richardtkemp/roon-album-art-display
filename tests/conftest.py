@@ -31,14 +31,6 @@ def sample_config():
     """Create a sample configuration for testing."""
     config = configparser.ConfigParser()
 
-    config["APP"] = {
-        "extension_id": "test_extension",
-        "display_name": "Test Display",
-        "display_version": "1.0.0",
-        "publisher": "Test Publisher",
-        "email": "test@example.com",
-    }
-
     config["DISPLAY"] = {"type": "system_display", "interrupt_on_skip": "false"}
 
     config["IMAGE_RENDER"] = {

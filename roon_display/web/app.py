@@ -297,6 +297,7 @@ def create_app(config_path: Optional[str] = None, port: Optional[int] = None) ->
             config_handler.config_manager.get_preview_auto_revert_seconds()
         )
 
+        display_name = config_handler.config_manager.get_app_info()["display_name"]
         return render_template(
             "config_form.html",
             tab_sections=tab_sections,
@@ -308,6 +309,7 @@ def create_app(config_path: Optional[str] = None, port: Optional[int] = None) ->
             preview_debounce_ms=debounce_ms,
             preview_auto_revert_ms=auto_revert_seconds
             * 1000,  # Convert to milliseconds
+            display_name=display_name,
         )
 
     @app.route("/thumbnail/<anniversary_name>/<filename>")
