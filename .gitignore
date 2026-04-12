@@ -185,3 +185,5 @@ extra_images/
 .claude
 simulation_track_index.txt
 myhealth.sh
+wpa_supplicant.conf
+dietpi-wifi.db
