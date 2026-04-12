@@ -132,7 +132,6 @@ class RenderCoordinator:
         self._overlay_timeout: Optional[float] = None
 
         # Display state
-        self._current_key: Optional[str] = None
         self._target_lock: threading.Lock = threading.Lock()
         self._last_rendered_target: Optional[RenderTarget] = None
 
@@ -161,6 +160,13 @@ class RenderCoordinator:
         # Start anniversary monitor if enabled
         if self.anniversary_manager:
             self.anniversary_manager.start_anniversary_monitor(self)
+
+    @property
+    def _current_key(self) -> Optional[str]:
+        """Image key currently on display, derived from last rendered target."""
+        with self._target_lock:
+            t = self._last_rendered_target
+        return t.image_key if t is not None else None
 
     # ------------------------------------------------------------------
     # Public API
@@ -392,7 +398,6 @@ class RenderCoordinator:
                 self._last_prepared.target.image_key,
                 self._last_prepared.target.track_info,
             )
-            self._current_key = self._last_prepared.target.image_key
             self._rendered_overlay = current_overlay
             with self._target_lock:
                 self._last_rendered_target = self._last_prepared.target
@@ -427,9 +432,10 @@ class RenderCoordinator:
             self._viewer.render(display_image, None, None)
             self._rendered_overlay = current_overlay
             # The overlay-only render replaced whatever was on the physical
-            # display, so clear _current_key to ensure the next prepared art
-            # isn't skipped by dedup.
-            self._current_key = None
+            # display, so clear _last_rendered_target to ensure the next
+            # prepared art isn't skipped by dedup.
+            with self._target_lock:
+                self._last_rendered_target = None
         except RenderCancelledError:
             logger.info("Render cancelled (overlay-only)")
 
@@ -512,10 +518,19 @@ class RenderCoordinator:
         if not hasattr(self._viewer, "epd"):
             return  # Not an e-ink display; no persistence needed
         try:
-            from .utils import get_current_image_key
+            from .utils import get_current_image_key, get_saved_image_dir
 
-            self._current_key = get_current_image_key()
-            if self._current_key:
-                logger.info(f"E-ink display already showing: {self._current_key}")
+            key = get_current_image_key()
+            if key:
+                image_path = get_saved_image_dir() / f"album_art_{key}.jpg"
+                with self._target_lock:
+                    self._last_rendered_target = RenderTarget(
+                        content_type="cached_art",
+                        image_key=key,
+                        image_path=image_path if image_path.exists() else None,
+                        img=None,
+                        track_info="Last displayed artwork",
+                    )
+                logger.info(f"E-ink display already showing: {key}")
         except Exception as e:
             logger.debug(f"Could not read current image key: {e}")
