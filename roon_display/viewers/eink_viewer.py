@@ -11,11 +11,13 @@ CRITICAL E-INK HARDWARE CONSTRAINTS:
 THREADING IMPLEMENTATION:
 ========================
 
-1. When new update() called while previous thread running:
-   - partial_refresh=False: wait for previous thread to finish (legacy, safe)
-   - partial_refresh=True: signal cancel and spawn new thread immediately;
-     new thread blocks at _render_lock until old thread exits after Reset()
-3. Thread completion ensures hardware is ready for next operation
+update() always returns immediately — it never blocks the caller.
+Serialisation is handled inside display_image() via _render_lock:
+
+- partial_refresh=False: new thread blocks at _render_lock until the previous
+  render finishes naturally, then runs in sequence.
+- partial_refresh=True: _cancel_render is set before spawning; new thread
+  blocks briefly at _render_lock until the old thread exits after Reset().
 
 CANCELLATION:
 ============
@@ -148,66 +150,27 @@ class EinkViewer(BaseViewer):
 
     @log_performance(threshold=0.5, description="E-ink display update")
     def update(self, image_key: str, img: Any, title: str) -> None:
-        """Update the display with new image (thread-safe)."""
-        update_start = time.time()
-        main_thread_id = threading.current_thread().ident
+        """Update the display with new image (non-blocking, thread-safe).
 
-        logger.debug(
-            f"UPDATE START: {title} (key: {image_key}, main_thread: {main_thread_id})"
-        )
-
+        Always returns immediately — serialisation happens inside display_image()
+        via _render_lock. This ensures the caller (roon callback thread) is never
+        blocked by hardware rendering.
+        """
         if img is None:
             logger.warning(f"No image provided for display: {title}")
             return
 
-        partial_refresh = self.config_manager.get_partial_refresh()
-
-        previous_thread_id = None
-        if self.update_thread is not None and self.update_thread.is_alive():
-            previous_thread_id = self.update_thread.ident
-
-        if self.update_thread is not None and self.update_thread.is_alive():
-            if partial_refresh:
+        if self.config_manager.get_partial_refresh():
+            if self.update_thread is not None and self.update_thread.is_alive():
                 logger.info(
-                    f"Cancel signalled for thread {previous_thread_id}; "
+                    f"Cancel signalled for thread {self.update_thread.ident}; "
                     f"starting {title} immediately"
                 )
-                self._cancel_render.set()
-                # Don't wait — new thread will block at _render_lock until old exits
-            else:
-                wait_start = time.time()
-                logger.debug(
-                    f"Waiting for previous thread {previous_thread_id} to finish for {title}"
-                )
+            self._cancel_render.set()
 
-                while self.update_thread.is_alive():
-                    time.sleep(0.1)
-                    wait_elapsed = time.time() - wait_start
-                    if (
-                        wait_elapsed > 60
-                        and int(wait_elapsed) % 60 == 0
-                        and (wait_elapsed - int(wait_elapsed)) < 0.1
-                    ):
-                        logger.warning(
-                            f"Still waiting for thread {previous_thread_id} after {wait_elapsed:.0f}s"
-                        )
-
-                wait_elapsed = time.time() - wait_start
-                logger.debug(
-                    f"Previous thread {previous_thread_id} finished after {wait_elapsed:.1f}s"
-                )
-
-        if self.update_thread is not None and not self.update_thread.is_alive():
-            self.update_thread = None
-
-        logger.debug(f"Creating new update thread for {title}")
+        logger.debug(f"Spawning display thread for {title} (key: {image_key})")
         self.update_thread = threading.Thread(
             target=self.display_image, args=(image_key, img, title)
         )
         self.update_thread.start()
-
-        update_elapsed = time.time() - update_start
-        new_thread_id = self.update_thread.ident
-        logger.debug(
-            f"UPDATE COMPLETE: {title} (new_thread: {new_thread_id}, setup_time: {update_elapsed:.2f}s)"
-        )
+        logger.debug(f"Display thread {self.update_thread.ident} started for {title}")
