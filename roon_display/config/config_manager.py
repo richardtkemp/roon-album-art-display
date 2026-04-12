@@ -169,7 +169,7 @@ CONFIG_SCHEMA: Dict[str, Any] = {
             "comment": "Overlay width as percentage of image width",
         },
         "size_y_percent": {
-            "default": "25",
+            "default": "15",
             "type": "number",
             "input_type": "range",
             "min": 5,
@@ -184,7 +184,7 @@ CONFIG_SCHEMA: Dict[str, Any] = {
             "comment": "Font for overlay text",
         },
         "font_size": {
-            "default": "12",
+            "default": "20",
             "type": "number",
             "input_type": "number",
             "min": 4,
