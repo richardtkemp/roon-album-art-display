@@ -190,13 +190,14 @@ CONFIG_SCHEMA: Dict[str, Any] = {
             "max": 50,
             "comment": "Spacing between lines of text (pixels)",
         },
-        "overlay_border_size": {
+        "overlay_margin": {
             "default": "20",
             "type": "number",
             "input_type": "number",
             "min": 0,
             "max": 100,
-            "comment": "Border/margin size for overlays and text layout (pixels)",
+            "getter_name": "overlay_border_size",
+            "comment": "Inner margin for overlay text (pixels)",
         },
     },
     "LAYOUT": {
