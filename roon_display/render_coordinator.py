@@ -282,7 +282,7 @@ class RenderCoordinator:
             # Composite current overlay onto preview so it reflects reality
             with self._overlay_lock:
                 current_overlay = self._overlay
-            return self._composite(current_overlay, image)
+            return self._composite(current_overlay, image, overrides=config_data)
         except Exception as e:
             logger.error(f"Error generating preview: {e}")
             return None
@@ -432,15 +432,22 @@ class RenderCoordinator:
     # Helpers
     # ------------------------------------------------------------------
 
-    def _composite(self, overlay_text: Optional[str], base: Image.Image) -> Image.Image:
+    def _composite(
+        self,
+        overlay_text: Optional[str],
+        base: Image.Image,
+        overrides: Optional[Dict[str, Any]] = None,
+    ) -> Image.Image:
         """Composite an error-overlay badge onto the bottom-right of base."""
         if overlay_text is None:
             return base
+        size_x = self.config_manager.get_config(overrides, "overlay_size_x_percent")
+        size_y = self.config_manager.get_config(overrides, "overlay_size_y_percent")
         overlay_img = self.message_renderer.create_error_overlay(
             overlay_text,
             base.size,
-            size_x_percent=self.config_manager.get_overlay_size_x_percent(),
-            size_y_percent=self.config_manager.get_overlay_size_y_percent(),
+            size_x_percent=size_x,
+            size_y_percent=size_y,
         )
         result = base.copy()
         x = base.width - overlay_img.width
