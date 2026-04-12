@@ -95,7 +95,7 @@ CONFIG_SCHEMA: Dict[str, Any] = {
             "comment": "Timeout for web requests (seconds)",
         },
     },
-    "IMAGE_QUALITY": {
+    "THUMBNAILS": {
         "thumbnail_size": {
             "default": "100",
             "type": "number",

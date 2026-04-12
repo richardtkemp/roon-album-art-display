@@ -255,12 +255,12 @@ def create_app(config_path: Optional[str] = None, port: Optional[int] = None) ->
                 "IMAGE_RENDER": sections.get("IMAGE_RENDER", {}),
                 "IMAGE_POSITION": sections.get("IMAGE_POSITION", {}),
                 "LAYOUT": sections.get("LAYOUT", {}),
-                "IMAGE_QUALITY": sections.get("IMAGE_QUALITY", {}),
                 "TEXT_RENDERING": sections.get("TEXT_RENDERING", {}),
             },
             "Features": {
                 "ZONES": sections.get("ZONES", {}),
                 "ANNIVERSARIES": sections.get("ANNIVERSARIES", {}),
+                "THUMBNAILS": sections.get("THUMBNAILS", {}),
             },
             "System": {
                 "ROON_SERVER": system_info.get("ROON_SERVER", {}),

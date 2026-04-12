@@ -173,7 +173,7 @@ function revertToLiveDisplay() {
 // ── Form change detection ────────────────────────────────────────────
 
 function shouldTriggerPreview(section, fieldName) {
-    const previewSections = ['ANNIVERSARIES', 'IMAGE_RENDER', 'IMAGE_POSITION', 'DISPLAY', 'LAYOUT', 'IMAGE_QUALITY', 'TEXT_RENDERING'];
+    const previewSections = ['ANNIVERSARIES', 'IMAGE_RENDER', 'IMAGE_POSITION', 'DISPLAY', 'LAYOUT', 'THUMBNAILS', 'TEXT_RENDERING'];
 
     const skipFields = ['ZONES', 'MONITORING', 'NETWORK', 'TIMEOUTS'];
     if (skipFields.includes(section)) return false;
