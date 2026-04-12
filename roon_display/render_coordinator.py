@@ -519,15 +519,24 @@ class RenderCoordinator:
             key = get_current_image_key()
             if key:
                 image_path = get_saved_image_dir() / f"album_art_{key}.jpg"
+                target = RenderTarget(
+                    content_type="cached_art",
+                    image_key=key,
+                    image_path=image_path if image_path.exists() else None,
+                    img=None,
+                    track_info="Last displayed artwork",
+                )
                 with self._target_lock:
-                    self._last_rendered_target = RenderTarget(
-                        content_type="cached_art",
-                        image_key=key,
-                        image_path=image_path if image_path.exists() else None,
-                        img=None,
-                        track_info="Last displayed artwork",
-                    )
+                    self._last_rendered_target = target
                 self._displayed_key = key
+
+                # Populate web cache so the web UI shows the image
+                # immediately instead of a grey placeholder.
+                if image_path.exists():
+                    prepared = self.image_processor.prepare(None, image_path)
+                    if prepared:
+                        self._cache_for_web(prepared, target)
+
                 logger.info(f"E-ink display already showing: {key}")
         except Exception as e:
             logger.debug(f"Could not read current image key: {e}")
