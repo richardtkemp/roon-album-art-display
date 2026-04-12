@@ -7,17 +7,15 @@ from datetime import datetime, timedelta
 from pathlib import Path
 from unittest.mock import MagicMock, Mock, patch
 
-import pytest
-
 from roon_display.health import HealthManager
 
 
 def make_config(script=None, interval=1800, timeout=30):
     """Create a mock config_manager for HealthManager tests."""
     m = Mock()
-    m.get_health_script.return_value = script
+    m.get_monitoring_health_script.return_value = script
     m.get_health_recheck_interval.return_value = interval
-    m.get_health_script_timeout.return_value = timeout
+    m.get_timeouts_health_script_timeout.return_value = timeout
     return m
 
 

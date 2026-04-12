@@ -1,10 +1,7 @@
 """Tests for configuration manager."""
 
-import sys
 from pathlib import Path
-from unittest.mock import mock_open, patch
-
-import pytest
+from unittest.mock import patch
 
 from roon_display.config.config_manager import ConfigManager
 
@@ -43,8 +40,8 @@ class TestConfigManager:
     def test_get_zone_config(self, config_manager):
         """Test getting zone configuration."""
         # Test individual getters
-        allowed_str = config_manager.get_allowed_zone_names()
-        forbidden_str = config_manager.get_forbidden_zone_names()
+        allowed_str = config_manager.get_zones_allowed_zone_names()
+        forbidden_str = config_manager.get_zones_forbidden_zone_names()
 
         # Parse like the client does
         allowed = [zone.strip() for zone in allowed_str.split(",") if zone.strip()]
@@ -67,8 +64,8 @@ class TestConfigManager:
 
         config_manager = ConfigManager(config_path)
         # Test individual getters with empty values
-        allowed_str = config_manager.get_allowed_zone_names()
-        forbidden_str = config_manager.get_forbidden_zone_names()
+        allowed_str = config_manager.get_zones_allowed_zone_names()
+        forbidden_str = config_manager.get_zones_forbidden_zone_names()
 
         # Parse like the client does
         allowed = [zone.strip() for zone in allowed_str.split(",") if zone.strip()]
@@ -163,13 +160,13 @@ class TestConfigManager:
         assert ip is None
         assert port is None
 
-    def test_get_tkinter_fullscreen_default(self, config_manager):
+    def test_get_display_tkinter_fullscreen_default(self, config_manager):
         """Test getting tkinter fullscreen setting with default value."""
         # Should return False by default
-        fullscreen = config_manager.get_tkinter_fullscreen()
+        fullscreen = config_manager.get_display_tkinter_fullscreen()
         assert fullscreen is False
 
-    def test_get_tkinter_fullscreen_true(self, temp_dir, sample_config):
+    def test_get_display_tkinter_fullscreen_true(self, temp_dir, sample_config):
         """Test getting tkinter fullscreen setting when set to true."""
         sample_config["DISPLAY"]["tkinter_fullscreen"] = "true"
 
@@ -178,10 +175,10 @@ class TestConfigManager:
             sample_config.write(f)
 
         config_manager = ConfigManager(config_path)
-        fullscreen = config_manager.get_tkinter_fullscreen()
+        fullscreen = config_manager.get_display_tkinter_fullscreen()
         assert fullscreen is True
 
-    def test_get_tkinter_fullscreen_false(self, temp_dir, sample_config):
+    def test_get_display_tkinter_fullscreen_false(self, temp_dir, sample_config):
         """Test getting tkinter fullscreen setting when set to false."""
         sample_config["DISPLAY"]["tkinter_fullscreen"] = "false"
 
@@ -190,7 +187,7 @@ class TestConfigManager:
             sample_config.write(f)
 
         config_manager = ConfigManager(config_path)
-        fullscreen = config_manager.get_tkinter_fullscreen()
+        fullscreen = config_manager.get_display_tkinter_fullscreen()
         assert fullscreen is False
 
     def test_create_default_config_structure(self, temp_dir):
@@ -276,29 +273,29 @@ class TestConfigManager:
         assert display_config["type"] == "system_display"
         assert display_config["interrupt_on_skip"] is False
 
-    def test_get_health_script_configured(self, config_manager):
+    def test_get_monitoring_health_script_configured(self, config_manager):
         """Test getting health script when configured."""
-        config_manager.set_health_script("/path/to/health.sh")
+        config_manager.set_monitoring_health_script("/path/to/health.sh")
 
-        script_path = config_manager.get_health_script()
+        script_path = config_manager.get_monitoring_health_script()
         assert script_path == "/path/to/health.sh"
 
-    def test_get_health_script_empty(self, config_manager):
+    def test_get_monitoring_health_script_empty(self, config_manager):
         """Test getting health script when empty."""
-        config_manager.set_health_script("")
+        config_manager.set_monitoring_health_script("")
 
-        script_path = config_manager.get_health_script()
+        script_path = config_manager.get_monitoring_health_script()
         assert script_path == ""
 
-    def test_get_health_script_not_configured(self, config_manager):
+    def test_get_monitoring_health_script_not_configured(self, config_manager):
         """Test getting health script when section doesn't exist."""
         # sample_config fixture has no MONITORING section, so no setup needed
-        script_path = config_manager.get_health_script()
+        script_path = config_manager.get_monitoring_health_script()
         assert script_path == ""
 
     def test_get_health_recheck_interval_configured(self, config_manager):
         """Test getting health recheck interval when configured."""
-        config_manager.set_health_recheck_interval("3600")
+        config_manager.set_monitoring_health_recheck_interval("3600")
 
         interval = config_manager.get_health_recheck_interval()
         assert interval == 3600
@@ -312,7 +309,7 @@ class TestConfigManager:
     def test_get_health_recheck_interval_fallback(self, config_manager):
         """Test getting health recheck interval with fallback value."""
         # Set health_script but not health_recheck_interval
-        config_manager.set_health_script("/path/to/script.sh")
+        config_manager.set_monitoring_health_script("/path/to/script.sh")
 
         interval = config_manager.get_health_recheck_interval()
         assert interval == 1800  # Default 30 minutes

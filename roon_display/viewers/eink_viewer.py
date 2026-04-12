@@ -107,7 +107,7 @@ class EinkViewer(BaseViewer):
 
         elapsed = time.time() - start_time
 
-        if elapsed < self.config_manager.get_eink_success_threshold():
+        if elapsed < self.config_manager.get_display_timing_eink_success_threshold():
             logger.error("=" * 80)
             logger.error("🚨 CRITICAL: FAST DISPLAY RENDER DETECTED! 🚨")
             logger.error(f"Display took {elapsed:.2f} seconds (expected ~25s)")

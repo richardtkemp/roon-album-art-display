@@ -180,9 +180,9 @@ class InternalServer:
 
     def start(self) -> None:
         """Start the internal server in a background thread."""
-        host = self.config_manager.get_internal_server_host()
-        port = self.config_manager.get_internal_server_port()
-        web_port = self.config_manager.get_web_config_port()
+        host = self.config_manager.get_network_internal_server_host()
+        port = self.config_manager.get_network_internal_server_port()
+        web_port = self.config_manager.get_network_web_config_port()
 
         if port == web_port:
             logger.error(

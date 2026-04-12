@@ -46,7 +46,7 @@ class TestSimulationServer:
 
     def test_start_and_stop(self, sim_server, config_manager):
         """Server can start and stop cleanly."""
-        config_manager.get_simulation_server_port = MagicMock(
+        config_manager.get_network_simulation_server_port = MagicMock(
             return_value=0
         )  # OS-assigned port
         sim_server.start()

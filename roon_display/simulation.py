@@ -58,7 +58,7 @@ class SimulationServer:
         try:
             self.server = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
             self.server.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
-            port = self.config_manager.get_simulation_server_port()
+            port = self.config_manager.get_network_simulation_server_port()
             self.server.bind(("localhost", port))
             self.server.listen(1)
             self.running = True
@@ -247,7 +247,7 @@ def send_simulation_trigger() -> bool:
         from .config.config_manager import ConfigManager
 
         config_manager = ConfigManager()
-        port = config_manager.get_simulation_server_port()
+        port = config_manager.get_network_simulation_server_port()
 
         sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         sock.settimeout(5.0)  # 5 second timeout

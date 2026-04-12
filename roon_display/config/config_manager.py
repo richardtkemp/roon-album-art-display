@@ -158,49 +158,8 @@ CONFIG_SCHEMA: Dict[str, Any] = {
             "comment": "Main loop interval (seconds)",
         },
     },
-    "TEXT_RENDERING": {
-        "font": {
-            "default": "",
-            "type": "select",
-            "options": [],  # Populated dynamically by web config handler
-            "comment": "Font for text rendering",
-        },
-        "font_size": {
-            "default": "24",
-            "type": "number",
-            "input_type": "number",
-            "min": 6,
-            "max": 72,
-            "comment": "Base font size for text rendering (pixels)",
-        },
-        "overlay_font_scale": {
-            "default": "0.5",
-            "type": "number",
-            "input_type": "number",
-            "min": 0.1,
-            "max": 1.0,
-            "step": 0.1,
-            "comment": "Overlay font size as fraction of base font_size (e.g. 0.5 = half)",
-        },
-        "line_spacing": {
-            "default": "10",
-            "type": "number",
-            "input_type": "number",
-            "min": 0,
-            "max": 50,
-            "comment": "Spacing between lines of text (pixels)",
-        },
-        "overlay_margin": {
-            "default": "20",
-            "type": "number",
-            "input_type": "number",
-            "min": 0,
-            "max": 100,
-            "comment": "Inner margin for overlay text (pixels)",
-        },
-    },
-    "LAYOUT": {
-        "overlay_size_x_percent": {
+    "OVERLAY": {
+        "size_x_percent": {
             "default": "33",
             "type": "number",
             "input_type": "range",
@@ -209,7 +168,7 @@ CONFIG_SCHEMA: Dict[str, Any] = {
             "step": 1,
             "comment": "Overlay width as percentage of image width",
         },
-        "overlay_size_y_percent": {
+        "size_y_percent": {
             "default": "25",
             "type": "number",
             "input_type": "range",
@@ -218,45 +177,35 @@ CONFIG_SCHEMA: Dict[str, Any] = {
             "step": 1,
             "comment": "Overlay height as percentage of image height",
         },
-        "anniversary_border_percent": {
-            "default": "5",
+        "font": {
+            "default": "",
+            "type": "select",
+            "options": [],  # Populated dynamically by web config handler
+            "comment": "Font for overlay text",
+        },
+        "font_size": {
+            "default": "12",
+            "type": "number",
+            "input_type": "number",
+            "min": 4,
+            "max": 72,
+            "comment": "Overlay font size (pixels)",
+        },
+        "line_spacing": {
+            "default": "10",
             "type": "number",
             "input_type": "number",
             "min": 0,
-            "max": 25,
-            "comment": "Border size for anniversary image display as percentage of screen dimension",
-        },
-        "anniversary_text_percent": {
-            "default": "15",
-            "type": "number",
-            "input_type": "number",
-            "min": 5,
             "max": 50,
-            "comment": "Text area height for anniversary display as percentage of screen height",
+            "comment": "Spacing between lines of overlay text (pixels)",
         },
-        "artist_display_time": {
-            "default": "3",
+        "margin": {
+            "default": "20",
             "type": "number",
             "input_type": "number",
-            "min": 1,
-            "max": 30,
-            "comment": "Time to display artist information (seconds)",
-        },
-        "album_display_time": {
-            "default": "3",
-            "type": "number",
-            "input_type": "number",
-            "min": 1,
-            "max": 30,
-            "comment": "Time to display album information (seconds)",
-        },
-        "track_display_time": {
-            "default": "3",
-            "type": "number",
-            "input_type": "number",
-            "min": 1,
-            "max": 30,
-            "comment": "Time to display track information (seconds)",
+            "min": 0,
+            "max": 100,
+            "comment": "Inner margin for overlay text (pixels)",
         },
     },
     "DISPLAY": {
@@ -399,8 +348,61 @@ CONFIG_SCHEMA: Dict[str, Any] = {
             "type": "boolean",
             "getter_name": "anniversaries_enabled",
             "comment": "Enable anniversary notifications",
-        }
-        # Other anniversary config fields not mentioned as they have specific functions to handle them
+        },
+        "font": {
+            "default": "",
+            "type": "select",
+            "options": [],  # Populated dynamically by web config handler
+            "comment": "Font for anniversary text",
+        },
+        "font_size": {
+            "default": "24",
+            "type": "number",
+            "input_type": "number",
+            "min": 6,
+            "max": 72,
+            "comment": "Anniversary font size (pixels)",
+        },
+        "border_percent": {
+            "default": "5",
+            "type": "number",
+            "input_type": "number",
+            "min": 0,
+            "max": 25,
+            "comment": "Border size as percentage of screen dimension",
+        },
+        "text_percent": {
+            "default": "15",
+            "type": "number",
+            "input_type": "number",
+            "min": 5,
+            "max": 50,
+            "comment": "Text area height as percentage of screen height",
+        },
+        "artist_display_time": {
+            "default": "3",
+            "type": "number",
+            "input_type": "number",
+            "min": 1,
+            "max": 30,
+            "comment": "Time to display artist information (seconds)",
+        },
+        "album_display_time": {
+            "default": "3",
+            "type": "number",
+            "input_type": "number",
+            "min": 1,
+            "max": 30,
+            "comment": "Time to display album information (seconds)",
+        },
+        "track_display_time": {
+            "default": "3",
+            "type": "number",
+            "input_type": "number",
+            "min": 1,
+            "max": 30,
+            "comment": "Time to display track information (seconds)",
+        },
     },
     "MONITORING": {
         "log_level": {
@@ -691,7 +693,7 @@ class ConfigManager:
         """Get display configuration as a dict with type and interrupt_on_skip."""
         return {
             "type": self.get_display_type(),
-            "interrupt_on_skip": self.get_interrupt_on_skip(),
+            "interrupt_on_skip": self.get_display_interrupt_on_skip(),
         }
 
     def get_zone_config(self) -> Tuple[List[str], List[str]]:
@@ -1111,7 +1113,8 @@ def _generate_getter_methods() -> None:
     existing = set(ConfigManager.__dict__)
     for section_name, fields in CONFIG_SCHEMA.items():
         for field_name, field_config in fields.items():
-            base_name = field_config.get("getter_name", field_name)
+            default_name = f"{section_name.lower()}_{field_name}"
+            base_name = field_config.get("getter_name", default_name)
             method_name = f"get_{base_name}"
             if method_name in existing:
                 continue  # Don't override manually-defined getters
@@ -1145,7 +1148,8 @@ def _generate_setter_methods() -> None:
     existing = set(ConfigManager.__dict__)
     for section_name, fields in CONFIG_SCHEMA.items():
         for field_name, field_config in fields.items():
-            base_name = field_config.get("getter_name", field_name)
+            default_name = f"{section_name.lower()}_{field_name}"
+            base_name = field_config.get("getter_name", default_name)
             method_name = f"set_{base_name}"
             if method_name in existing:
                 continue  # Don't override manually-defined setters

@@ -116,7 +116,10 @@ class WebConfigHandler:
                         )
 
                 # Populate font options dynamically
-                if section_name == "TEXT_RENDERING" and field_name == "font":
+                if (
+                    section_name in ("OVERLAY", "ANNIVERSARIES")
+                    and field_name == "font"
+                ):
                     fonts = _discover_fonts()
                     metadata["options"] = fonts
                     font_paths = [f["value"] for f in fonts]

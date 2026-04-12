@@ -44,7 +44,7 @@ class TkViewer(BaseViewer):
 
     def _configure_window_size(self) -> bool:
         """Configure window size and fullscreen mode. Returns fullscreen state."""
-        fullscreen = bool(self.config_manager.get_tkinter_fullscreen())
+        fullscreen = bool(self.config_manager.get_display_tkinter_fullscreen())
         self.root.attributes("-fullscreen", fullscreen)
         if not fullscreen:
             self.root.geometry("600x600")

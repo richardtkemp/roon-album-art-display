@@ -1,8 +1,7 @@
 """Integration tests for the complete application."""
 
-import tempfile
 from pathlib import Path
-from unittest.mock import MagicMock, Mock, patch
+from unittest.mock import Mock, patch
 
 import pytest
 
@@ -54,9 +53,9 @@ port = 9330
         processor = ImageProcessor(integration_config_manager)
 
         # Verify config values are accessible via config_manager methods
-        assert integration_config_manager.get_scale_x() == 0.9
-        assert integration_config_manager.get_scale_y() == 0.85
-        assert integration_config_manager.get_rotation() == 90
+        assert integration_config_manager.get_image_position_scale_x() == 0.9
+        assert integration_config_manager.get_image_position_scale_y() == 0.85
+        assert integration_config_manager.get_image_position_rotation() == 90
         assert processor is not None
 
     def test_image_processor_with_viewer_integration(
@@ -217,7 +216,7 @@ port = 9330
     def test_error_propagation_integration(self, integration_config_manager):
         """Test that errors are properly handled across components."""
         # Set invalid scale via setter
-        integration_config_manager.set_scale_x("0")
+        integration_config_manager.set_image_position_scale_x("0")
 
         with pytest.raises(ValueError, match="Scale values cannot be zero"):
             ImageProcessor(integration_config_manager)
@@ -285,8 +284,8 @@ forbidden_zone_names =
         config_manager = ConfigManager(config_path)
         processor = ImageProcessor(config_manager)
 
-        assert config_manager.get_scale_x() == 1.0
-        assert config_manager.get_scale_y() == 1.0
+        assert config_manager.get_image_position_scale_x() == 1.0
+        assert config_manager.get_image_position_scale_y() == 1.0
         assert not processor.needs_enhancement()
 
         # Zone config should handle empty values

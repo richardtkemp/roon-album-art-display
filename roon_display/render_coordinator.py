@@ -194,7 +194,7 @@ class RenderCoordinator:
         if content_type == "art" and self.anniversary_manager:
             self.anniversary_manager.update_last_track_time()
         target.generation = self._incoming.set(target)
-        if self.config_manager.get_interrupt_on_skip():
+        if self.config_manager.get_display_interrupt_on_skip():
             self._viewer.cancel()
 
     def set_main_content(

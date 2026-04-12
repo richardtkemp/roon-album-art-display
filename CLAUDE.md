@@ -88,8 +88,11 @@ roon_display/                 # Main package
 
 ## Key Architectural Patterns
 
+### Configuration
+Config getters are auto-generated as `get_{section}_{field}()` (e.g. `get_image_render_brightness()`). Fields with explicit `getter_name` in the schema override this. Manual getters on `ConfigManager` are never overridden. During preview rendering, `config_manager.preview_overrides()` makes all getters respect web form overrides automatically via `threading.local`.
+
 ### Image processing pipeline
-`ImageProcessor.prepare(img, image_path)` is the single entry point for all image processing — load, scale, rotate, enhance, composite onto canvas. Viewers receive a fully-processed `PIL.Image` and are pure display devices; they do not load or process images themselves. During preview rendering, config overrides are applied automatically via `config_manager.preview_overrides()` (thread-local context manager) — callers don't need to pass overrides explicitly.
+`ImageProcessor.prepare(img, image_path)` is the single entry point for all image processing — load, scale, rotate, enhance, composite onto canvas. Viewers receive a fully-processed `PIL.Image` and are pure display devices; they do not load or process images themselves.
 
 ### Render coordination
 `RenderCoordinator._render_display()` uses `render_lock.acquire(blocking=False)` + a `_render_pending` dirty flag. Concurrent calls set the flag and return; the running render loops until the flag is clear, so no track change is silently dropped.

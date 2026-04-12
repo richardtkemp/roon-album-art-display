@@ -1,9 +1,7 @@
 """Tests for main application entry point."""
 
-import sys
 import time
-from pathlib import Path
-from unittest.mock import MagicMock, Mock, call, patch
+from unittest.mock import Mock, call, patch
 
 import pytest
 
@@ -98,8 +96,12 @@ class TestMainApplication:
             "enabled": False,
             "anniversaries": [],
         }
-        mock_config_manager_instance.get_anniversary_check_interval.return_value = 60
-        mock_config_manager_instance.get_reconnection_interval.return_value = 30
+        mock_config_manager_instance.get_display_timing_anniversary_check_interval.return_value = (
+            60
+        )
+        mock_config_manager_instance.get_timeouts_reconnection_interval.return_value = (
+            30
+        )
         mock_config_manager.return_value = mock_config_manager_instance
 
         mock_viewer = Mock()
@@ -147,8 +149,12 @@ class TestMainApplication:
             "enabled": False,
             "anniversaries": [],
         }
-        mock_config_manager_instance.get_anniversary_check_interval.return_value = 60
-        mock_config_manager_instance.get_reconnection_interval.return_value = 30
+        mock_config_manager_instance.get_display_timing_anniversary_check_interval.return_value = (
+            60
+        )
+        mock_config_manager_instance.get_timeouts_reconnection_interval.return_value = (
+            30
+        )
         mock_config_manager.return_value = mock_config_manager_instance
 
         mock_viewer = Mock()
@@ -182,8 +188,12 @@ class TestMainApplication:
             "enabled": False,
             "anniversaries": [],
         }
-        mock_config_manager_instance.get_anniversary_check_interval.return_value = 60
-        mock_config_manager_instance.get_reconnection_interval.return_value = 30
+        mock_config_manager_instance.get_display_timing_anniversary_check_interval.return_value = (
+            60
+        )
+        mock_config_manager_instance.get_timeouts_reconnection_interval.return_value = (
+            30
+        )
         mock_config_manager.return_value = mock_config_manager_instance
 
         mock_viewer = Mock()
@@ -217,8 +227,12 @@ class TestMainApplication:
             "enabled": False,
             "anniversaries": [],
         }
-        mock_config_manager_instance.get_anniversary_check_interval.return_value = 60
-        mock_config_manager_instance.get_reconnection_interval.return_value = 30
+        mock_config_manager_instance.get_display_timing_anniversary_check_interval.return_value = (
+            60
+        )
+        mock_config_manager_instance.get_timeouts_reconnection_interval.return_value = (
+            30
+        )
         mock_config_manager.return_value = mock_config_manager_instance
 
         mock_viewer = Mock()
@@ -296,8 +310,12 @@ class TestMainApplication:
             "enabled": False,
             "anniversaries": [],
         }
-        mock_config_manager_instance.get_anniversary_check_interval.return_value = 60
-        mock_config_manager_instance.get_reconnection_interval.return_value = 30
+        mock_config_manager_instance.get_display_timing_anniversary_check_interval.return_value = (
+            60
+        )
+        mock_config_manager_instance.get_timeouts_reconnection_interval.return_value = (
+            30
+        )
         mock_config_manager.return_value = mock_config_manager_instance
 
         mock_viewer = Mock()

@@ -288,7 +288,7 @@ function restoreAllValues() {
                 if (currentValue !== savedValue) {
                     // Extract section from field name to check if it's preview-relevant
                     const section = name.includes('.') ? name.split('.')[0] : 'unknown';
-                    const previewSections = ['IMAGE_RENDER', 'IMAGE_POSITION', 'DISPLAY', 'LAYOUT', 'THUMBNAILS'];
+                    const previewSections = ['IMAGE_RENDER', 'IMAGE_POSITION', 'DISPLAY', 'OVERLAY', 'THUMBNAILS'];
 
                     if (previewSections.includes(section)) {
                         previewRelevantChanges = true;

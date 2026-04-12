@@ -1,8 +1,6 @@
 """Tests for image processing functionality."""
 
-import os
-from pathlib import Path
-from unittest.mock import Mock, patch
+from unittest.mock import patch
 
 import pytest
 from PIL import Image
@@ -20,14 +18,14 @@ class TestImageProcessor:
 
     def test_initialization(self, image_processor, config_manager):
         """Test ImageProcessor initialization reads config values correctly."""
-        assert config_manager.get_contrast() == 1.2
-        assert config_manager.get_sharpness() == 1.1
-        assert config_manager.get_brightness() == 0.9
-        assert config_manager.get_image_offset_x() == 10
-        assert config_manager.get_image_offset_y() == 20
-        assert config_manager.get_scale_x() == 0.8
-        assert config_manager.get_scale_y() == 0.9
-        assert config_manager.get_rotation() == 90
+        assert config_manager.get_image_render_contrast() == 1.2
+        assert config_manager.get_image_render_sharpness() == 1.1
+        assert config_manager.get_image_render_brightness() == 0.9
+        assert config_manager.get_image_position_image_offset_x() == 10
+        assert config_manager.get_image_position_image_offset_y() == 20
+        assert config_manager.get_image_position_scale_x() == 0.8
+        assert config_manager.get_image_position_scale_y() == 0.9
+        assert config_manager.get_image_position_rotation() == 90
 
     def test_initialization_zero_scale_raises_error(self, temp_dir, sample_config):
         """Test that zero scale values raise ValueError."""
@@ -119,7 +117,7 @@ class TestImageProcessor:
 
     def test_apply_rotation_none(self, image_processor, sample_image):
         """Test no rotation (0 degrees)."""
-        image_processor.config_manager.set_rotation("0")
+        image_processor.config_manager.set_image_position_rotation("0")
         result = image_processor.apply_rotation(sample_image)
 
         # No rotation should return same image
@@ -128,8 +126,8 @@ class TestImageProcessor:
     def test_resize_image_no_resize_needed(self, image_processor, sample_image):
         """Test resize produces output image."""
         image_processor.set_screen_size(100, 100)
-        image_processor.config_manager.set_scale_x("1.0")
-        image_processor.config_manager.set_scale_y("1.0")
+        image_processor.config_manager.set_image_position_scale_x("1.0")
+        image_processor.config_manager.set_image_position_scale_y("1.0")
 
         result = image_processor.resize_image(sample_image)
         assert isinstance(result, Image.Image)
@@ -156,8 +154,8 @@ class TestImageProcessor:
     def test_pad_image_with_offset(self, image_processor, sample_image):
         """Test padding with position offset."""
         image_processor.set_screen_size(200, 200)
-        image_processor.config_manager.set_image_offset_x("50")
-        image_processor.config_manager.set_image_offset_y("30")
+        image_processor.config_manager.set_image_position_image_offset_x("50")
+        image_processor.config_manager.set_image_position_image_offset_y("30")
 
         result = image_processor.pad_image_to_size(sample_image)
 
@@ -166,7 +164,7 @@ class TestImageProcessor:
     def test_process_image_position_full_pipeline(self, image_processor, sample_image):
         """Test complete image position processing pipeline."""
         image_processor.set_screen_size(150, 150)
-        image_processor.config_manager.set_rotation("90")
+        image_processor.config_manager.set_image_position_rotation("90")
 
         result = image_processor.process_image_position(sample_image)
 
@@ -184,10 +182,10 @@ class TestImageProcessor:
 
     def test_apply_enhancements_no_changes_needed(self, image_processor, sample_image):
         """Test enhancements when all adjustments are 1.0."""
-        image_processor.config_manager.set_color_enhance("1.0")
-        image_processor.config_manager.set_contrast("1.0")
-        image_processor.config_manager.set_brightness("1.0")
-        image_processor.config_manager.set_sharpness("1.0")
+        image_processor.config_manager.set_image_render_color_enhance("1.0")
+        image_processor.config_manager.set_image_render_contrast("1.0")
+        image_processor.config_manager.set_image_render_brightness("1.0")
+        image_processor.config_manager.set_image_render_sharpness("1.0")
 
         result = image_processor.apply_enhancements(sample_image)
 
@@ -224,10 +222,10 @@ class TestImageProcessor:
 
     def test_needs_enhancement_false(self, image_processor):
         """Test needs_enhancement when no enhancements needed."""
-        image_processor.config_manager.set_color_enhance("1.0")
-        image_processor.config_manager.set_contrast("1.0")
-        image_processor.config_manager.set_brightness("1.0")
-        image_processor.config_manager.set_sharpness("1.0")
+        image_processor.config_manager.set_image_render_color_enhance("1.0")
+        image_processor.config_manager.set_image_render_contrast("1.0")
+        image_processor.config_manager.set_image_render_brightness("1.0")
+        image_processor.config_manager.set_image_render_sharpness("1.0")
 
         assert image_processor.needs_enhancement() is False
 
@@ -247,7 +245,7 @@ class TestImageProcessor:
         """Test processing with a larger image."""
         large_image = Image.new("RGB", (2000, 1500), "blue")
         image_processor.set_screen_size(800, 600)
-        image_processor.config_manager.set_rotation("0")
+        image_processor.config_manager.set_image_position_rotation("0")
 
         result = image_processor.process_image_position(large_image)
 
@@ -256,7 +254,7 @@ class TestImageProcessor:
     @pytest.mark.parametrize("rotation", [0, 90, 180, 270, 45])
     def test_rotation_parameters(self, image_processor, sample_image, rotation):
         """Test various rotation values."""
-        image_processor.config_manager.set_rotation(str(rotation))
+        image_processor.config_manager.set_image_position_rotation(str(rotation))
 
         if rotation in [90, 180, 270]:
             result = image_processor.apply_rotation(sample_image)

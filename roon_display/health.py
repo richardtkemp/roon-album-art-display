@@ -28,7 +28,9 @@ class HealthManager:
         """Initialize health manager with config manager and optional overrides."""
         self.config_manager = config_manager
 
-        script_path = health_script_path or config_manager.get_health_script()
+        script_path = (
+            health_script_path or config_manager.get_monitoring_health_script()
+        )
         self.health_script_path = self._resolve_script_path(script_path)
 
         interval_seconds = (
@@ -96,7 +98,7 @@ class HealthManager:
 
             cmd = [self.health_script_path, status, additional_info]
 
-            timeout = self.config_manager.get_health_script_timeout()
+            timeout = self.config_manager.get_timeouts_health_script_timeout()
             result = subprocess.run(
                 cmd, capture_output=True, text=True, timeout=timeout
             )
@@ -113,7 +115,7 @@ class HealthManager:
                 return False
 
         except subprocess.TimeoutExpired:
-            timeout = self.config_manager.get_health_script_timeout()
+            timeout = self.config_manager.get_timeouts_health_script_timeout()
             logger.error(f"Health script timed out after {timeout} seconds")
             return False
         except Exception as e:

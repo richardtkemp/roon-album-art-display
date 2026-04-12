@@ -242,13 +242,19 @@ class AnniversaryManager:
         """Create anniversary display with custom border percentage."""
         full_screen_width = image_processor.screen_width
         full_screen_height = image_processor.screen_height
-        effective_width = int(full_screen_width * config_manager.get_scale_x())
-        effective_height = int(full_screen_height * config_manager.get_scale_y())
+        effective_width = int(
+            full_screen_width * config_manager.get_image_position_scale_x()
+        )
+        effective_height = int(
+            full_screen_height * config_manager.get_image_position_scale_y()
+        )
 
         canvas = Image.new("RGB", (full_screen_width, full_screen_height), "white")
 
-        border_fraction = config_manager.get_anniversary_border_percent() / 100.0
-        text_area_fraction = self.config_manager.get_anniversary_text_percent() / 100.0
+        border_fraction = config_manager.get_anniversaries_border_percent() / 100.0
+        text_area_fraction = (
+            self.config_manager.get_anniversaries_text_percent() / 100.0
+        )
 
         border_size = int(min(effective_width, effective_height) * border_fraction)
         text_area_height = int(effective_height * text_area_fraction)
@@ -258,10 +264,10 @@ class AnniversaryManager:
 
         offset_x = (
             full_screen_width - effective_width
-        ) // 2 + config_manager.get_image_offset_x()
+        ) // 2 + config_manager.get_image_position_image_offset_x()
         offset_y = (
             full_screen_height - effective_height
-        ) // 2 + config_manager.get_image_offset_y()
+        ) // 2 + config_manager.get_image_position_image_offset_y()
 
         try:
             anniversary_img: Image.Image = Image.open(image_path)
@@ -283,7 +289,8 @@ class AnniversaryManager:
             image_y = offset_y + border_size + (image_area_height - scaled_height) // 2
 
             font = ImageFont.truetype(
-                config_manager.get_font(), config_manager.get_font_size()
+                config_manager.get_anniversaries_font(),
+                config_manager.get_anniversaries_font_size(),
             )
             draw = ImageDraw.Draw(canvas)
             text_width, text_height = get_text_size(draw, message, font)
@@ -311,7 +318,9 @@ class AnniversaryManager:
 
         def monitor_anniversaries() -> None:
             while True:
-                check_interval = self.config_manager.get_anniversary_check_interval()
+                check_interval = (
+                    self.config_manager.get_display_timing_anniversary_check_interval()
+                )
                 # Sleep for a fraction of the check interval to stay responsive
                 # while not busy-looping
                 poll_sleep = min(check_interval / 6, 30)

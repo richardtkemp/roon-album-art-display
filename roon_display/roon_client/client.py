@@ -36,15 +36,15 @@ class RoonClient:
         # Get configuration
         self.app_info = config_manager.get_app_info()
         # Parse zone configuration
-        allowed_zones_str = config_manager.get_allowed_zone_names()
-        forbidden_zones_str = config_manager.get_forbidden_zone_names()
+        allowed_zones_str = config_manager.get_zones_allowed_zone_names()
+        forbidden_zones_str = config_manager.get_zones_forbidden_zone_names()
         self.allowed_zones = [
             zone.strip() for zone in allowed_zones_str.split(",") if zone.strip()
         ]
         self.forbidden_zones = [
             zone.strip() for zone in forbidden_zones_str.split(",") if zone.strip()
         ]
-        self.loop_time = config_manager.get_loop_time()
+        self.loop_time = config_manager.get_display_timing_loop_time()
 
         # Token storage in current directory
         self.token_file = Path(".roon_album_display_token.txt")
@@ -149,7 +149,7 @@ class RoonClient:
         configured reconnection_interval and doubling up to 10 minutes.
         Blocks until connected or self.running is cleared.
         """
-        base_interval = self.config_manager.get_reconnection_interval()
+        base_interval = self.config_manager.get_timeouts_reconnection_interval()
         max_interval = 600  # 10 minutes
         current_interval = base_interval
 

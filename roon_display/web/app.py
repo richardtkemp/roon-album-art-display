@@ -38,14 +38,14 @@ class InternalAppClient:
     def __init__(self, config_manager: Any) -> None:
         """Initialize client with config manager."""
         self.config_manager = config_manager
-        host = config_manager.get_internal_server_host()
-        port = config_manager.get_internal_server_port()
+        host = config_manager.get_network_internal_server_host()
+        port = config_manager.get_network_internal_server_port()
         self.base_url = f"http://{host}:{port}"
 
     def get_current_image(self) -> Optional[bytes]:
         """Get current display image from main app."""
         try:
-            timeout = self.config_manager.get_web_request_timeout()
+            timeout = self.config_manager.get_timeouts_web_request_timeout()
             response = requests.get(f"{self.base_url}/current-image", timeout=timeout)
             if response.status_code == 200:
                 return cast(bytes, response.content)
@@ -61,7 +61,7 @@ class InternalAppClient:
     def get_current_status(self) -> Dict[str, Any]:
         """Get current display status from main app."""
         try:
-            timeout = self.config_manager.get_web_request_timeout()
+            timeout = self.config_manager.get_timeouts_web_request_timeout()
             response = requests.get(f"{self.base_url}/current-status", timeout=timeout)
             if response.status_code == 200:
                 return dict(response.json())
@@ -84,7 +84,7 @@ class InternalAppClient:
             response = requests.post(
                 f"{self.base_url}/preview",
                 json=config_data,
-                timeout=self.config_manager.get_web_request_timeout() * 2,
+                timeout=self.config_manager.get_timeouts_web_request_timeout() * 2,
             )
             if response.status_code == 200:
                 return cast(bytes, response.content)
@@ -100,7 +100,9 @@ class InternalAppClient:
     def check_health(self) -> bool:
         """Check if main app is responsive."""
         try:
-            timeout = max(2, self.config_manager.get_web_request_timeout() // 2)
+            timeout = max(
+                2, self.config_manager.get_timeouts_web_request_timeout() // 2
+            )
             response = requests.get(f"{self.base_url}/health", timeout=timeout)
             return bool(response.status_code == 200)
         except requests.RequestException:
@@ -109,7 +111,7 @@ class InternalAppClient:
     def update_config(self, config_updates: dict) -> dict:
         """Send configuration updates to main app."""
         try:
-            timeout = self.config_manager.get_web_request_timeout()
+            timeout = self.config_manager.get_timeouts_web_request_timeout()
             response = requests.post(
                 f"{self.base_url}/update-config", json=config_updates, timeout=timeout
             )
@@ -125,7 +127,7 @@ class InternalAppClient:
     def force_refresh(self) -> dict:
         """Trigger a force refresh of the display."""
         try:
-            timeout = self.config_manager.get_web_request_timeout()
+            timeout = self.config_manager.get_timeouts_web_request_timeout()
             response = requests.post(f"{self.base_url}/force-refresh", timeout=timeout)
             if response.status_code == 200:
                 return {"success": True}
@@ -258,8 +260,7 @@ def create_app(config_path: Optional[str] = None, port: Optional[int] = None) ->
             "Image": {
                 "IMAGE_RENDER": sections.get("IMAGE_RENDER", {}),
                 "IMAGE_POSITION": sections.get("IMAGE_POSITION", {}),
-                "LAYOUT": sections.get("LAYOUT", {}),
-                "TEXT_RENDERING": sections.get("TEXT_RENDERING", {}),
+                "OVERLAY": sections.get("OVERLAY", {}),
             },
             "Features": {
                 "ZONES": sections.get("ZONES", {}),
@@ -295,9 +296,11 @@ def create_app(config_path: Optional[str] = None, port: Optional[int] = None) ->
 
         # Get web timing values from config
         refresh_interval_seconds = (
-            config_handler.config_manager.get_web_auto_refresh_seconds()
+            config_handler.config_manager.get_display_timing_web_auto_refresh_seconds()
         )
-        debounce_ms = config_handler.config_manager.get_preview_debounce_ms()
+        debounce_ms = (
+            config_handler.config_manager.get_display_timing_preview_debounce_ms()
+        )
 
         display_name = config_handler.config_manager.get_app_info()["display_name"]
         return render_template(
@@ -330,7 +333,9 @@ def create_app(config_path: Optional[str] = None, port: Optional[int] = None) ->
                 return "Image not found", 404
 
             # Create and return thumbnail
-            thumbnail_size = config_handler.config_manager.get_thumbnail_size()
+            thumbnail_size = (
+                config_handler.config_manager.get_thumbnails_thumbnail_size()
+            )
             thumbnail_data = create_thumbnail(
                 image_path,
                 max_size=(thumbnail_size, thumbnail_size),
@@ -533,8 +538,8 @@ def main() -> None:
     config_handler = app.config["config_handler"]
 
     # Get host and port from config or command line
-    host = args.host or config_handler.config_manager.get_web_config_host()
-    port = args.port or config_handler.config_manager.get_web_config_port()
+    host = args.host or config_handler.config_manager.get_network_web_config_host()
+    port = args.port or config_handler.config_manager.get_network_web_config_port()
 
     logger.info(f"Starting Roon Display web configuration server on {host}:{port}")
 

@@ -24,8 +24,8 @@ class ImageProcessor:
         """Initialize with configuration manager."""
         self.config_manager = config_manager
 
-        scale_x = self.config_manager.get_scale_x()
-        scale_y = self.config_manager.get_scale_y()
+        scale_x = self.config_manager.get_image_position_scale_x()
+        scale_y = self.config_manager.get_image_position_scale_y()
         if scale_x == 0 or scale_y == 0:
             logger.error("Scale must not be set to zero! Check config file")
             raise ValueError("Scale values cannot be zero")
@@ -50,10 +50,10 @@ class ImageProcessor:
         return any(
             v != 1.0
             for v in [
-                self.config_manager.get_color_enhance(),
-                self.config_manager.get_contrast(),
-                self.config_manager.get_brightness(),
-                self.config_manager.get_sharpness(),
+                self.config_manager.get_image_render_color_enhance(),
+                self.config_manager.get_image_render_contrast(),
+                self.config_manager.get_image_render_brightness(),
+                self.config_manager.get_image_render_sharpness(),
             ]
         )
 
@@ -108,15 +108,15 @@ class ImageProcessor:
 
         screen_width = self.config_manager.get_screen_width()
         screen_height = self.config_manager.get_screen_height()
-        scale_x = self.config_manager.get_scale_x()
-        scale_y = self.config_manager.get_scale_y()
-        rotation = str(self.config_manager.get_rotation())
-        offset_x = self.config_manager.get_image_offset_x()
-        offset_y = self.config_manager.get_image_offset_y()
-        color_enhance = self.config_manager.get_color_enhance()
-        contrast = self.config_manager.get_contrast()
-        brightness = self.config_manager.get_brightness()
-        sharpness = self.config_manager.get_sharpness()
+        scale_x = self.config_manager.get_image_position_scale_x()
+        scale_y = self.config_manager.get_image_position_scale_y()
+        rotation = str(self.config_manager.get_image_position_rotation())
+        offset_x = self.config_manager.get_image_position_image_offset_x()
+        offset_y = self.config_manager.get_image_position_image_offset_y()
+        color_enhance = self.config_manager.get_image_render_color_enhance()
+        contrast = self.config_manager.get_image_render_contrast()
+        brightness = self.config_manager.get_image_render_brightness()
+        sharpness = self.config_manager.get_image_render_sharpness()
 
         canvas = Image.new("RGB", (screen_width, screen_height), "white")
 
@@ -161,7 +161,7 @@ class ImageProcessor:
 
     def apply_rotation(self, img: Image.Image) -> Image.Image:
         """Apply rotation to image based on config."""
-        rotation = self.config_manager.get_rotation()
+        rotation = self.config_manager.get_image_position_rotation()
         if rotation == 90:
             result = img.transpose(Image.Transpose.ROTATE_90)
         elif rotation == 180:
@@ -182,8 +182,8 @@ class ImageProcessor:
         img_width, img_height = img.size
         screen_width = self.config_manager.get_screen_width()
         screen_height = self.config_manager.get_screen_height()
-        scale_x = self.config_manager.get_scale_x()
-        scale_y = self.config_manager.get_scale_y()
+        scale_x = self.config_manager.get_image_position_scale_x()
+        scale_y = self.config_manager.get_image_position_scale_y()
 
         target_width = int(screen_width * scale_x)
         target_height = int(screen_height * scale_y)
@@ -212,8 +212,8 @@ class ImageProcessor:
 
         screen_width = self.config_manager.get_screen_width()
         screen_height = self.config_manager.get_screen_height()
-        offset_x = self.config_manager.get_image_offset_x()
-        offset_y = self.config_manager.get_image_offset_y()
+        offset_x = self.config_manager.get_image_position_image_offset_x()
+        offset_y = self.config_manager.get_image_position_image_offset_y()
 
         new_image = Image.new("RGB", (screen_width, screen_height), color="white")
 
@@ -249,19 +249,19 @@ class ImageProcessor:
             return img
 
         try:
-            color_enhance = self.config_manager.get_color_enhance()
+            color_enhance = self.config_manager.get_image_render_color_enhance()
             if color_enhance != 1:
                 img = ImageEnhance.Color(img).enhance(color_enhance)
 
-            contrast = self.config_manager.get_contrast()
+            contrast = self.config_manager.get_image_render_contrast()
             if contrast != 1:
                 img = ImageEnhance.Contrast(img).enhance(contrast)
 
-            brightness = self.config_manager.get_brightness()
+            brightness = self.config_manager.get_image_render_brightness()
             if brightness != 1:
                 img = ImageEnhance.Brightness(img).enhance(brightness)
 
-            sharpness = self.config_manager.get_sharpness()
+            sharpness = self.config_manager.get_image_render_sharpness()
             if sharpness != 1:
                 img = ImageEnhance.Sharpness(img).enhance(sharpness)
 

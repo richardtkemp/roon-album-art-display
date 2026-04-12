@@ -139,7 +139,7 @@ class TestEinkViewer:
 
     def test_normal_render_timing_no_warning(self, eink_viewer, sample_image, caplog):
         """Test that normal render timing doesn't trigger warnings."""
-        eink_viewer.config_manager.set_eink_success_threshold("0.001")
+        eink_viewer.config_manager.set_display_timing_eink_success_threshold("0.001")
         with caplog.at_level(logging.ERROR):
             eink_viewer.render(sample_image, "normal_key", "Normal Render Test")
 
@@ -197,12 +197,12 @@ class TestEinkViewer:
         self, config_manager, mock_eink_module
     ):
         """Test EinkViewer initialization reads interrupt_on_skip from config."""
-        config_manager.set_interrupt_on_skip("true")
+        config_manager.set_display_interrupt_on_skip("true")
         with patch("roon_display.utils.set_current_image_key"):
             viewer = EinkViewer(config_manager, mock_eink_module)
             viewer.startup = Mock()
             assert viewer.eink == mock_eink_module
-            assert config_manager.get_interrupt_on_skip() is True
+            assert config_manager.get_display_interrupt_on_skip() is True
 
 
 class TestTkViewer:
@@ -250,7 +250,7 @@ class TestTkViewer:
 
     def test_initialization(self, config_manager, mock_tk_root, mock_tk_label):
         """Test TkViewer initialization."""
-        config_manager.set_tkinter_fullscreen("true")
+        config_manager.set_display_tkinter_fullscreen("true")
         with patch("tkinter.Label", return_value=mock_tk_label), patch(
             "roon_display.viewers.tk_viewer.set_current_image_key",
             create=True,
@@ -268,7 +268,7 @@ class TestTkViewer:
         self, config_manager, mock_tk_root, mock_tk_label
     ):
         """Test TkViewer with fullscreen enabled."""
-        config_manager.set_tkinter_fullscreen("true")
+        config_manager.set_display_tkinter_fullscreen("true")
         with patch("tkinter.Label", return_value=mock_tk_label), patch(
             "roon_display.viewers.tk_viewer.set_current_image_key",
             create=True,
