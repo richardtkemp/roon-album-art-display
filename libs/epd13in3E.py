@@ -170,6 +170,7 @@ class EPD():
         was power-cycled while the display was active. Takes ~5.5s.
         """
         logger.info("Power drain: cycling display power")
+        epdconfig.module_init()
         epdconfig.digital_write(self.EPD_PWR_PIN, 0)
         epdconfig.digital_write(self.EPD_RST_PIN, 0)
         time.sleep(5)
