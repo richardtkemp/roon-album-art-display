@@ -76,7 +76,9 @@ class EinkViewer(BaseViewer):
         start_time = time.time()
 
         try:
+            init_start = time.time()
             self.epd.Init()
+            logger.info(f"Init took {time.time() - init_start:.2f}s")
             self.epd.display(self.epd.getbuffer(image), title)
         except RenderCancelledError:
             elapsed = time.time() - start_time
