@@ -163,6 +163,20 @@ class EPD():
         self.writePower(False, title)
         logger.debug(f"Write to display complete for {title}")
 
+    def PowerDrain(self):
+        """Full power drain to recover from stuck state after cold boot.
+
+        Without this, the BUSY pin can stay LOW indefinitely if the Pi
+        was power-cycled while the display was active. Takes ~5.5s.
+        """
+        logger.info("Power drain: cycling display power")
+        epdconfig.digital_write(self.EPD_PWR_PIN, 0)
+        epdconfig.digital_write(self.EPD_RST_PIN, 0)
+        time.sleep(5)
+        epdconfig.digital_write(self.EPD_PWR_PIN, 1)
+        time.sleep(0.5)
+        self.powered_on = False
+
     def Init(self):
         logger.debug("EPD init...")
         epdconfig.module_init()

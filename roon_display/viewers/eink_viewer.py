@@ -53,6 +53,7 @@ class EinkViewer(BaseViewer):
         self._last_render_event_time: Optional[float] = None
 
         self.epd = eink_module.EPD()
+        self.epd.PowerDrain()
         self.epd.Init()
         self.startup()
 
