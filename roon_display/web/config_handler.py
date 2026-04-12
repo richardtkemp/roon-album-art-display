@@ -39,8 +39,9 @@ class WebConfigHandler:
             for field_name, field_config in schema_fields.items():
                 metadata = field_config.copy()
 
-                # Get current value using auto-generated getter method
-                getter_method_name = f"get_{field_name}"
+                # Get current value using getter method (respects getter_name override)
+                base_name = field_config.get("getter_name", field_name)
+                getter_method_name = f"get_{base_name}"
                 try:
                     if hasattr(self.config_manager, getter_method_name):
                         getter_method = getattr(self.config_manager, getter_method_name)

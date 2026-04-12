@@ -268,6 +268,7 @@ CONFIG_SCHEMA: Dict[str, Any] = {
         "type": {
             "default": "epd13in3E",
             "type": "select",
+            "getter_name": "display_type",
             "options": ["system_display", "epd13in3E"],
             "comment": "Display type to use",
         },
@@ -394,6 +395,7 @@ CONFIG_SCHEMA: Dict[str, Any] = {
         "enabled": {
             "default": "false",
             "type": "boolean",
+            "getter_name": "anniversaries_enabled",
             "comment": "Enable anniversary notifications",
         }
         # Other anniversary config fields not mentioned as they have specific functions to handle them
@@ -658,14 +660,6 @@ class ConfigManager:
         # Fall back to config manager method
         return getattr(self, f"get_{key}")()
 
-    def get_display_type(self) -> str:
-        """Get display type (manual: schema field is 'type', too generic for auto-gen)."""
-        return str(self._get_typed_value("DISPLAY", "type", "select"))
-
-    def set_display_type(self, value: str) -> None:
-        """Set display type."""
-        self.update_config_values({"DISPLAY.type": str(value)})
-
     def get_server_config(self) -> Tuple[Optional[str], Optional[int]]:
         """Get server configuration as (ip, port) tuple, or (None, None) if not set."""
         if "ROON_SERVER" not in self._config:
@@ -879,10 +873,6 @@ class ConfigManager:
     # Monitoring Configuration Methods
 
     # Anniversary Configuration Methods
-    def get_anniversaries_enabled(self) -> bool:
-        """Get anniversaries enabled (manual: schema field is 'enabled', too generic)."""
-        return bool(self._get_typed_value("ANNIVERSARIES", "enabled", "boolean"))
-
     def get_anniversaries_list(self) -> List[Dict[str, Any]]:
         """Get list of configured anniversaries."""
         anniversaries_config = self.get_anniversaries_config()
@@ -1076,24 +1066,24 @@ def _generate_getter_methods() -> None:
     existing = set(ConfigManager.__dict__)
     for section_name, fields in CONFIG_SCHEMA.items():
         for field_name, field_config in fields.items():
-            method_name = f"get_{field_name}"
+            base_name = field_config.get("getter_name", field_name)
+            method_name = f"get_{base_name}"
             if method_name in existing:
                 continue  # Don't override manually-defined getters
             field_type = field_config["type"]
 
-            def make_getter(section: str, field: str, ftype: str) -> Any:
+            def make_getter(section: str, field: str, ftype: str, mname: str) -> Any:
                 def getter(self: Any) -> Any:
                     return self._get_typed_value(section, field, ftype)
 
-                getter.__name__ = method_name
+                getter.__name__ = mname
                 getter.__doc__ = f"Get {field} from {section} section."
                 return getter
 
-            # Add the method to the ConfigManager class
             setattr(
                 ConfigManager,
                 method_name,
-                make_getter(section_name, field_name, field_type),
+                make_getter(section_name, field_name, field_type, method_name),
             )
 
 
@@ -1110,22 +1100,23 @@ def _generate_setter_methods() -> None:
     existing = set(ConfigManager.__dict__)
     for section_name, fields in CONFIG_SCHEMA.items():
         for field_name, field_config in fields.items():
-            method_name = f"set_{field_name}"
+            base_name = field_config.get("getter_name", field_name)
+            method_name = f"set_{base_name}"
             if method_name in existing:
                 continue  # Don't override manually-defined setters
 
-            def make_setter(section: str, field: str) -> Any:
+            def make_setter(section: str, field: str, mname: str) -> Any:
                 def setter(self: Any, value: Any) -> None:
                     self.update_config_values({f"{section}.{field}": str(value)})
 
-                setter.__name__ = f"set_{field}"
+                setter.__name__ = mname
                 setter.__doc__ = f"Set {field} in {section} section."
                 return setter
 
             setattr(
                 ConfigManager,
                 method_name,
-                make_setter(section_name, field_name),
+                make_setter(section_name, field_name, method_name),
             )
 
 
