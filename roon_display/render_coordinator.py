@@ -136,6 +136,13 @@ class RenderCoordinator:
     def _render_display(self) -> None:
         """Render the current state to the display."""
         self._render_pending = True
+
+        # Signal any in-progress render to abort early so the new content shows sooner.
+        if self.config_manager.get_partial_refresh() and hasattr(
+            self.viewer, "cancel_current_render"
+        ):
+            self.viewer.cancel_current_render()
+
         if not self.render_lock.acquire(blocking=False):
             return  # render in progress; it will loop and pick up the flag
 

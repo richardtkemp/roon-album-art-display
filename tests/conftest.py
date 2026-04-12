@@ -125,12 +125,15 @@ def mock_eink_module():
     # Use MagicMock to properly track attribute assignments
     mock_epd = MagicMock()
     mock_epd.Init = Mock()
+    mock_epd.Reset = Mock()
+    mock_epd.set_cancel_event = Mock()
 
     # Mock display method that simulates a brief e-ink update
     def slow_display(*args, **kwargs):
         time.sleep(0.01)
 
     mock_epd.display = Mock(side_effect=slow_display)
+    mock_epd.updateDisplay = Mock()
     mock_epd.getbuffer = Mock(return_value=b"test_buffer")
 
     mock_module.EPD = Mock(return_value=mock_epd)

@@ -265,6 +265,86 @@ class TestEinkViewer:
             len(critical_logs) == 0
         ), f"Should not warn about normal timing, but got: {critical_logs}"
 
+    # --- Cancellation tests ---
+
+    def test_cancel_render_sets_event(self, eink_viewer):
+        """cancel_current_render() sets the _cancel_render event."""
+        assert not eink_viewer._cancel_render.is_set()
+        eink_viewer.cancel_current_render()
+        assert eink_viewer._cancel_render.is_set()
+
+    def test_display_image_clears_cancel_event_at_start(
+        self, eink_viewer, sample_image
+    ):
+        """display_image() clears the cancel event before touching hardware."""
+        eink_viewer._cancel_render.set()
+        eink_viewer.display_image("key", sample_image, "Test")
+        # Init must have been called — event was cleared before hardware access
+        eink_viewer.epd.Init.assert_called()
+
+    def test_display_image_calls_reset_on_cancel(self, eink_viewer, sample_image):
+        """When display() raises RenderCancelledError, Reset() is called."""
+        from roon_display.viewers.eink_viewer import RenderCancelledError
+
+        eink_viewer.epd.display.side_effect = RenderCancelledError("test cancel")
+        eink_viewer.display_image("key", sample_image, "Test")
+        eink_viewer.epd.Reset.assert_called_once()
+
+    def test_display_image_does_not_finalize_on_cancel(self, eink_viewer, sample_image):
+        """Cancelled render does not update the current image key."""
+        from roon_display.viewers.eink_viewer import RenderCancelledError
+
+        eink_viewer.epd.display.side_effect = RenderCancelledError("test cancel")
+        with patch("roon_display.utils.set_current_image_key") as mock_set_key:
+            eink_viewer.display_image("key", sample_image, "Test")
+            mock_set_key.assert_not_called()
+
+    def test_display_image_disarms_cancel_event_on_success(
+        self, eink_viewer, sample_image
+    ):
+        """After a normal render, set_cancel_event(None) is called to disarm."""
+        from unittest.mock import call
+
+        eink_viewer.display_image("key", sample_image, "Test")
+        calls = eink_viewer.epd.set_cancel_event.call_args_list
+        assert calls[-1] == call(None)
+
+    def test_update_signals_cancel_when_partial_refresh_enabled(
+        self, eink_viewer, sample_image
+    ):
+        """update() sets _cancel_render when partial_refresh=True and render is running."""
+        eink_viewer.config_manager.set_partial_refresh("true")
+
+        # Start a slow render
+        eink_viewer.epd.display.side_effect = lambda *a, **kw: time.sleep(0.5)
+        eink_viewer.update("key1", sample_image, "Song 1")
+        assert eink_viewer.update_thread is not None
+
+        # Second update should signal cancel immediately
+        eink_viewer.update("key2", sample_image, "Song 2")
+        assert eink_viewer._cancel_render.is_set()
+
+        # Clean up
+        if eink_viewer.update_thread:
+            eink_viewer.update_thread.join(timeout=2)
+
+    def test_update_does_not_cancel_when_partial_refresh_disabled(
+        self, eink_viewer, sample_image
+    ):
+        """update() does NOT set _cancel_render when partial_refresh=False."""
+        eink_viewer.config_manager.set_partial_refresh("false")
+
+        # Start a slow render
+        eink_viewer.epd.display.side_effect = lambda *a, **kw: time.sleep(0.1)
+        eink_viewer.update("key1", sample_image, "Song 1")
+
+        # Cancel event should not have been set by update()
+        assert not eink_viewer._cancel_render.is_set()
+
+        # Clean up
+        if eink_viewer.update_thread:
+            eink_viewer.update_thread.join(timeout=2)
+
 
 class TestTkViewer:
     """Test TkViewer class."""

@@ -77,6 +77,11 @@ class EPD():
         # Dangerous? TODO
         self.powered_on = False
 
+        self._cancel_event = None
+
+    def set_cancel_event(self, event):
+        self._cancel_event = event
+
 
     def Reset(self):
         epdconfig.digital_write(self.EPD_RST_PIN, 1)
@@ -105,9 +110,12 @@ class EPD():
         epdconfig.spi_writebyte2(buf, Len)
 
     def ReadBusyH(self, where, timeout_s=60):
+        from roon_display.viewers.eink_viewer import RenderCancelledError
         logger.debug(f"e-Paper busy H checking at {where}")
         start = time.time()
         while epdconfig.digital_read(self.EPD_BUSY_PIN) == 0:      # 0: busy, 1: idle
+            if self._cancel_event is not None and self._cancel_event.is_set():
+                raise RenderCancelledError(f"Render cancelled at {where}")
             if time.time() - start > timeout_s:
                 raise TimeoutError(
                     f"e-Paper BUSY pin stuck LOW at {where} after {timeout_s}s"
@@ -268,6 +276,7 @@ class EPD():
         self.CS_ALL(1)
 
     def getbuffer(self, image):
+        from roon_display.viewers.eink_viewer import RenderCancelledError
         # Create a pallette with the 7 colors supported by the panel
         pal_image = Image.new("P", (1,1))
         # original
@@ -289,16 +298,23 @@ class EPD():
             # Resize image to fit display if dimensions don't match TODO Should send correct in the first place
             image_temp = image.resize((self.width, self.height), Image.Resampling.LANCZOS)
 
+        if self._cancel_event is not None and self._cancel_event.is_set():
+            raise RenderCancelledError("Cancelled before quantize")
 
         # Convert the soruce image to the 7 colors, dithering if needed
         image_7color = image_temp.convert("RGB").quantize(palette=pal_image)
         buf_7color = bytearray(image_7color.tobytes('raw'))
+
+        if self._cancel_event is not None and self._cancel_event.is_set():
+            raise RenderCancelledError("Cancelled after quantize")
 
         # PIL does not support 4 bit color, so pack the 4 bits of color
         # into a single byte to transfer to the panel
         buf = [0x00] * int(self.width * self.height / 2)
         idx = 0
         for i in range(0, len(buf_7color), 2):
+            if i % 10000 == 0 and self._cancel_event is not None and self._cancel_event.is_set():
+                raise RenderCancelledError("Cancelled during buffer packing")
             buf[idx] = (buf_7color[i] << 4) + buf_7color[i+1]
             idx += 1
 
@@ -319,6 +335,7 @@ class EPD():
         self.updateDisplay("Clear")
 
     def display(self, image, title):
+        from roon_display.viewers.eink_viewer import RenderCancelledError
         Width  = int(self.width / 4)
         Width1 = int(self.width / 2)
 
@@ -328,6 +345,8 @@ class EPD():
         epdconfig.digital_write(self.EPD_CS_M_PIN, 0)
         self.SendCommand(0x10)
         for i in range(self.height):
+            if self._cancel_event is not None and self._cancel_event.is_set():
+                raise RenderCancelledError(f"Cancelled during pixel transfer (master) at row {i}")
             self.SendData2(image[i * Width1 : i * Width1+Width], Width)
         self.CS_ALL(1)
 
@@ -335,6 +354,8 @@ class EPD():
         epdconfig.digital_write(self.EPD_CS_S_PIN, 0)
         self.SendCommand(0x10)
         for i in range(self.height):
+            if self._cancel_event is not None and self._cancel_event.is_set():
+                raise RenderCancelledError(f"Cancelled during pixel transfer (slave) at row {i}")
             self.SendData2(image[i * Width1+Width : i * Width1+Width1], Width)
         self.CS_ALL(1)
 
