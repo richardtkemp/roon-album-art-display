@@ -4,9 +4,11 @@ from __future__ import annotations
 
 import logging
 from pathlib import Path
-from typing import TYPE_CHECKING, Any, Optional, Tuple
+from typing import TYPE_CHECKING, Any, Optional
 
 from PIL import Image, ImageDraw, ImageFont
+
+from .utils import get_text_size, scale_image_to_fit
 
 if TYPE_CHECKING:
     from .config.config_manager import ConfigManager
@@ -79,7 +81,7 @@ class MessageRenderer:
         max_line_width = 0
 
         for line in lines:
-            line_width, line_height = self._get_text_size(draw, line, font)
+            line_width, line_height = get_text_size(draw, line, font)
             line_heights.append(line_height)
             max_line_width = max(max_line_width, line_width)
 
@@ -93,7 +95,7 @@ class MessageRenderer:
         # Draw each line centered
         current_y = start_y
         for line in lines:
-            line_width, line_height = self._get_text_size(draw, line, font)
+            line_width, line_height = get_text_size(draw, line, font)
             x = (screen_width - line_width) // 2
             draw.text((x, current_y), line, fill="black", font=font)
             current_y += line_height + line_spacing
@@ -130,25 +132,9 @@ class MessageRenderer:
                 logger.debug("Converted image to RGB mode")
 
             # Calculate scaling to fit image area
-            img_width, img_height = msg_img.size
-            img_ratio = img_width / img_height
-
-            if img_width > img_height:
-                # Image is wider - fit to width, height will be smaller
-                scaled_width = image_area_width
-                scaled_height = int(scaled_width / img_ratio)
-                # Ensure we don't exceed height limit
-                if scaled_height > image_area_height:
-                    scaled_height = image_area_height
-                    scaled_width = int(scaled_height * img_ratio)
-            else:
-                # Image is taller - fit to height, width will be smaller
-                scaled_height = image_area_height
-                scaled_width = int(scaled_height * img_ratio)
-                # Ensure we don't exceed width limit
-                if scaled_width > image_area_width:
-                    scaled_width = image_area_width
-                    scaled_height = int(scaled_width / img_ratio)
+            scaled_width, scaled_height = scale_image_to_fit(
+                msg_img.width, msg_img.height, image_area_width, image_area_height
+            )
 
             # Resize image
             msg_img = msg_img.resize(
@@ -171,7 +157,7 @@ class MessageRenderer:
             self.config_manager.get_font(), self.config_manager.get_font_size()
         )
         draw = ImageDraw.Draw(canvas)
-        text_width, text_height = self._get_text_size(draw, message, font)
+        text_width, text_height = get_text_size(draw, message, font)
 
         text_x = (screen_width - text_width) // 2
         text_y = (
@@ -325,37 +311,6 @@ class MessageRenderer:
             # Estimate text width without font
             return len(text) * 8
 
-    def _text_fits_in_bounds(
-        self, message: str, font: Any, available_width: int, available_height: int
-    ) -> bool:
-        """Check if text with given font fits within the available space."""
-        if not font:
-            return True  # Can't measure without font, assume it fits
-
-        # For this check, we'll use the text as-is since wrapping could cause recursion
-        lines = message.split("\n")
-        line_heights = []
-        max_line_width = 0
-
-        # Create temporary draw to measure text
-        temp_img = Image.new("RGB", (1, 1), "white")
-        temp_draw = ImageDraw.Draw(temp_img)
-
-        for line in lines:
-            line_width, line_height = self._get_text_size(temp_draw, line, font)
-            line_heights.append(line_height)
-            max_line_width = max(max_line_width, line_width)
-
-        # Check if width fits (should fit since we wrapped it, but double-check)
-        if max_line_width > available_width:
-            return False
-
-        # Check if height fits (including line spacing)
-        line_spacing = self.config_manager.get_line_spacing_ratio()
-        total_height = sum(line_heights) + (len(lines) - 1) * line_spacing
-
-        return bool(total_height <= available_height)
-
     def _wrap_text_for_screen(self, message: str, font: Any) -> str:
         """Wrap text to fit screen width, respecting existing line breaks."""
         if not font:
@@ -466,12 +421,3 @@ class MessageRenderer:
             wrapped_paragraphs.append("\n".join(lines))
 
         return "\n".join(wrapped_paragraphs)
-
-    def _get_text_size(self, draw: Any, text: str, font: Any) -> Tuple[int, int]:
-        """Get text dimensions using font metrics."""
-        if font:
-            bbox = draw.textbbox((0, 0), text, font=font)
-            return bbox[2] - bbox[0], bbox[3] - bbox[1]
-        else:
-            # Estimate text size without font
-            return len(text) * 10, 20

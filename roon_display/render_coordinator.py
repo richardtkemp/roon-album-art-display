@@ -131,7 +131,12 @@ class RenderCoordinator:
         self._current_key: Optional[str] = None
         self._last_rendered_target: Optional[RenderTarget] = None
 
-        # Image caching for web access
+        # Render-loop state (only accessed from render thread)
+        self._last_prepared: Optional[PreparedItem] = None
+        self._rendered_overlay: Optional[str] = None
+
+        # Image caching for web access — guarded by _web_cache_lock
+        self._web_cache_lock: threading.Lock = threading.Lock()
         self.last_rendered_image: Optional[Image.Image] = None
         self.last_render_metadata: Dict[str, Any] = {}
 
@@ -237,7 +242,10 @@ class RenderCoordinator:
         self,
     ) -> Tuple[Optional[Image.Image], Dict[str, Any]]:
         """Return the last rendered image and metadata (for web UI)."""
-        return self.last_rendered_image, self.last_render_metadata.copy()
+        with self._web_cache_lock:
+            image = self.last_rendered_image
+            metadata = self.last_render_metadata.copy()
+        return image, metadata
 
     def render_preview(self, config_data: Dict[str, Any]) -> Optional[Image.Image]:
         """Generate a preview image with temporary config overrides."""
@@ -303,119 +311,119 @@ class RenderCoordinator:
 
     def _render_loop(self) -> None:
         """Stage-2 worker: render prepared images to the display."""
-        _last_prepared: Optional[PreparedItem] = None
-        _rendered_overlay: Optional[str] = None
-
         while True:
             self._render_trigger.wait()
             self._render_trigger.clear()
 
-            # Absorb the latest prepared item if one arrived
-            new_item = self._prepared.try_take()
-            if new_item is not None:
-                if (
-                    self._incoming.is_current(new_item.target.generation)
-                    or new_item.target.force
-                ):
-                    _last_prepared = new_item
-                else:
-                    logger.debug("Discarding stale prepared item in render loop")
-
-            # Check overlay timeout
-            with self._overlay_lock:
-                if self._overlay_timeout and time.time() > self._overlay_timeout:
-                    self._overlay = None
-                    self._overlay_timeout = None
-                current_overlay = self._overlay
+            self._absorb_prepared_item()
+            current_overlay = self._expire_overlay()
 
             try:
-                if _last_prepared is not None:
-                    # Staleness check — always applies, even when force=True
-                    if not self._incoming.is_current(_last_prepared.target.generation):
-                        logger.debug(
-                            "Render loop: stale target, skipping until newer item"
-                        )
-                        continue
-
-                    # Dedup: skip re-render if same image is already on screen
-                    # and nothing has changed. force=True bypasses this check.
-                    already_shown = _last_prepared.target.image_key == self._current_key
-                    overlay_changed = current_overlay is not _rendered_overlay
-                    if (
-                        already_shown
-                        and not overlay_changed
-                        and not _last_prepared.target.force
-                    ):
-                        # E-ink render skip is correct, but ensure web cache
-                        # is populated (it's None after restart while e-ink
-                        # retains the physical image).
-                        if self.last_rendered_image is None:
-                            display_image = self._composite(
-                                current_overlay, _last_prepared.image
-                            )
-                            self._cache_for_web(display_image, _last_prepared.target)
-                        continue
-
-                    display_image = self._composite(
-                        current_overlay, _last_prepared.image
-                    )
-                    # Cache before render so the web UI shows the image while hardware
-                    # is still updating (~25s on e-ink).
-                    self._cache_for_web(display_image, _last_prepared.target)
-                    try:
-                        self._viewer.render(
-                            display_image,
-                            _last_prepared.target.image_key,
-                            _last_prepared.target.track_info,
-                        )
-                        self._current_key = _last_prepared.target.image_key
-                        _rendered_overlay = current_overlay
-                        self._last_rendered_target = _last_prepared.target
-                        queue_to_display = time.time() - _last_prepared.target.queued_at
-                        logger.info(
-                            f"Track displayed: {_last_prepared.target.image_key}"
-                            f" — {queue_to_display:.1f}s from queue to display"
-                        )
-                    except RenderCancelledError:
-                        logger.info(
-                            "Render cancelled — will re-render when next item ready"
-                        )
-
+                if self._last_prepared is not None:
+                    self._render_art(current_overlay)
                 elif current_overlay:
-                    # No prepared art yet — try to load the last cached
-                    # image from disk so the overlay composites on top of
-                    # real content rather than a blank white screen.
-                    cached = self._load_cached_base_image()
-                    if cached is not None:
-                        base_image, cached_target = cached
-                        display_image = self._composite(current_overlay, base_image)
-                        cache_target = cached_target
-                        self._last_rendered_target = cached_target
-                    else:
-                        display_image = self.message_renderer.create_text_message(
-                            current_overlay
-                        )
-                        cache_target = RenderTarget(
-                            content_type="overlay",
-                            image_key=None,
-                            image_path=None,
-                            img=None,
-                            track_info=None,
-                        )
-                    self._cache_for_web(display_image, cache_target)
-                    try:
-                        self._viewer.render(display_image, None, None)
-                        _rendered_overlay = current_overlay
-                        # The overlay-only render replaced whatever was on
-                        # the physical display, so clear _current_key to
-                        # ensure the next prepared art isn't skipped by dedup.
-                        self._current_key = None
-                    except RenderCancelledError:
-                        logger.info("Render cancelled (overlay-only)")
+                    self._render_overlay_only(current_overlay)
                 else:
                     logger.warning("No content to render")
             except Exception as e:
                 logger.error(f"Render loop: unexpected error: {e}", exc_info=True)
+
+    def _absorb_prepared_item(self) -> None:
+        """Absorb the latest prepared item if one arrived."""
+        new_item = self._prepared.try_take()
+        if new_item is not None:
+            if (
+                self._incoming.is_current(new_item.target.generation)
+                or new_item.target.force
+            ):
+                self._last_prepared = new_item
+            else:
+                logger.debug("Discarding stale prepared item in render loop")
+
+    def _expire_overlay(self) -> Optional[str]:
+        """Check overlay timeout and return current overlay text."""
+        with self._overlay_lock:
+            if self._overlay_timeout and time.time() > self._overlay_timeout:
+                self._overlay = None
+                self._overlay_timeout = None
+            return self._overlay
+
+    def _render_art(self, current_overlay: Optional[str]) -> None:
+        """Render prepared art to the display with dedup and staleness checks."""
+        assert self._last_prepared is not None
+
+        # Staleness check — always applies, even when force=True
+        if not self._incoming.is_current(self._last_prepared.target.generation):
+            logger.debug("Render loop: stale target, skipping until newer item")
+            return
+
+        # Dedup: skip re-render if same image is already on screen
+        # and nothing has changed. force=True bypasses this check.
+        already_shown = self._last_prepared.target.image_key == self._current_key
+        overlay_changed = current_overlay is not self._rendered_overlay
+        if (
+            already_shown
+            and not overlay_changed
+            and not self._last_prepared.target.force
+        ):
+            # E-ink render skip is correct, but ensure web cache
+            # is populated (it's None after restart while e-ink
+            # retains the physical image).
+            if self.last_rendered_image is None:
+                display_image = self._composite(
+                    current_overlay, self._last_prepared.image
+                )
+                self._cache_for_web(display_image, self._last_prepared.target)
+            return
+
+        display_image = self._composite(current_overlay, self._last_prepared.image)
+        # Cache before render so the web UI shows the image while hardware
+        # is still updating (~25s on e-ink).
+        self._cache_for_web(display_image, self._last_prepared.target)
+        try:
+            self._viewer.render(
+                display_image,
+                self._last_prepared.target.image_key,
+                self._last_prepared.target.track_info,
+            )
+            self._current_key = self._last_prepared.target.image_key
+            self._rendered_overlay = current_overlay
+            self._last_rendered_target = self._last_prepared.target
+            queue_to_display = time.time() - self._last_prepared.target.queued_at
+            logger.info(
+                f"Track displayed: {self._last_prepared.target.image_key}"
+                f" — {queue_to_display:.1f}s from queue to display"
+            )
+        except RenderCancelledError:
+            logger.info("Render cancelled — will re-render when next item ready")
+
+    def _render_overlay_only(self, current_overlay: str) -> None:
+        """Render an overlay without prepared art, loading cached art if available."""
+        cached = self._load_cached_base_image()
+        if cached is not None:
+            base_image, cached_target = cached
+            display_image = self._composite(current_overlay, base_image)
+            cache_target = cached_target
+            self._last_rendered_target = cached_target
+        else:
+            display_image = self.message_renderer.create_text_message(current_overlay)
+            cache_target = RenderTarget(
+                content_type="overlay",
+                image_key=None,
+                image_path=None,
+                img=None,
+                track_info=None,
+            )
+        self._cache_for_web(display_image, cache_target)
+        try:
+            self._viewer.render(display_image, None, None)
+            self._rendered_overlay = current_overlay
+            # The overlay-only render replaced whatever was on the physical
+            # display, so clear _current_key to ensure the next prepared art
+            # isn't skipped by dedup.
+            self._current_key = None
+        except RenderCancelledError:
+            logger.info("Render cancelled (overlay-only)")
 
     # ------------------------------------------------------------------
     # Helpers
@@ -472,14 +480,17 @@ class RenderCoordinator:
 
     def _cache_for_web(self, display_image: Image.Image, target: RenderTarget) -> None:
         """Cache the rendered image and metadata for web UI access."""
-        self.last_rendered_image = display_image.copy()
-        self.last_render_metadata = {
+        image_copy = display_image.copy()
+        metadata = {
             "timestamp": time.time(),
             "content_type": target.content_type,
             "image_key": target.image_key,
             "track_info": target.track_info,
             "has_overlay": self._overlay is not None,
         }
+        with self._web_cache_lock:
+            self.last_rendered_image = image_copy
+            self.last_render_metadata = metadata
 
     def _initialize_current_display_state(self) -> None:
         """Read last-displayed key from disk for e-ink persistence across restarts."""

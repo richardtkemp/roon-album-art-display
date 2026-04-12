@@ -17,6 +17,8 @@ from .utils import (
     ensure_anniversary_dir_exists,
     get_extra_images_dir,
     get_last_track_time,
+    get_text_size,
+    scale_image_to_fit,
     set_last_track_time,
 )
 
@@ -236,99 +238,6 @@ class AnniversaryManager:
             )
             return renderer.create_text_message(message, image_path)
 
-    def _create_text_only_image(
-        self,
-        message: str,
-        image_processor: ImageProcessor,
-        config_manager: ConfigManager,
-    ) -> Image.Image:
-        """Create a text-only image with centered text."""
-        width = config_manager.get_screen_width()
-        height = config_manager.get_screen_height()
-
-        img = Image.new("RGB", (width, height), "white")
-        draw = ImageDraw.Draw(img)
-
-        font = ImageFont.truetype(
-            config_manager.get_font(), config_manager.get_font_size()
-        )
-
-        text_width, text_height = self._get_text_size(draw, message, font)
-        x = (width - text_width) // 2
-        y = (height - text_height) // 2
-
-        draw.text((x, y), message, fill="black", font=font)
-
-        return img
-
-    def _create_image_with_text(
-        self,
-        image_path: str,
-        message: str,
-        image_processor: ImageProcessor,
-        config_manager: ConfigManager,
-    ) -> Image.Image:
-        """Create anniversary display with natural image scaling and text below."""
-        screen_width = config_manager.get_screen_width()
-        screen_height = config_manager.get_screen_height()
-
-        canvas = Image.new("RGB", (screen_width, screen_height), "white")
-
-        border_fraction = self.config_manager.get_anniversary_border_percent() / 100.0
-        text_area_fraction = self.config_manager.get_anniversary_text_percent() / 100.0
-
-        border_size = int(screen_width * border_fraction)
-        text_area_height = int(screen_height * text_area_fraction)
-
-        image_area_width = screen_width - (2 * border_size)
-        image_area_height = screen_height - border_size - text_area_height
-
-        anniversary_img: Image.Image = Image.open(image_path)
-        img_ratio = anniversary_img.width / anniversary_img.height
-        area_ratio = image_area_width / image_area_height
-
-        if img_ratio > area_ratio:
-            scaled_width = image_area_width
-            scaled_height = int(scaled_width / img_ratio)
-            if scaled_height > image_area_height:
-                scaled_height = image_area_height
-                scaled_width = int(scaled_height * img_ratio)
-        else:
-            scaled_height = image_area_height
-            scaled_width = int(scaled_height * img_ratio)
-            if scaled_width > image_area_width:
-                scaled_width = image_area_width
-                scaled_height = int(scaled_width / img_ratio)
-
-        anniversary_img = anniversary_img.resize(
-            (scaled_width, scaled_height), Image.Resampling.LANCZOS
-        )
-
-        image_x = border_size + (image_area_width - scaled_width) // 2
-        image_y = border_size + (image_area_height - scaled_height) // 2
-
-        logger.debug(f"Screen: {screen_width}x{screen_height}")
-        logger.debug(f"Border: {border_size}, Text area: {text_area_height}")
-        logger.debug(f"Image area: {image_area_width}x{image_area_height}")
-        logger.debug(f"Scaled image: {scaled_width}x{scaled_height}")
-        logger.debug(f"Image position: ({image_x}, {image_y})")
-
-        font = ImageFont.truetype(
-            config_manager.get_font(), config_manager.get_font_size()
-        )
-        draw = ImageDraw.Draw(canvas)
-        text_width, text_height = self._get_text_size(draw, message, font)
-
-        text_x = (screen_width - text_width) // 2
-        text_y = (
-            screen_height - text_area_height + (text_area_height - text_height) // 2
-        )
-
-        canvas.paste(anniversary_img, (image_x, image_y))
-        draw.text((text_x, text_y), message, fill="black", font=font)
-
-        return canvas
-
     def _create_image_with_text_custom_border(
         self,
         image_path: str,
@@ -365,21 +274,12 @@ class AnniversaryManager:
             if anniversary_img.mode != "RGB":
                 anniversary_img = anniversary_img.convert("RGB")
 
-            img_width, img_height = anniversary_img.size
-            img_ratio = img_width / img_height
-
-            if img_width > img_height:
-                scaled_width = image_area_width
-                scaled_height = int(scaled_width / img_ratio)
-                if scaled_height > image_area_height:
-                    scaled_height = image_area_height
-                    scaled_width = int(scaled_height * img_ratio)
-            else:
-                scaled_height = image_area_height
-                scaled_width = int(scaled_height * img_ratio)
-                if scaled_width > image_area_width:
-                    scaled_width = image_area_width
-                    scaled_height = int(scaled_width / img_ratio)
+            scaled_width, scaled_height = scale_image_to_fit(
+                anniversary_img.width,
+                anniversary_img.height,
+                image_area_width,
+                image_area_height,
+            )
 
             anniversary_img = anniversary_img.resize(
                 (scaled_width, scaled_height), Image.Resampling.LANCZOS
@@ -392,7 +292,7 @@ class AnniversaryManager:
                 config_manager.get_font(), config_manager.get_font_size()
             )
             draw = ImageDraw.Draw(canvas)
-            text_width, text_height = self._get_text_size(draw, message, font)
+            text_width, text_height = get_text_size(draw, message, font)
 
             text_x = offset_x + (effective_width - text_width) // 2
             text_y = offset_y + (
@@ -410,14 +310,6 @@ class AnniversaryManager:
             return renderer.create_text_message(message)
 
         return canvas
-
-    def _get_text_size(self, draw: Any, text: str, font: Any) -> tuple[int, int]:
-        """Get text dimensions using font metrics."""
-        if font:
-            bbox = draw.textbbox((0, 0), text, font=font)
-            return bbox[2] - bbox[0], bbox[3] - bbox[1]
-        else:
-            return len(text) * 10, 20
 
     def start_anniversary_monitor(self, render_coordinator: Any) -> None:
         """Start anniversary monitoring in background thread."""

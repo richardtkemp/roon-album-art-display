@@ -76,7 +76,8 @@ class SimulationServer:
         """Main server loop."""
         while self.running:
             try:
-                assert self.server is not None
+                if self.server is None:
+                    raise RuntimeError("Simulation server socket is not initialized")
                 self.server.settimeout(1.0)  # Add timeout to prevent hanging
                 client, addr = self.server.accept()
                 logger.debug(f"Simulation trigger received from {addr}")

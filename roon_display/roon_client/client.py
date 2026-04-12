@@ -58,7 +58,8 @@ class RoonClient:
         # Roon API instance (set during connect())
         self.roon: Any = None
 
-        # State tracking
+        # State tracking — guarded by _state_lock for thread safety
+        self._state_lock = threading.Lock()
         self.last_event: Any = None
         # Initialize with current image key to prevent startup flash
         self.last_image_key = get_current_image_key()
@@ -81,16 +82,18 @@ class RoonClient:
     @property
     def is_connected(self) -> bool:
         """Get connection status (combines auth + connection state)."""
-        return self._is_connected
+        with self._state_lock:
+            return self._is_connected
 
     @is_connected.setter
     def is_connected(self, value: bool) -> None:
         """Set connection status with state change logging."""
-        if self._is_connected != value:
-            logger.warning(
-                f"🔗 CONNECTION STATE CHANGE: {self._is_connected} → {value}"
-            )
-            self._is_connected = value
+        with self._state_lock:
+            if self._is_connected != value:
+                logger.warning(
+                    f"🔗 CONNECTION STATE CHANGE: {self._is_connected} → {value}"
+                )
+                self._is_connected = value
 
     def connect(self, discovery_timeout: float = 10) -> bool:
         """Attempt a single connection to Roon server.
@@ -331,10 +334,11 @@ class RoonClient:
         """Handle zone change events."""
         try:
             # Update connection tracking - receiving callbacks means fully connected
-            if not self.is_connected:
-                logger.info("Received zone callback - connection restored")
-                self.is_connected = True
-                self.connection_state = "connected"
+            with self._state_lock:
+                if not self._is_connected:
+                    logger.info("Received zone callback - connection restored")
+                    self._is_connected = True
+                    self.connection_state = "connected"
 
                 # Clear any overlay errors when connection is restored
                 if self.render_coordinator:
@@ -408,26 +412,29 @@ class RoonClient:
     def _process_now_playing(self, now_playing: Any) -> Any:
         """Process now_playing data for image updates."""
         try:
-            # Skip duplicate events
-            if now_playing == self.last_event:
-                return False
+            with self._state_lock:
+                # Skip duplicate events
+                if now_playing == self.last_event:
+                    return False
 
-            self.last_event = now_playing
+                self.last_event = now_playing
 
-            # Extract image key
-            image_key = (
-                now_playing.get("image_key") if isinstance(now_playing, dict) else None
-            )
-            if not image_key:
-                logger.warning("No image key found in now_playing data")
-                return False
+                # Extract image key
+                image_key = (
+                    now_playing.get("image_key")
+                    if isinstance(now_playing, dict)
+                    else None
+                )
+                if not image_key:
+                    logger.warning("No image key found in now_playing data")
+                    return False
 
-            # Skip if same image
-            if image_key == self.last_image_key:
-                return False
+                # Skip if same image
+                if image_key == self.last_image_key:
+                    return False
 
-            logger.info(f"New track with image key: {image_key}")
-            self.last_image_key = image_key
+                logger.info(f"New track with image key: {image_key}")
+                self.last_image_key = image_key
 
             # Extract track info
             track_info = self._extract_track_info(now_playing)
@@ -666,10 +673,12 @@ class RoonClient:
         logger.error(f"Connection failure detected: {failure_type}")
 
         # Set disconnected state for reconnection attempts
-        if self.is_connected:
-            self.is_connected = False
-            self.connection_state = "disconnected"
-            self.last_reconnect_attempt = time.time()
+        with self._state_lock:
+            if self._is_connected:
+                self._is_connected = False
+                logger.warning("🔗 CONNECTION STATE CHANGE: True → False")
+                self.connection_state = "disconnected"
+                self.last_reconnect_attempt = time.time()
 
         if failure_type == "auth_revoked":
             # Show re-authorization message

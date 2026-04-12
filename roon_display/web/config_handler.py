@@ -150,7 +150,8 @@ class WebConfigHandler:
                 with socket.socket(socket.AF_INET, socket.SOCK_DGRAM) as s:
                     s.connect(("8.8.8.8", 80))
                     return str(s.getsockname()[0])
-            except Exception:
+            except Exception as e:
+                logger.debug(f"Could not determine host IP: {e}")
                 return "Unknown"
 
         def get_wifi_ssid() -> str:
@@ -182,7 +183,8 @@ class WebConfigHandler:
                         return result.stdout.strip()
 
                 return "Not connected to WiFi"
-            except Exception:
+            except Exception as e:
+                logger.debug(f"Could not determine WiFi SSID: {e}")
                 return "Unknown"
 
         def get_uptime() -> str:
@@ -196,7 +198,8 @@ class WebConfigHandler:
                 hours = int((uptime_duration % 86400) // 3600)
                 minutes = int((uptime_duration % 3600) // 60)
                 return f"{days}d {hours}h {minutes}m"
-            except Exception:
+            except Exception as e:
+                logger.debug(f"Could not determine uptime: {e}")
                 return "Unknown"
 
         def get_memory_usage() -> str:
@@ -205,7 +208,8 @@ class WebConfigHandler:
                 memory = psutil.virtual_memory()
                 free_percent = round((memory.available / memory.total) * 100, 1)
                 return f"{free_percent}% free"
-            except Exception:
+            except Exception as e:
+                logger.debug(f"Could not determine memory usage: {e}")
                 return "Unknown"
 
         def get_disk_usage() -> str:
@@ -214,7 +218,8 @@ class WebConfigHandler:
                 disk = psutil.disk_usage("/")
                 free_percent = round((disk.free / disk.total) * 100, 1)
                 return f"{free_percent}% free"
-            except Exception:
+            except Exception as e:
+                logger.debug(f"Could not determine disk usage: {e}")
                 return "Unknown"
 
         system_info = {

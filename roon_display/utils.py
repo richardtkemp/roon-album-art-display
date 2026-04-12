@@ -5,7 +5,7 @@ import logging
 import os
 import time
 from pathlib import Path
-from typing import Any, Callable, Optional, TypeVar
+from typing import Any, Callable, Optional, Tuple, TypeVar
 
 _F = TypeVar("_F", bound=Callable[..., Any])
 
@@ -88,6 +88,54 @@ def ensure_anniversary_dir_exists(anniversary_name: str) -> Path:
         anniversary_dir.mkdir(parents=True, exist_ok=True)
         logger.info(f"Created anniversary directory: {anniversary_dir}")
     return anniversary_dir
+
+
+def get_text_size(draw: Any, text: str, font: Any) -> Tuple[int, int]:
+    """Get text dimensions using font metrics.
+
+    Args:
+        draw: PIL ImageDraw instance
+        text: Text to measure
+        font: PIL font instance (or None for estimate)
+
+    Returns:
+        (width, height) tuple
+    """
+    if font:
+        bbox = draw.textbbox((0, 0), text, font=font)
+        return bbox[2] - bbox[0], bbox[3] - bbox[1]
+    else:
+        # Estimate text size without font
+        return len(text) * 10, 20
+
+
+def scale_image_to_fit(
+    img_width: int,
+    img_height: int,
+    area_width: int,
+    area_height: int,
+) -> Tuple[int, int]:
+    """Calculate scaled dimensions to fit an image within an area, preserving aspect ratio.
+
+    Returns:
+        (scaled_width, scaled_height) tuple
+    """
+    img_ratio = img_width / img_height
+
+    if img_width > img_height:
+        scaled_width = area_width
+        scaled_height = int(scaled_width / img_ratio)
+        if scaled_height > area_height:
+            scaled_height = area_height
+            scaled_width = int(scaled_height * img_ratio)
+    else:
+        scaled_height = area_height
+        scaled_width = int(scaled_height * img_ratio)
+        if scaled_width > area_width:
+            scaled_width = area_width
+            scaled_height = int(scaled_width / img_ratio)
+
+    return scaled_width, scaled_height
 
 
 # Global flag for performance logging - set by main.py from config
