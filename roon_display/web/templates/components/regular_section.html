@@ -8,10 +8,12 @@
             <input type="checkbox" id="{{ section_name }}_{{ key }}"
                    name="{{ section_name }}.{{ key }}"
                    value="true" {{ 'checked' if config_item.value else '' }}
-                   data-default="{{ config_item.default_value }}">
+                   data-default="{{ config_item.default_value }}"
+                   data-schema-default="{{ config_item.schema_default }}">
         {% elif config_item.type == 'select' %}
             <select id="{{ section_name }}_{{ key }}" name="{{ section_name }}.{{ key }}"
-                    data-default="{{ config_item.default_value }}">
+                    data-default="{{ config_item.default_value }}"
+                   data-schema-default="{{ config_item.schema_default }}">
                 {% for option in config_item.options %}
                     {% if option is mapping %}
                     <option value="{{ option.value }}" {{ 'selected' if option.value == config_item.value|string else '' }}>
@@ -27,7 +29,8 @@
         {% elif config_item.type == 'textarea' %}
             <textarea id="{{ section_name }}_{{ key }}" name="{{ section_name }}.{{ key }}"
                       class="textarea-large"
-                      data-default="{{ config_item.default_value }}">{{ config_item.value }}</textarea>
+                      data-default="{{ config_item.default_value }}"
+                   data-schema-default="{{ config_item.schema_default }}">{{ config_item.value }}</textarea>
         {% elif config_item.input_type == 'range' %}
             <div class="range-input-group">
                 <input type="range"
@@ -35,6 +38,7 @@
                        name="{{ section_name }}.{{ key }}"
                        value="{{ config_item.value }}"
                        data-default="{{ config_item.default_value }}"
+                   data-schema-default="{{ config_item.schema_default }}"
                        {% if config_item.min %}min="{{ config_item.min }}"{% endif %}
                        {% if config_item.max %}max="{{ config_item.max }}"{% endif %}
                        {% if config_item.step %}step="{{ config_item.step }}"{% endif %}
@@ -45,6 +49,7 @@
                        name="{{ section_name }}.{{ key }}_text"
                        value="{{ config_item.value }}"
                        data-default="{{ config_item.default_value }}"
+                   data-schema-default="{{ config_item.schema_default }}"
                        {% if config_item.min %}min="{{ config_item.min }}"{% endif %}
                        {% if config_item.max %}max="{{ config_item.max }}"{% endif %}
                        {% if config_item.step %}step="{{ config_item.step }}"{% endif %}
@@ -57,6 +62,7 @@
                    name="{{ section_name }}.{{ key }}"
                    value="{{ config_item.value }}"
                    data-default="{{ config_item.default_value }}"
+                   data-schema-default="{{ config_item.schema_default }}"
                    {% if config_item.min %}min="{{ config_item.min }}"{% endif %}
                    {% if config_item.max %}max="{{ config_item.max }}"{% endif %}
                    {% if config_item.step %}step="{{ config_item.step }}"{% endif %}>

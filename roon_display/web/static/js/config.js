@@ -149,13 +149,13 @@ function storeFormValues() {
                 console.log(`[DEBUG] storeFormValues: ${name} = "${input.value}" (type: ${input.type}, id: ${input.id})`);
             }
 
-            // Store default value from data attribute (set by backend)
-            const defaultValue = input.getAttribute('data-default');
-            if (defaultValue !== null) {
+            // Store schema default for "Reset Defaults"
+            const schemaDefault = input.getAttribute('data-schema-default');
+            if (schemaDefault !== null) {
                 if (input.type === 'checkbox') {
-                    defaultValues[name] = defaultValue.toLowerCase() === 'true';
+                    defaultValues[name] = schemaDefault.toLowerCase() === 'true';
                 } else {
-                    defaultValues[name] = defaultValue;
+                    defaultValues[name] = schemaDefault;
                 }
             }
         }
