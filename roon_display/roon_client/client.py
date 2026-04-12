@@ -154,6 +154,14 @@ class RoonClient:
         current_interval = base_interval
 
         while self.running:
+            if self.connect(discovery_timeout=current_interval):
+                if self.render_coordinator:
+                    self.render_coordinator.clear_overlay()
+                return
+
+            # Only show overlay after a failed attempt — avoids an
+            # unnecessary e-ink refresh when the server is found quickly.
+            logger.info(f"Connection attempt failed, retrying in {current_interval}s")
             if self.render_coordinator:
                 self.render_coordinator.set_overlay(
                     "Searching for Roon server...\n\n"
@@ -161,13 +169,6 @@ class RoonClient:
                     "Will retry automatically.",
                     timeout=current_interval + 10,
                 )
-
-            if self.connect(discovery_timeout=current_interval):
-                if self.render_coordinator:
-                    self.render_coordinator.clear_overlay()
-                return
-
-            logger.info(f"Connection attempt failed, retrying in {current_interval}s")
             # Sleep in small increments so self.running can stop us
             deadline = time.time() + current_interval
             while self.running and time.time() < deadline:

@@ -120,21 +120,6 @@ def main() -> None:
         )
         internal_server.set_roon_client(roon_client)
 
-        # Load any existing image on startup through coordinator
-        from .utils import get_current_image_key, get_saved_image_dir
-
-        current_key = get_current_image_key()
-        if current_key:
-            image_path = get_saved_image_dir() / f"album_art_{current_key}.jpg"
-            if image_path.exists():
-                logger.info(f"Loading last displayed image on startup: {current_key}")
-                render_coordinator.set_art(
-                    content_type="last_art",
-                    image_key=current_key,
-                    image_path=image_path,
-                    track_info="Last displayed artwork",
-                )
-
         # Start simulation server for testing
         simulation_server = SimulationServer(roon_client, config_manager)
         simulation_server.start()
