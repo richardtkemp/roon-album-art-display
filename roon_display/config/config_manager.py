@@ -356,30 +356,6 @@ CONFIG_SCHEMA: Dict[str, Any] = {
             "max": 50,
             "comment": "Text area height as percentage of screen height",
         },
-        "artist_display_time": {
-            "default": "3",
-            "type": "number",
-            "input_type": "number",
-            "min": 1,
-            "max": 30,
-            "comment": "Time to display artist information (seconds)",
-        },
-        "album_display_time": {
-            "default": "3",
-            "type": "number",
-            "input_type": "number",
-            "min": 1,
-            "max": 30,
-            "comment": "Time to display album information (seconds)",
-        },
-        "track_display_time": {
-            "default": "3",
-            "type": "number",
-            "input_type": "number",
-            "min": 1,
-            "max": 30,
-            "comment": "Time to display track information (seconds)",
-        },
     },
     "ANNIVERSARIES": {
         "enabled": {
