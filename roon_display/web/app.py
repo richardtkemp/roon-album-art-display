@@ -469,7 +469,11 @@ def create_app(config_path: Optional[str] = None, port: Optional[int] = None) ->
                     config[key] = value
 
             # Handle checkboxes that are only present when checked
-            checkbox_fields = ["ANNIVERSARIES.enabled", "DISPLAY.tkinter_fullscreen"]
+            checkbox_fields = [
+                "ANNIVERSARIES.enabled",
+                "DISPLAY.tkinter_fullscreen",
+                "DISPLAY.partial_refresh",
+            ]
 
             for checkbox_field in checkbox_fields:
                 if checkbox_field not in config:

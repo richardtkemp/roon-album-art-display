@@ -209,11 +209,21 @@ class RenderCoordinator:
         logger.debug(f"Updated current display image key: {image_key}")
 
     def _cache_rendered_image(self, image: Optional[Image.Image]) -> None:
-        """Cache the rendered image for internal server access."""
-        if image:
-            self.last_rendered_image = image.copy()
-        else:
-            self.last_rendered_image = None
+        """Cache the rendered image and metadata for internal server access."""
+        self.last_rendered_image = image.copy() if image else None
+        self.last_render_metadata = {
+            "timestamp": time.time(),
+            "content_type": (
+                self.main_content.get("content_type") if self.main_content else None
+            ),
+            "image_key": (
+                self.main_content.get("image_key") if self.main_content else None
+            ),
+            "track_info": (
+                self.main_content.get("track_info") if self.main_content else None
+            ),
+            "has_overlay": self.overlay_content is not None,
+        }
 
     def get_current_rendered_image(
         self,

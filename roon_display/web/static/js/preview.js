@@ -418,7 +418,15 @@ function initializePreview(config) {
     updateDisplayImage();
     updateDisplayMetadata();
     setupFormChangeDetection();
-    setupStickyImageShrinking();
+
+    // Delay sticky-shrink setup until the display image has loaded so that
+    // ScrollShrinkEffect.init() can measure the real image height.
+    // updateDisplayImage() above sets a new ?t=timestamp src, so the browser
+    // won't have a cached offsetHeight ready yet — we must wait for 'load'.
+    const displayImg = document.getElementById('current-display-image');
+    const initShrink = () => { setupStickyImageShrinking(); };
+    displayImg.addEventListener('load', initShrink, { once: true });
+    displayImg.addEventListener('error', initShrink, { once: true });
 
     // Auto-refresh at configured interval
     setInterval(() => {
