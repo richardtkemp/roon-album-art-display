@@ -5,7 +5,7 @@ from __future__ import annotations
 import logging
 import threading
 import time
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from pathlib import Path
 from typing import TYPE_CHECKING, Any, Dict, Generic, Optional, Tuple, TypeVar
 
@@ -78,6 +78,7 @@ class RenderTarget:
     track_info: Optional[str]
     force: bool = False
     generation: int = 0
+    queued_at: float = field(default_factory=time.time)
 
 
 @dataclass
@@ -350,6 +351,11 @@ class RenderCoordinator:
                     self._current_key = _last_prepared.target.image_key
                     _rendered_overlay = current_overlay
                     self._last_rendered_target = _last_prepared.target
+                    queue_to_display = time.time() - _last_prepared.target.queued_at
+                    logger.info(
+                        f"Track displayed: {_last_prepared.target.image_key}"
+                        f" — {queue_to_display:.1f}s from queue to display"
+                    )
                 except RenderCancelledError:
                     logger.info(
                         "Render cancelled — will re-render when next item ready"

@@ -144,7 +144,7 @@ class EPD():
         self.powered_on = state
 
     def writeDRF(self, title):
-        logger.debug(f"Write DRF for {title}") # Display refresh
+        logger.info(f"Write DRF for {title}") # Display refresh
         self.CS_ALL(0)
         self.SendCommand(0x12)
         self.SendData(0x00)
@@ -340,7 +340,7 @@ class EPD():
         Width1 = int(self.width / 2)
 
         self.ReadBusyH(f"Starting [[{getParent()}]] {title}")
-        logger.debug(f"Sending data 1 for {title}")
+        logger.info(f"Sending data 1 for {title}")
         self.CS_ALL(1)
         epdconfig.digital_write(self.EPD_CS_M_PIN, 0)
         self.SendCommand(0x10)

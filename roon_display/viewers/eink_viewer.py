@@ -50,6 +50,7 @@ class EinkViewer(BaseViewer):
         import threading
 
         self._cancel_render = threading.Event()
+        self._last_render_event_time: Optional[float] = None
 
         self.epd = eink_module.EPD()
         self.epd.Init()
@@ -78,8 +79,19 @@ class EinkViewer(BaseViewer):
             self.epd.Init()
             self.epd.display(self.epd.getbuffer(image), title)
         except RenderCancelledError:
-            logger.info(f"Render cancelled for {title} — calling Reset()")
+            elapsed = time.time() - start_time
+            cancel_time = time.time()
+            since_last = (
+                f", {cancel_time - self._last_render_event_time:.1f}s since last render"
+                if self._last_render_event_time is not None
+                else ""
+            )
+            logger.info(
+                f"Render cancelled for {title} after {elapsed:.1f}s{since_last} — calling Reset()"
+            )
+            self._last_render_event_time = cancel_time
             self.epd.set_cancel_event(None)
+            self.epd.powered_on = False  # Force writePower(True) before next writeDRF
             self.epd.Reset()
             raise  # Re-raise so the render loop can loop
         except TimeoutError as e:
@@ -109,7 +121,16 @@ class EinkViewer(BaseViewer):
                     f"Fast render detected: {elapsed:.2f}s for {title}"
                 )
         else:
-            logger.info(f"Finished displaying image for {title} ({elapsed:.1f}s)")
+            success_time = time.time()
+            since_last = (
+                f", {success_time - self._last_render_event_time:.1f}s since last render"
+                if self._last_render_event_time is not None
+                else ""
+            )
+            logger.info(
+                f"Finished displaying image for {title} ({elapsed:.1f}s{since_last})"
+            )
+            self._last_render_event_time = success_time
             if self.health_manager:
                 self.health_manager.report_render_success(
                     f"Successful render: {elapsed:.1f}s for {title}"
