@@ -49,36 +49,35 @@ class TestLatestSlot:
         assert result.v == "b"
 
     def test_generation_increments(self, slot):
-        """Each set() increments the generation counter on the value."""
+        """Each set() returns an incrementing generation counter."""
 
         class Item:
-            generation = 0
+            pass
 
         a, b = Item(), Item()
-        slot.set(a)
-        slot.set(b)
-        assert a.generation == 1
-        assert b.generation == 2
+        gen_a = slot.set(a)
+        gen_b = slot.set(b)
+        assert gen_a == 1
+        assert gen_b == 2
 
     def test_is_current_true(self, slot):
         """is_current() returns True when no newer item has been set."""
 
         class Item:
-            generation = 0
+            pass
 
         item = Item()
-        slot.set(item)
-        assert slot.is_current(item.generation)
+        gen = slot.set(item)
+        assert slot.is_current(gen)
 
     def test_is_current_false_after_new_set(self, slot):
         """is_current() returns False after a newer item is set."""
 
         class Item:
-            generation = 0
+            pass
 
         a = Item()
-        slot.set(a)
-        gen = a.generation
+        gen = slot.set(a)
 
         b = Item()
         slot.set(b)

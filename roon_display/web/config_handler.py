@@ -2,7 +2,6 @@
 
 import configparser
 import logging
-import os
 import platform
 import socket
 import subprocess

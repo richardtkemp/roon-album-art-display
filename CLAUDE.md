@@ -20,20 +20,6 @@ This is a Python application that displays full-screen album art from a Roon mus
 
 ## Current Development Status
 
-### Test Suite (207 tests passing)
-| File | Tests |
-|---|---|
-| test_utils.py | 10 |
-| test_config_manager.py | 27 |
-| test_image_processor.py | 29 |
-| test_time_utils.py | 17 |
-| test_health.py | 16 |
-| test_viewers.py | 27 |
-| test_roon_client.py | 42 |
-| test_render_coordinator.py | 14 |
-| test_main.py | 14 |
-| test_integration.py | 11 |
-
 ### Code Quality Setup
 - **Environment Detection**: Makefile automatically detects virtual env vs system Python
 - **Formatting**: Black (run before flake8)

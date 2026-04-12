@@ -37,13 +37,17 @@ class LatestSlot(Generic[T]):
         self._value: Optional[T] = None
         self._generation: int = 0
 
-    def set(self, value: T) -> None:
-        """Overwrite the slot and increment the generation counter."""
+    def set(self, value: T) -> int:
+        """Overwrite the slot and increment the generation counter.
+
+        Returns the new generation number so callers can stamp their
+        value objects if needed.
+        """
         with self._cond:
             self._generation += 1
-            value.generation = self._generation  # type: ignore[attr-defined]
             self._value = value
             self._cond.notify_all()
+            return self._generation
 
     def wait_and_take(self) -> T:
         """Block until a value is available, then return and clear it."""
@@ -129,9 +133,10 @@ class RenderCoordinator:
 
         # Display state
         self._current_key: Optional[str] = None
+        self._target_lock: threading.Lock = threading.Lock()
         self._last_rendered_target: Optional[RenderTarget] = None
 
-        # Render-loop state (only accessed from render thread)
+        # Render-loop state (written by render thread only)
         self._last_prepared: Optional[PreparedItem] = None
         self._rendered_overlay: Optional[str] = None
 
@@ -183,7 +188,7 @@ class RenderCoordinator:
         )
         if content_type == "art" and self.anniversary_manager:
             self.anniversary_manager.update_last_track_time()
-        self._incoming.set(target)
+        target.generation = self._incoming.set(target)
         if self.config_manager.get_interrupt_on_skip():
             self._viewer.cancel()
 
@@ -226,8 +231,9 @@ class RenderCoordinator:
     def force_refresh(self) -> None:
         """Re-render current content with the current config (e.g. after settings change)."""
         logger.info("Force refresh triggered")
-        if self._last_rendered_target is not None:
+        with self._target_lock:
             t = self._last_rendered_target
+        if t is not None:
             target = RenderTarget(
                 content_type=t.content_type,
                 image_key=t.image_key,
@@ -236,7 +242,7 @@ class RenderCoordinator:
                 track_info=t.track_info,
                 force=True,
             )
-            self._incoming.set(target)
+            target.generation = self._incoming.set(target)
 
     def get_current_rendered_image(
         self,
@@ -259,13 +265,15 @@ class RenderCoordinator:
             else:
                 logger.info("Generating preview with no config changes")
 
-            if self._last_rendered_target is None:
+            with self._target_lock:
+                t = self._last_rendered_target
+            if t is None:
                 logger.warning("No content available for preview")
                 return None
 
             image = self.image_processor.prepare(
-                self._last_rendered_target.img,
-                self._last_rendered_target.image_path,
+                t.img,
+                t.image_path,
                 overrides=config_data,
             )
             if image is None:
@@ -278,14 +286,6 @@ class RenderCoordinator:
         except Exception as e:
             logger.error(f"Error generating preview: {e}")
             return None
-
-    # ------------------------------------------------------------------
-    # Backward-compat shims (called by BaseViewer._notify_render_complete)
-    # ------------------------------------------------------------------
-
-    def set_current_display_image_key(self, image_key: str) -> None:
-        """No-op: render loop updates _current_key directly after each render."""
-        pass
 
     # ------------------------------------------------------------------
     # Pipeline workers
@@ -306,7 +306,8 @@ class RenderCoordinator:
             if not self._incoming.is_current(target.generation):
                 logger.debug(f"Discarding stale prepared item gen={target.generation}")
                 continue
-            self._prepared.set(PreparedItem(target=target, image=image))
+            item = PreparedItem(target=target, image=image)
+            self._prepared.set(item)
             self._render_trigger.set()
 
     def _render_loop(self) -> None:
@@ -388,7 +389,8 @@ class RenderCoordinator:
             )
             self._current_key = self._last_prepared.target.image_key
             self._rendered_overlay = current_overlay
-            self._last_rendered_target = self._last_prepared.target
+            with self._target_lock:
+                self._last_rendered_target = self._last_prepared.target
             queue_to_display = time.time() - self._last_prepared.target.queued_at
             logger.info(
                 f"Track displayed: {self._last_prepared.target.image_key}"
@@ -404,7 +406,8 @@ class RenderCoordinator:
             base_image, cached_target = cached
             display_image = self._composite(current_overlay, base_image)
             cache_target = cached_target
-            self._last_rendered_target = cached_target
+            with self._target_lock:
+                self._last_rendered_target = cached_target
         else:
             display_image = self.message_renderer.create_text_message(current_overlay)
             cache_target = RenderTarget(

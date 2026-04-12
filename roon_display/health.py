@@ -6,10 +6,9 @@ import logging
 import os
 import stat
 import subprocess
-import time
 from datetime import datetime, timedelta
 from pathlib import Path
-from typing import TYPE_CHECKING, Any, Optional, Tuple
+from typing import TYPE_CHECKING, Optional, Tuple
 
 if TYPE_CHECKING:
     from .config.config_manager import ConfigManager

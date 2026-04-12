@@ -13,11 +13,9 @@ import sys
 from pathlib import Path
 from typing import Any
 
-logger = logging.getLogger(__name__)
+from .utils import SUPPORTED_IMAGE_EXTENSIONS
 
-IMAGE_EXTENSIONS: frozenset[str] = frozenset(
-    {".jpg", ".jpeg", ".png", ".bmp", ".gif", ".webp", ".tiff"}
-)
+logger = logging.getLogger(__name__)
 
 
 def resolve_image(path: Path) -> Path:
@@ -27,7 +25,9 @@ def resolve_image(path: Path) -> Path:
     contents.  Raises ``FileNotFoundError`` if no suitable image is found.
     """
     if path.is_dir():
-        candidates = [f for f in path.iterdir() if f.suffix.lower() in IMAGE_EXTENSIONS]
+        candidates = [
+            f for f in path.iterdir() if f.suffix.lower() in SUPPORTED_IMAGE_EXTENSIONS
+        ]
         if not candidates:
             raise FileNotFoundError(f"No image files found in directory: {path}")
         chosen = random.choice(candidates)

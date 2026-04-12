@@ -6,9 +6,8 @@ from pathlib import Path
 from typing import Dict, List, Optional, Tuple
 
 from PIL import Image
-from werkzeug.utils import secure_filename
 
-from ..utils import get_extra_images_dir
+from ..utils import SUPPORTED_IMAGE_EXTENSIONS, get_extra_images_dir
 
 logger = logging.getLogger(__name__)
 
@@ -26,19 +25,8 @@ def validate_image_format(file_data: bytes, filename: str) -> bool:
                 img.verify()
 
         # Additional check: ensure it has a valid image extension
-        valid_extensions = {
-            ".jpg",
-            ".jpeg",
-            ".png",
-            ".bmp",
-            ".gif",
-            ".tiff",
-            ".tif",
-            ".webp",
-            ".avif",
-        }
         file_ext = Path(filename).suffix.lower()
-        return file_ext in valid_extensions
+        return file_ext in SUPPORTED_IMAGE_EXTENSIONS
 
     except Exception as e:
         logger.warning(f"Image validation failed for {filename}: {e}")
@@ -54,22 +42,11 @@ def get_anniversary_images() -> Dict[str, List[str]]:
         for anniversary_dir in extra_images_dir.iterdir():
             if anniversary_dir.is_dir():
                 image_files = []
-                valid_extensions = {
-                    ".jpg",
-                    ".jpeg",
-                    ".png",
-                    ".bmp",
-                    ".gif",
-                    ".tiff",
-                    ".tif",
-                    ".webp",
-                    ".avif",
-                }
 
                 for file_path in anniversary_dir.iterdir():
                     if (
                         file_path.is_file()
-                        and file_path.suffix.lower() in valid_extensions
+                        and file_path.suffix.lower() in SUPPORTED_IMAGE_EXTENSIONS
                     ):
                         image_files.append(file_path.name)
 

@@ -5,7 +5,11 @@ import logging
 import os
 import time
 from pathlib import Path
-from typing import Any, Callable, Optional, Tuple, TypeVar
+from typing import Any, Callable, FrozenSet, Optional, Tuple, TypeVar
+
+SUPPORTED_IMAGE_EXTENSIONS: FrozenSet[str] = frozenset(
+    {".jpg", ".jpeg", ".png", ".bmp", ".gif", ".tiff", ".tif", ".webp", ".avif"}
+)
 
 _F = TypeVar("_F", bound=Callable[..., Any])
 

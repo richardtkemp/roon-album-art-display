@@ -258,47 +258,7 @@ class MessageRenderer:
 
     def _wrap_text_for_overlay(self, text: str, font: Any, max_width: int) -> str:
         """Wrap text to fit within overlay width."""
-        if not font:
-            # Simple character-based wrapping fallback
-            chars_per_line = max_width // self.config_manager.get_line_spacing_ratio()
-            words = text.split()
-            lines = []
-            current_line = ""
-
-            for word in words:
-                test_line = current_line + (" " if current_line else "") + word
-                if len(test_line) <= chars_per_line:
-                    current_line = test_line
-                else:
-                    if current_line:
-                        lines.append(current_line)
-                    current_line = word
-
-            if current_line:
-                lines.append(current_line)
-
-            return "\n".join(lines)
-
-        # Use font metrics for accurate wrapping
-        words = text.split()
-        lines = []
-        current_line = ""
-
-        for word in words:
-            test_line = current_line + (" " if current_line else "") + word
-            test_width = self._get_text_size_width(test_line, font)
-
-            if test_width <= max_width:
-                current_line = test_line
-            else:
-                if current_line:
-                    lines.append(current_line)
-                current_line = word
-
-        if current_line:
-            lines.append(current_line)
-
-        return "\n".join(lines)
+        return self._wrap_text(text, font, max_width)
 
     def _get_text_size_width(self, text: str, font: Any) -> int:
         """Get text width using font metrics."""
@@ -313,33 +273,27 @@ class MessageRenderer:
 
     def _wrap_text_for_screen(self, message: str, font: Any) -> str:
         """Wrap text to fit screen width, respecting existing line breaks."""
-        if not font:
-            # Simple character-based wrapping fallback
-            screen_width = self.config_manager.get_screen_width()
-            margin = self.config_manager.get_overlay_border_size()
-            chars_per_line = (
-                screen_width - 2 * margin
-            ) // self.config_manager.get_line_spacing_ratio()
-            return self._simple_wrap_text(message, chars_per_line)
-
-        # Calculate available width
         screen_width = self.config_manager.get_screen_width()
         margin = self.config_manager.get_overlay_border_size()
         available_width = screen_width - 2 * margin
+        return self._wrap_text(message, font, available_width)
 
-        # Process each paragraph (separated by existing newlines) separately
-        paragraphs = message.split("\n")
+    def _wrap_text(self, text: str, font: Any, max_width: int) -> str:
+        """Wrap text to fit within max_width, preserving existing line breaks."""
+        if not font:
+            chars_per_line = max_width // self.config_manager.get_line_spacing_ratio()
+            return self._simple_wrap_text(text, chars_per_line)
+
+        paragraphs = text.split("\n")
         wrapped_paragraphs = []
 
         for paragraph in paragraphs:
             if not paragraph.strip():
-                wrapped_paragraphs.append("")  # Preserve empty lines
+                wrapped_paragraphs.append("")
                 continue
-
-            wrapped_paragraph = self._wrap_paragraph_to_width(
-                paragraph, font, available_width
+            wrapped_paragraphs.append(
+                self._wrap_paragraph_to_width(paragraph, font, max_width)
             )
-            wrapped_paragraphs.append(wrapped_paragraph)
 
         return "\n".join(wrapped_paragraphs)
 

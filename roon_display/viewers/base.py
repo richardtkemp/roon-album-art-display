@@ -38,18 +38,12 @@ class BaseViewer(ABC):
         """Set the render coordinator for display state tracking."""
         self.render_coordinator = coordinator
 
-    def _notify_render_complete(self, image_key: str) -> None:
-        """Notify render coordinator that a render completed successfully."""
-        if self.render_coordinator and image_key:
-            self.render_coordinator.set_current_display_image_key(image_key)
-
     def _finalize_successful_render(self, image_key: Optional[str]) -> None:
-        """Common logic for successful renders — update tracking and notify coordinator."""
+        """Common logic for successful renders — update tracking."""
         from ..utils import set_current_image_key
 
         if image_key:
             set_current_image_key(image_key)
-            self._notify_render_complete(image_key)
 
         if self.on_display_complete is not None:
             self.on_display_complete()

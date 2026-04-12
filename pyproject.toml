@@ -12,7 +12,9 @@ dependencies = [
     "pillow",
     "roonapi",
     "configparser",
-    "numpy"
+    "numpy",
+    "flask",
+    "psutil"
 ]
 requires-python = ">=3.8"
 

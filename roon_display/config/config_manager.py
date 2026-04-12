@@ -4,12 +4,10 @@ from __future__ import annotations
 
 import configparser
 import logging
-import sys
 from pathlib import Path
-from typing import Any, Dict, List, Optional, Tuple, Union
+from typing import Any, Dict, List, Optional, Tuple
 
 from ..time_utils import parse_time_to_minutes, parse_time_to_seconds
-from ..utils import get_extra_images_dir
 
 logger = logging.getLogger(__name__)
 

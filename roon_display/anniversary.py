@@ -14,6 +14,7 @@ from PIL import Image, ImageDraw, ImageFont
 
 from .message_renderer import MessageRenderer
 from .utils import (
+    SUPPORTED_IMAGE_EXTENSIONS,
     ensure_anniversary_dir_exists,
     get_extra_images_dir,
     get_last_track_time,
@@ -67,20 +68,13 @@ class AnniversaryManager:
             logger.warning(f"Anniversary directory not found: {anniversary_dir}")
             return None
 
-        image_extensions = {
-            ".jpg",
-            ".jpeg",
-            ".png",
-            ".bmp",
-            ".gif",
-            ".tiff",
-            ".webp",
-            ".avif",
-        }
         image_files: List[Path] = []
 
         for file_path in anniversary_dir.iterdir():
-            if file_path.is_file() and file_path.suffix.lower() in image_extensions:
+            if (
+                file_path.is_file()
+                and file_path.suffix.lower() in SUPPORTED_IMAGE_EXTENSIONS
+            ):
                 try:
                     with Image.open(file_path) as test_img:
                         test_img.verify()
@@ -317,22 +311,19 @@ class AnniversaryManager:
 
         def monitor_anniversaries() -> None:
             while True:
+                check_interval = self.config_manager.get_anniversary_check_interval()
+                # Sleep for a fraction of the check interval to stay responsive
+                # while not busy-looping
+                poll_sleep = min(check_interval / 6, 30)
                 try:
                     current_time = time.time()
-                    anniversary_check_interval = (
-                        self.config_manager.get_anniversary_check_interval()
-                    )
-                    if (
-                        current_time - self.last_anniversary_check
-                        >= anniversary_check_interval
-                    ):
+                    if current_time - self.last_anniversary_check >= check_interval:
                         self.last_anniversary_check = current_time
                         self._check_anniversaries()
-                        # TODO magic number
-                    time.sleep(10)
+                    time.sleep(poll_sleep)
                 except Exception as e:
                     logger.error(f"Error in anniversary monitor: {e}")
-                    time.sleep(self.config_manager.get_reconnection_interval())
+                    time.sleep(poll_sleep)
 
         anniversary_thread = threading.Thread(target=monitor_anniversaries, daemon=True)
         anniversary_thread.start()

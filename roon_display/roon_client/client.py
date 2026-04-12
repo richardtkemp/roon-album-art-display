@@ -6,19 +6,13 @@ import logging
 import threading
 import time
 from pathlib import Path
-from typing import Any, Dict, List, Optional, Tuple, Union
+from typing import Any, Optional, Tuple
 
 import requests
 from PIL import Image
 from roonapi import RoonApi, RoonDiscovery
 
-from ..message_renderer import MessageRenderer
-from ..utils import (
-    get_current_image_key,
-    get_saved_image_dir,
-    log_performance,
-    set_current_image_key,
-)
+from ..utils import get_current_image_key, get_saved_image_dir, log_performance
 
 logger = logging.getLogger(__name__)
 

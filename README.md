@@ -109,17 +109,17 @@ Example configuration:
 type = epd13in3E  # or 'system_display'
 
 [IMAGE_RENDER]
-colour_balance_adjustment = 1.0
-contrast_adjustment = 1.2
-brightness_adjustment = 1.0
-sharpness_adjustment = 1.0
+color_enhance = 1.0
+contrast = 1.2
+brightness = 1.0
+sharpness = 1.0
 
 [IMAGE_POSITION]
 scale_x = 1.0
 scale_y = 1.0
 rotation = 270
-position_offset_x = 0
-position_offset_y = 0
+image_offset_x = 0
+image_offset_y = 0
 
 [ZONES]
 allowed_zone_names = Living Room,Kitchen
