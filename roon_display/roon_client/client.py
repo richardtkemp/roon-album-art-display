@@ -200,7 +200,7 @@ class RoonClient:
                     logger.info(f"Found {len(servers)} Roon server(s)")
                     result: Tuple[str, int] = servers[0]
                     return result
-                logger.info("Waiting for Roon servers...")
+                logger.debug("Waiting for Roon servers...")
                 time.sleep(1)
             logger.info("Server discovery timed out")
             return None
