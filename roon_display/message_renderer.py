@@ -220,9 +220,14 @@ class MessageRenderer:
         try:
             font: Any = ImageFont.truetype(font_path, max(1, font_size))
         except Exception as e:
-            raise RuntimeError(
-                f"Cannot load font '{font_path}' at size {font_size}: {e}"
-            ) from e
+            msg = f"Cannot load font '{font_path}' at size {font_size}: {e}"
+            # During preview, raise so the error reaches the web UI.
+            # During normal rendering, fall back to default so the
+            # overlay still renders (albeit ugly).
+            if getattr(self.config_manager._override_local, "overrides", None):
+                raise RuntimeError(msg) from e
+            logger.error(msg)
+            font = ImageFont.load_default()
 
         # Wrap text to fit overlay
         wrapped_text = self._wrap_text_for_overlay(
