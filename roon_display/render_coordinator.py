@@ -338,6 +338,9 @@ class RenderCoordinator:
                     continue
 
                 display_image = self._composite(current_overlay, _last_prepared.image)
+                # Cache before render so the web UI shows the image while hardware
+                # is still updating (~25s on e-ink).
+                self._cache_for_web(display_image, _last_prepared.target)
                 try:
                     self._viewer.render(
                         display_image,
@@ -347,7 +350,6 @@ class RenderCoordinator:
                     self._current_key = _last_prepared.target.image_key
                     _rendered_overlay = current_overlay
                     self._last_rendered_target = _last_prepared.target
-                    self._cache_for_web(display_image, _last_prepared.target)
                 except RenderCancelledError:
                     logger.info(
                         "Render cancelled — will re-render when next item ready"
