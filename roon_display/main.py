@@ -133,7 +133,8 @@ def main() -> None:
             """Connect to Roon and start event loop in background."""
             try:
                 roon_client.connect_loop()
-                roon_client.run()
+                event_thread = roon_client.run()
+                event_thread.join()
             except Exception as e:
                 logger.error(f"Error in Roon client: {e}")
 
