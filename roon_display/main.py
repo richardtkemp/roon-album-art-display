@@ -139,32 +139,30 @@ def main() -> None:
         simulation_server = SimulationServer(roon_client, config_manager)
         simulation_server.start()
 
-        if tk_root:
-            # For Tkinter, we need to start connection in background thread
-            # so the GUI can show authorization messages
-            import threading
+        # Connection runs in a background thread for both display types.
+        # connect_loop handles retries with overlay feedback so the user
+        # always sees connection status on both e-ink and web UI.
+        import threading
 
-            def connect_and_run() -> None:
-                """Connect to Roon and start event loop in background."""
-                try:
-                    roon_client.connect()
-                    roon_client.run()
-                except Exception as e:
-                    logger.error(f"Error in Roon client: {e}")
-
-            # Start Roon connection in background thread
-            roon_thread = threading.Thread(target=connect_and_run, daemon=True)
-            roon_thread.start()
-
-            # Start Tkinter main loop immediately (blocks here)
-            tk_root.mainloop()
-
-        else:
-            # For e-ink, connect synchronously (no GUI to show)
-            roon_client.connect()
-            event_thread = roon_client.run()
+        def connect_and_run() -> None:
+            """Connect to Roon and start event loop in background."""
             try:
-                event_thread.join()
+                roon_client.connect_loop()
+                roon_client.run()
+            except Exception as e:
+                logger.error(f"Error in Roon client: {e}")
+
+        roon_client.running = True
+        roon_thread = threading.Thread(
+            target=connect_and_run, daemon=True, name="roon-client"
+        )
+        roon_thread.start()
+
+        if tk_root:
+            tk_root.mainloop()
+        else:
+            try:
+                roon_thread.join()
             except KeyboardInterrupt:
                 logger.info("Received interrupt signal")
 

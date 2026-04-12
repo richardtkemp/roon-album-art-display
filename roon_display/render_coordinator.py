@@ -339,6 +339,14 @@ class RenderCoordinator:
                         and not overlay_changed
                         and not _last_prepared.target.force
                     ):
+                        # E-ink render skip is correct, but ensure web cache
+                        # is populated (it's None after restart while e-ink
+                        # retains the physical image).
+                        if self.last_rendered_image is None:
+                            display_image = self._composite(
+                                current_overlay, _last_prepared.image
+                            )
+                            self._cache_for_web(display_image, _last_prepared.target)
                         continue
 
                     display_image = self._composite(

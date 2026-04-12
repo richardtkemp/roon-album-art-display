@@ -93,7 +93,7 @@ class TestRoonClient:
         mock_discovery.return_value = mock_discover
 
         with patch("time.sleep"):
-            result = roon_client._discover_server()
+            result = roon_client._discover_server(timeout=10)
 
         assert result == ("192.168.1.50", 9330)
         mock_discover.stop.assert_called_once()
@@ -106,9 +106,25 @@ class TestRoonClient:
         mock_discover.stop = Mock()
         mock_discovery.return_value = mock_discover
 
-        result = roon_client._discover_server()
+        result = roon_client._discover_server(timeout=10)
 
         assert result == ("192.168.1.50", 9330)
+        mock_discover.stop.assert_called_once()
+
+    @patch("roon_display.roon_client.client.RoonDiscovery")
+    def test_discover_server_timeout(self, mock_discovery, roon_client):
+        """Test server discovery returns None on timeout."""
+        mock_discover = Mock()
+        mock_discover.all.return_value = []
+        mock_discover.stop = Mock()
+        mock_discovery.return_value = mock_discover
+
+        with patch("time.sleep"):
+            # Very short timeout to trigger immediately
+            with patch("time.time", side_effect=[0.0, 0.0, 100.0]):
+                result = roon_client._discover_server(timeout=1)
+
+        assert result is None
         mock_discover.stop.assert_called_once()
 
     def test_get_token_exists(self, roon_client):

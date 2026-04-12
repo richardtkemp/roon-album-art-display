@@ -92,8 +92,12 @@ class RoonClient:
             )
             self._is_connected = value
 
-    def connect(self) -> Any:
-        """Connect to Roon server."""
+    def connect(self, discovery_timeout: float = 10) -> bool:
+        """Attempt a single connection to Roon server.
+
+        Tries saved server first, then bounded discovery. Returns True on
+        success, False on failure (never raises for connection issues).
+        """
         logger.info("Connecting to Roon server...")
 
         # Try saved server first, then fall back to discovery
@@ -107,21 +111,28 @@ class RoonClient:
                 logger.warning(
                     "Saved server connection failed, falling back to discovery"
                 )
-                server_ip, server_port = self._discover_server()
+                result = self._discover_server(timeout=discovery_timeout)
+                if result:
+                    server_ip, server_port = result
+                    logger.info(
+                        f"Connecting to discovered server at"
+                        f" {server_ip}:{server_port}"
+                    )
+                    self.roon = self._create_roon_connection(server_ip, server_port)
+        else:
+            # No saved server, use discovery
+            result = self._discover_server(timeout=discovery_timeout)
+            if result:
+                server_ip, server_port = result
                 logger.info(
                     f"Connecting to discovered server at {server_ip}:{server_port}"
                 )
                 self.roon = self._create_roon_connection(server_ip, server_port)
-        else:
-            # No saved server, use discovery
-            server_ip, server_port = self._discover_server()
-            logger.info(f"Connecting to discovered server at {server_ip}:{server_port}")
-            self.roon = self._create_roon_connection(server_ip, server_port)
 
         if not self.roon:
             self.is_connected = False
             self._report_health_failure("Failed to connect to Roon server")
-            raise ConnectionError("Could not connect to Roon server")
+            return False
 
         # Validate connection
         self._validate_connection()
@@ -130,28 +141,66 @@ class RoonClient:
         self._process_initial_zones()
 
         logger.info("Successfully connected to Roon server")
-        return self.roon
+        return True
+
+    def connect_loop(self) -> None:
+        """Connect to Roon with retry and overlay feedback.
+
+        Handles both initial connection and reconnection with the same
+        logic. Sets overlays so the user always sees connection status.
+        Blocks until connected or self.running is cleared.
+        """
+        reconnect_interval = self.config_manager.get_reconnection_interval()
+
+        while self.running:
+            if self.render_coordinator:
+                self.render_coordinator.set_overlay(
+                    "Searching for Roon server...\n\n"
+                    "Waiting for server to come online.\n"
+                    "Will retry automatically.",
+                    timeout=reconnect_interval + 10,
+                )
+
+            if self.connect(discovery_timeout=reconnect_interval):
+                if self.render_coordinator:
+                    self.render_coordinator.clear_overlay()
+                return
+
+            logger.info(f"Connection attempt failed, retrying in {reconnect_interval}s")
+            # Sleep in small increments so self.running can stop us
+            deadline = time.time() + reconnect_interval
+            while self.running and time.time() < deadline:
+                time.sleep(1)
 
     def _get_server_details(self) -> Any:
         """Get saved server details if available."""
         return self.config_manager.get_server_config()
 
-    def _discover_server(self) -> Any:
-        """Discover Roon server on network."""
+    def _discover_server(self, timeout: float = 0) -> Optional[Tuple[str, int]]:
+        """Discover Roon server on network.
+
+        Args:
+            timeout: Maximum seconds to wait. 0 means no limit.
+
+        Returns:
+            (ip, port) tuple, or None if timeout expired.
+        """
         self.connection_state = "searching"
         discover = RoonDiscovery(None)
-
-        # Wait for server discovery
-        while True:
-            servers = discover.all()
-            if servers:
-                logger.info(f"Found {len(servers)} Roon server(s)")
-                break
-            logger.info("Waiting for Roon servers...")
-            time.sleep(1)
-
-        discover.stop()
-        return servers[0]  # Return first server found
+        deadline = time.time() + timeout if timeout > 0 else float("inf")
+        try:
+            while time.time() < deadline:
+                servers = discover.all()
+                if servers:
+                    logger.info(f"Found {len(servers)} Roon server(s)")
+                    result: Tuple[str, int] = servers[0]
+                    return result
+                logger.info("Waiting for Roon servers...")
+                time.sleep(1)
+            logger.info("Server discovery timed out")
+            return None
+        finally:
+            discover.stop()
 
     def _test_connectivity(self, server_ip: str, server_port: int) -> bool:
         """Test if server port is reachable."""
@@ -595,29 +644,9 @@ class RoonClient:
                             # Distinguish between network errors and auth errors
                             self._handle_connection_failure("auth_revoked")
 
-                # If disconnected, attempt reconnection every minute
+                # If disconnected, use connect_loop for retry with overlay
                 elif not self.is_connected:
-                    current_time = time.time()
-                    reconnect_interval = self.config_manager.get_reconnection_interval()
-                    if current_time - self.last_reconnect_attempt >= reconnect_interval:
-                        logger.info("Attempting to reconnect to Roon server...")
-                        self.last_reconnect_attempt = current_time
-                        try:
-                            self.connect()
-                            # Connection was established, but we need to wait for callbacks to confirm full connectivity
-                            if hasattr(self, "roon") and self.roon:
-                                logger.info(
-                                    "Reconnection attempt completed - waiting for zone callbacks to confirm connectivity"
-                                )
-                                # Don't immediately set is_connected = True - wait for callbacks
-                                # The callback handler will set it when we receive zone updates
-                            else:
-                                logger.warning(
-                                    "Reconnection failed - no valid API connection"
-                                )
-                        except Exception as e:
-                            logger.warning(f"Reconnection failed: {e}")
-                            # Continue showing error and try again next interval
+                    self.connect_loop()
 
                 time.sleep(10)  # Check every 10 seconds
 
