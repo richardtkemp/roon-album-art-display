@@ -138,6 +138,7 @@ class RenderCoordinator:
         # Render-loop state (written by render thread only)
         self._last_prepared: Optional[PreparedItem] = None
         self._rendered_overlay: Optional[str] = None
+        self._dedup_invalidated: bool = False
 
         # Image caching for web access — guarded by _web_cache_lock
         self._web_cache_lock: threading.Lock = threading.Lock()
@@ -164,6 +165,8 @@ class RenderCoordinator:
     @property
     def _current_key(self) -> Optional[str]:
         """Image key currently on display, derived from last rendered target."""
+        if self._dedup_invalidated:
+            return None
         with self._target_lock:
             t = self._last_rendered_target
         return t.image_key if t is not None else None
@@ -396,6 +399,7 @@ class RenderCoordinator:
                 self._last_prepared.target.track_info,
             )
             self._rendered_overlay = current_overlay
+            self._dedup_invalidated = False
             with self._target_lock:
                 self._last_rendered_target = self._last_prepared.target
             queue_to_display = time.time() - self._last_prepared.target.queued_at
@@ -429,10 +433,9 @@ class RenderCoordinator:
             self._viewer.render(display_image, None, None)
             self._rendered_overlay = current_overlay
             # The overlay-only render replaced whatever was on the physical
-            # display, so clear _last_rendered_target to ensure the next
-            # prepared art isn't skipped by dedup.
-            with self._target_lock:
-                self._last_rendered_target = None
+            # display, so invalidate dedup to ensure the next prepared art
+            # isn't skipped. We keep _last_rendered_target for preview use.
+            self._dedup_invalidated = True
         except RenderCancelledError:
             logger.info("Render cancelled (overlay-only)")
 
