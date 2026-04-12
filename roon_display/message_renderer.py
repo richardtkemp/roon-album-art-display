@@ -226,9 +226,15 @@ class MessageRenderer:
         )
 
         # Get smaller font for overlay
-        font = ImageFont.truetype(
-            self.config_manager.get_font(), self.config_manager.get_font_size() // 3
-        )
+        try:
+            font: Any = ImageFont.truetype(
+                self.config_manager.get_font(), self.config_manager.get_font_size() // 3
+            )
+        except Exception as e:
+            logger.debug(
+                f"Failed to load font for overlay: {e}, falling back to default"
+            )
+            font = ImageFont.load_default()
 
         # Wrap text to fit overlay
         wrapped_text = self._wrap_text_for_overlay(

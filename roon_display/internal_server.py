@@ -41,7 +41,7 @@ class InternalServer:
             """Return the exact image currently on display."""
             try:
                 image, metadata = self.render_coordinator.get_current_rendered_image()
-                if image:
+                if image is not None:
                     img_io = io.BytesIO()
                     image.save(img_io, "JPEG", quality=85)
                     img_io.seek(0)

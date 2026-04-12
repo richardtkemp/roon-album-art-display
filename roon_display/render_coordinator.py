@@ -321,68 +321,75 @@ class RenderCoordinator:
                     self._overlay_timeout = None
                 current_overlay = self._overlay
 
-            if _last_prepared is not None:
-                # Staleness check — always applies, even when force=True
-                if not self._incoming.is_current(_last_prepared.target.generation):
-                    logger.debug("Render loop: stale target, skipping until newer item")
-                    continue
+            try:
+                if _last_prepared is not None:
+                    # Staleness check — always applies, even when force=True
+                    if not self._incoming.is_current(_last_prepared.target.generation):
+                        logger.debug(
+                            "Render loop: stale target, skipping until newer item"
+                        )
+                        continue
 
-                # Dedup: skip re-render if same image is already on screen
-                # and nothing has changed. force=True bypasses this check.
-                already_shown = _last_prepared.target.image_key == self._current_key
-                overlay_changed = current_overlay is not _rendered_overlay
-                if (
-                    already_shown
-                    and not overlay_changed
-                    and not _last_prepared.target.force
-                ):
-                    continue
+                    # Dedup: skip re-render if same image is already on screen
+                    # and nothing has changed. force=True bypasses this check.
+                    already_shown = _last_prepared.target.image_key == self._current_key
+                    overlay_changed = current_overlay is not _rendered_overlay
+                    if (
+                        already_shown
+                        and not overlay_changed
+                        and not _last_prepared.target.force
+                    ):
+                        continue
 
-                display_image = self._composite(current_overlay, _last_prepared.image)
-                # Cache before render so the web UI shows the image while hardware
-                # is still updating (~25s on e-ink).
-                self._cache_for_web(display_image, _last_prepared.target)
-                try:
-                    self._viewer.render(
+                    display_image = self._composite(
+                        current_overlay, _last_prepared.image
+                    )
+                    # Cache before render so the web UI shows the image while hardware
+                    # is still updating (~25s on e-ink).
+                    self._cache_for_web(display_image, _last_prepared.target)
+                    try:
+                        self._viewer.render(
+                            display_image,
+                            _last_prepared.target.image_key,
+                            _last_prepared.target.track_info,
+                        )
+                        self._current_key = _last_prepared.target.image_key
+                        _rendered_overlay = current_overlay
+                        self._last_rendered_target = _last_prepared.target
+                        queue_to_display = time.time() - _last_prepared.target.queued_at
+                        logger.info(
+                            f"Track displayed: {_last_prepared.target.image_key}"
+                            f" — {queue_to_display:.1f}s from queue to display"
+                        )
+                    except RenderCancelledError:
+                        logger.info(
+                            "Render cancelled — will re-render when next item ready"
+                        )
+
+                elif current_overlay:
+                    # No art yet — show overlay as full-screen message
+                    display_image = self.message_renderer.create_text_message(
+                        current_overlay
+                    )
+                    self._cache_for_web(
                         display_image,
-                        _last_prepared.target.image_key,
-                        _last_prepared.target.track_info,
+                        RenderTarget(
+                            content_type="overlay",
+                            image_key=None,
+                            image_path=None,
+                            img=None,
+                            track_info=None,
+                        ),
                     )
-                    self._current_key = _last_prepared.target.image_key
-                    _rendered_overlay = current_overlay
-                    self._last_rendered_target = _last_prepared.target
-                    queue_to_display = time.time() - _last_prepared.target.queued_at
-                    logger.info(
-                        f"Track displayed: {_last_prepared.target.image_key}"
-                        f" — {queue_to_display:.1f}s from queue to display"
-                    )
-                except RenderCancelledError:
-                    logger.info(
-                        "Render cancelled — will re-render when next item ready"
-                    )
-
-            elif current_overlay:
-                # No art yet — show overlay as full-screen message
-                display_image = self.message_renderer.create_text_message(
-                    current_overlay
-                )
-                self._cache_for_web(
-                    display_image,
-                    RenderTarget(
-                        content_type="overlay",
-                        image_key=None,
-                        image_path=None,
-                        img=None,
-                        track_info=None,
-                    ),
-                )
-                try:
-                    self._viewer.render(display_image, None, None)
-                    _rendered_overlay = current_overlay
-                except RenderCancelledError:
-                    logger.info("Render cancelled (overlay-only)")
-            else:
-                logger.warning("No content to render")
+                    try:
+                        self._viewer.render(display_image, None, None)
+                        _rendered_overlay = current_overlay
+                    except RenderCancelledError:
+                        logger.info("Render cancelled (overlay-only)")
+                else:
+                    logger.warning("No content to render")
+            except Exception as e:
+                logger.error(f"Render loop: unexpected error: {e}", exc_info=True)
 
     # ------------------------------------------------------------------
     # Helpers
