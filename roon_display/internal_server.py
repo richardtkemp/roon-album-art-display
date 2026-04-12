@@ -83,15 +83,15 @@ class InternalServer:
             """Generate preview image with provided configuration."""
             try:
                 config_data = request.get_json()
-                preview_image = self.render_coordinator.render_preview(config_data)
+                result = self.render_coordinator.render_preview(config_data)
 
-                if preview_image:
-                    img_io = io.BytesIO()
-                    preview_image.save(img_io, "JPEG", quality=85)
-                    img_io.seek(0)
-                    return send_file(img_io, mimetype="image/jpeg")
-                else:
-                    return jsonify({"error": "Preview generation failed"}), 500
+                if isinstance(result, str):
+                    return jsonify({"error": result}), 500
+
+                img_io = io.BytesIO()
+                result.save(img_io, "JPEG", quality=85)
+                img_io.seek(0)
+                return send_file(img_io, mimetype="image/jpeg")
             except Exception as e:
                 logger.error(f"Error generating preview: {e}")
                 return jsonify({"error": f"Preview error: {e}"}), 500

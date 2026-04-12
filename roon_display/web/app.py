@@ -5,7 +5,7 @@ from __future__ import annotations
 import io
 import logging
 from pathlib import Path
-from typing import Any, Dict, List, Optional, Tuple, cast
+from typing import Any, Dict, List, Optional, Tuple, Union, cast
 
 import requests
 from flask import (
@@ -74,8 +74,12 @@ class InternalAppClient:
             logger.debug(f"Failed to get current status: {e}")
             return {}
 
-    def generate_preview(self, config_data: Dict[str, Any]) -> Optional[bytes]:
-        """Generate preview image with config changes."""
+    def generate_preview(self, config_data: Dict[str, Any]) -> Union[bytes, str, None]:
+        """Generate preview image with config changes.
+
+        Returns image bytes on success, error string on server error, None on
+        connection failure.
+        """
         try:
             response = requests.post(
                 f"{self.base_url}/preview",
@@ -85,10 +89,10 @@ class InternalAppClient:
             if response.status_code == 200:
                 return cast(bytes, response.content)
             else:
-                logger.warning(
-                    f"Failed to generate preview: HTTP {response.status_code}"
-                )
-                return None
+                try:
+                    return cast(str, response.json()["error"])
+                except Exception:
+                    return f"Preview failed: HTTP {response.status_code}"
         except requests.RequestException as e:
             logger.debug(f"Failed to generate preview: {e}")
             return None
@@ -437,14 +441,16 @@ def create_app(config_path: Optional[str] = None, port: Optional[int] = None) ->
             config_data = _parse_form_to_config_for_preview(request.form, request.files)
 
             # Request preview from main app
-            preview_data = internal_client.generate_preview(config_data)
+            result = internal_client.generate_preview(config_data)
 
-            if preview_data:
+            if isinstance(result, bytes):
                 return send_file(
-                    io.BytesIO(preview_data), mimetype="image/jpeg", as_attachment=False
+                    io.BytesIO(result), mimetype="image/jpeg", as_attachment=False
                 )
+            elif isinstance(result, str):
+                return jsonify({"error": result}), 500
             else:
-                return jsonify({"error": "Preview generation failed"}), 500
+                return jsonify({"error": "Display app not reachable"}), 500
         except Exception as e:
             logger.error(f"Error generating preview: {e}")
             return jsonify({"error": str(e)}), 500

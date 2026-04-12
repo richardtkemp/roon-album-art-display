@@ -7,7 +7,7 @@ import threading
 import time
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import TYPE_CHECKING, Any, Dict, Generic, Optional, Tuple, TypeVar
+from typing import TYPE_CHECKING, Any, Dict, Generic, Optional, Tuple, TypeVar, Union
 
 from PIL import Image
 
@@ -263,8 +263,11 @@ class RenderCoordinator:
             metadata = self.last_render_metadata.copy()
         return image, metadata
 
-    def render_preview(self, config_data: Dict[str, Any]) -> Optional[Image.Image]:
-        """Generate a preview image with temporary config overrides."""
+    def render_preview(self, config_data: Dict[str, Any]) -> Union[Image.Image, str]:
+        """Generate a preview image with temporary config overrides.
+
+        Returns a PIL Image on success, or an error string on failure.
+        """
         try:
             config_diff = self.config_manager.get_config_diff(config_data)
             if config_diff:
@@ -278,13 +281,12 @@ class RenderCoordinator:
             with self._target_lock:
                 t = self._last_rendered_target
             if t is None:
-                logger.warning("No content available for preview")
-                return None
+                return "No content available for preview"
 
             with self.config_manager.preview_overrides(config_data):
                 image = self.image_processor.prepare(t.img, t.image_path)
                 if image is None:
-                    return None
+                    return "Failed to prepare image"
 
                 # Composite current overlay onto preview so it reflects reality
                 with self._overlay_lock:
@@ -292,7 +294,7 @@ class RenderCoordinator:
                 return self._composite(current_overlay, image)
         except Exception as e:
             logger.error(f"Error generating preview: {e}")
-            return None
+            return str(e)
 
     # ------------------------------------------------------------------
     # Pipeline workers

@@ -113,7 +113,9 @@ function fetchPreviewImage() {
     })
     .then(response => {
         if (response.ok) return response.blob();
-        throw new Error(`Preview generation failed: HTTP ${response.status}`);
+        return response.json().then(data => {
+            throw new Error(data.error || `Preview failed: HTTP ${response.status}`);
+        });
     })
     .then(blob => {
         const img = document.getElementById('current-display-image');
@@ -128,6 +130,9 @@ function fetchPreviewImage() {
     })
     .catch(error => {
         console.error('Preview failed:', error);
+        const overlay = document.getElementById('display-overlay');
+        overlay.innerHTML = `<span class="overlay-text overlay-error">${error.message}</span>`;
+        overlay.classList.remove('hidden');
     });
 }
 

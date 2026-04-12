@@ -297,6 +297,15 @@ button:hover { background-color: #45a049; }
 
 .display-overlay.hidden { display: none; }
 
+.overlay-error {
+    background: rgba(244, 67, 54, 0.95);
+    padding: 8px 12px;
+    border-radius: 4px;
+    font-size: 0.75em;
+    max-width: 300px;
+    word-break: break-word;
+}
+
 .display-container.fixed {
     position: fixed;
     top: 0;
