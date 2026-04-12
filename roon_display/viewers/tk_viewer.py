@@ -3,9 +3,9 @@
 from __future__ import annotations
 
 import logging
+import threading
 from typing import TYPE_CHECKING, Any, Optional
 
-from ..utils import set_current_image_key
 from .base import BaseViewer
 
 if TYPE_CHECKING:
@@ -30,7 +30,6 @@ class TkViewer(BaseViewer):
             window_width = self.root.winfo_screenwidth()
             window_height = self.root.winfo_screenheight()
         else:
-            # Use the explicit size we set
             window_width = 600
             window_height = 600
 
@@ -41,34 +40,24 @@ class TkViewer(BaseViewer):
         self._setup_window_appearance()
         self._setup_window_behavior()
 
-        # Track pending updates for thread safety
-        self.pending_image_data: Optional[tuple] = None
-
         self.startup()
 
     def _configure_window_size(self) -> bool:
         """Configure window size and fullscreen mode. Returns fullscreen state."""
-        # Set fullscreen mode based on config
         fullscreen = bool(self.config_manager.get_tkinter_fullscreen())
         self.root.attributes("-fullscreen", fullscreen)
-
-        # If not fullscreen, set a reasonable window size
         if not fullscreen:
             self.root.geometry("600x600")
-
         return fullscreen
 
     def _setup_window_appearance(self) -> None:
         """Configure window appearance."""
-        # Force light theme
         self.root.tk_setPalette(
             background="#f0f0f0",
             foreground="black",
             activeBackground="#e0e0e0",
             activeForeground="black",
         )
-
-        # Create image label
         import tkinter as tk
 
         self.label = tk.Label(self.root)
@@ -76,47 +65,40 @@ class TkViewer(BaseViewer):
 
     def _setup_window_behavior(self) -> None:
         """Configure window event handling."""
-        # Escape key to close
         self.root.bind("<Escape>", lambda e: self.root.destroy())
-
-        # Handle window close
         self.root.protocol("WM_DELETE_WINDOW", self.root.destroy)
 
-    def check_pending_updates(self) -> None:
-        """Check for pending image updates (call from main thread)."""
-        # Schedule next check
-        self.root.after(100, self.check_pending_updates)
+    def render(
+        self, image: Any, image_key: Optional[str], title: Optional[str]
+    ) -> None:
+        """Thread-safe blocking render via the Tk main thread.
 
-        # Process pending update
-        if self.pending_image_data is not None:
-            image_key, img, title = self.pending_image_data
-            self.display_image(image_key, img, title)
-            logger.info(f"Updated display with {title}")
-            self.pending_image_data = None
+        Schedules the actual Tk update on the main thread via ``root.after(0,
+        …)`` and blocks until the callback fires.  This keeps Tk widget updates
+        on the correct thread while allowing the coordinator's render worker to
+        call render() from a background thread.
+        """
+        done = threading.Event()
+        error_holder: list = []
 
-    def display_image(self, image_key: Any, img: Any, title: Any) -> None:
-        """Display image (must be called from main thread)."""
-        if img is None:
-            logger.warning(f"No image provided for display: {title}")
-            return
+        def _do_render() -> None:
+            try:
+                from PIL import ImageTk
 
-        try:
-            # Convert to PhotoImage for Tkinter
-            from PIL import ImageTk
+                self.photo = ImageTk.PhotoImage(image)
+                self.label.configure(image=self.photo)
+                self.label.image = self.photo  # type: ignore[attr-defined]
+                self._finalize_successful_render(image_key)
+            except Exception as e:
+                error_holder.append(e)
+            finally:
+                done.set()
 
-            self.photo = ImageTk.PhotoImage(img)
+        self.root.after(0, _do_render)
+        done.wait()
+        if error_holder:
+            raise error_holder[0]
 
-            # Update label
-            self.label.configure(image=self.photo)
-            self.label.image = self.photo  # type: ignore[attr-defined]  # Keep reference for GC
-
-            # Finalize successful render (update tracking and notify coordinator)
-            self._finalize_successful_render(image_key)
-
-        except Exception as e:
-            self._log_render_error(e, title)
-
-    def update(self, image_key: Any, img: Any, title: Any) -> None:
-        """Thread-safe method to request image update."""
-        # Store update data for main thread to process
-        self.pending_image_data = (image_key, img, title)
+    def cancel(self) -> None:
+        """No-op — Tk renders are fast and not worth cancelling."""
+        pass

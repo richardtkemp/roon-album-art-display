@@ -43,13 +43,13 @@ class BaseViewer(ABC):
         if self.render_coordinator and image_key:
             self.render_coordinator.set_current_display_image_key(image_key)
 
-    def _finalize_successful_render(self, image_key: str) -> None:
-        """Common logic for successful renders - update tracking and notify coordinator."""
+    def _finalize_successful_render(self, image_key: Optional[str]) -> None:
+        """Common logic for successful renders — update tracking and notify coordinator."""
         from ..utils import set_current_image_key
 
-        set_current_image_key(image_key)
-
-        self._notify_render_complete(image_key)
+        if image_key:
+            set_current_image_key(image_key)
+            self._notify_render_complete(image_key)
 
         if self.on_display_complete is not None:
             self.on_display_complete()
@@ -71,11 +71,13 @@ class BaseViewer(ABC):
         pass
 
     @abstractmethod
-    def update(self, image_key: str, img: Any, title: str) -> None:
-        """Update the display with a new image."""
+    def render(
+        self, image: Any, image_key: Optional[str], title: Optional[str]
+    ) -> None:
+        """Blocking render. Raises RenderCancelledError if cancelled mid-render."""
         pass
 
     @abstractmethod
-    def display_image(self, image_key: str, img: Any, title: str) -> None:
-        """Display an image on the device."""
+    def cancel(self) -> None:
+        """Signal current render to abort. No-op if idle."""
         pass

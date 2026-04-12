@@ -455,7 +455,7 @@ class AnniversaryManager:
                     f"Anniversary triggered: {anniversary['name']} - {anniversary['message']}"
                 )
 
-                self.render_coordinator.set_main_content(
+                self.render_coordinator.set_art(
                     content_type="anniversary",
                     image_key="anniversary",
                     track_info=f"Anniversary: {anniversary['message']}",

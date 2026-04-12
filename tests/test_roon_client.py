@@ -366,7 +366,7 @@ class TestRoonClient:
         ):
             roon_client._fetch_and_display_album_art("existing_key", "Test Track")
 
-            roon_client.render_coordinator.set_main_content.assert_called_once_with(
+            roon_client.render_coordinator.set_art.assert_called_once_with(
                 content_type="art",
                 image_key="existing_key",
                 image_path=image_path,
@@ -386,7 +386,7 @@ class TestRoonClient:
         ), patch.object(roon_client, "_download_album_art", return_value=sample_image):
             roon_client._fetch_and_display_album_art("new_key", "New Track")
 
-            roon_client.render_coordinator.set_main_content.assert_called_once_with(
+            roon_client.render_coordinator.set_art.assert_called_once_with(
                 content_type="art",
                 image_key="new_key",
                 image_path=image_path,

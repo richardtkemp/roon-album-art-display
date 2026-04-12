@@ -63,7 +63,7 @@ port = 9330
         self, integration_config_manager, mock_eink_module
     ):
         """Test image processor working with viewer."""
-        with patch("roon_display.viewers.eink_viewer.set_current_image_key"):
+        with patch("roon_display.utils.set_current_image_key"):
             viewer = EinkViewer(integration_config_manager, mock_eink_module)
 
             assert viewer is not None
@@ -225,18 +225,12 @@ port = 9330
     def test_threading_integration(
         self, integration_config_manager, mock_eink_module, sample_image
     ):
-        """Test threading behavior in integration scenario."""
-        with patch("roon_display.viewers.eink_viewer.set_current_image_key"):
+        """Test that EinkViewer.render() is callable and blocks."""
+        with patch("roon_display.utils.set_current_image_key"):
             viewer = EinkViewer(integration_config_manager, mock_eink_module)
 
-            # Test multiple rapid updates (threading scenario)
-            for i in range(3):
-                viewer.update(f"key_{i}", sample_image, f"Song {i}")
-
-            # Last thread should be active
-            if viewer.update_thread:
-                assert viewer.update_thread.is_alive()
-                viewer.update_thread.join(timeout=1)
+            # render() is synchronous — just verify it completes without error
+            viewer.render(sample_image, "key_0", "Song 0")
 
     def test_memory_management_integration(
         self, integration_config_manager, sample_image

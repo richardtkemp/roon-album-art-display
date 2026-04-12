@@ -1,69 +1,185 @@
-"""Centralized render coordinator that manages main content and overlay display."""
+"""Centralized render coordinator with a two-stage prepare → render pipeline."""
 
 from __future__ import annotations
 
 import logging
 import threading
 import time
+from dataclasses import dataclass
 from pathlib import Path
-from typing import TYPE_CHECKING, Any, Dict, Optional, Tuple
+from typing import TYPE_CHECKING, Any, Dict, Generic, Optional, Tuple, TypeVar
 
 from PIL import Image
+
+from .exceptions import RenderCancelledError
 
 if TYPE_CHECKING:
     from .config.config_manager import ConfigManager
     from .image_processing.processor import ImageProcessor
+    from .message_renderer import MessageRenderer
 
 logger = logging.getLogger(__name__)
 
+T = TypeVar("T")
+
+
+class LatestSlot(Generic[T]):
+    """Thread-safe single-slot mailbox. Always holds the latest value.
+
+    ``set()`` always overwrites. ``wait_and_take()`` blocks until a value is
+    available, then returns and clears the slot. The generation counter lets
+    callers detect whether a newer item has arrived since they took their item.
+    """
+
+    def __init__(self) -> None:
+        self._lock = threading.Lock()
+        self._cond = threading.Condition(self._lock)
+        self._value: Optional[T] = None
+        self._generation: int = 0
+
+    def set(self, value: T) -> None:
+        """Overwrite the slot and increment the generation counter."""
+        with self._cond:
+            self._generation += 1
+            value.generation = self._generation  # type: ignore[attr-defined]
+            self._value = value
+            self._cond.notify_all()
+
+    def wait_and_take(self) -> T:
+        """Block until a value is available, then return and clear it."""
+        with self._cond:
+            while self._value is None:
+                self._cond.wait()
+            value = self._value
+            self._value = None
+            return value
+
+    def try_take(self) -> Optional[T]:
+        """Non-blocking take. Returns None if slot is empty."""
+        with self._lock:
+            value = self._value
+            self._value = None
+            return value
+
+    def is_current(self, generation: int) -> bool:
+        """Return True if no newer item has arrived since this generation."""
+        with self._lock:
+            return self._generation == generation
+
+
+@dataclass
+class RenderTarget:
+    """A request to render a particular piece of content."""
+
+    content_type: str
+    image_key: Optional[str]
+    image_path: Optional[Path]
+    img: Optional[Image.Image]
+    track_info: Optional[str]
+    force: bool = False
+    generation: int = 0
+
+
+@dataclass
+class PreparedItem:
+    """A fully processed, display-ready image paired with its source target."""
+
+    target: RenderTarget
+    image: Image.Image
+
 
 class RenderCoordinator:
-    """Coordinates rendering with main content slot and overlay slot."""
+    """Coordinates rendering with a two-stage prepare → render pipeline.
+
+    Stage 1 (prepare-loop): takes incoming RenderTargets, runs
+    ``image_processor.prepare()`` to produce a display-ready image, and emits
+    PreparedItems.  Stale targets (superseded before prepare completes) are
+    silently discarded.
+
+    Stage 2 (render-loop): takes PreparedItems and calls ``viewer.render()``,
+    which blocks until the hardware finishes.  Stale prepared items are
+    discarded; the dedup check skips re-renders of the same image unless an
+    overlay changed or ``force=True`` was requested.
+    """
 
     def __init__(
         self,
         viewer: Any,
         image_processor: "ImageProcessor",
-        message_renderer: Any,
+        message_renderer: "MessageRenderer",
         config_manager: "ConfigManager",
         anniversary_manager: Any = None,
     ) -> None:
-        """Initialize render coordinator."""
-        self.viewer = viewer
+        self._viewer = viewer
         self.image_processor = image_processor
         self.message_renderer = message_renderer
-        self.anniversary_manager = anniversary_manager
         self.config_manager = config_manager
+        self.anniversary_manager = anniversary_manager
 
-        # Content slots
-        self.main_content: Optional[Dict[str, Any]] = (
-            None  # Art or anniversary content (fullscreen)
-        )
-        self.overlay_content: Optional[Dict[str, Any]] = (
-            None  # Errors or temporary messages (bottom-right)
-        )
-        self.overlay_timeout: Optional[float] = None  # When overlay should auto-clear
+        # Pipeline slots
+        self._incoming: LatestSlot[RenderTarget] = LatestSlot()
+        self._prepared: LatestSlot[PreparedItem] = LatestSlot()
+        self._render_trigger: threading.Event = threading.Event()
 
-        # Rendering control
-        self._render_pending = False
-        self.render_lock = threading.Lock()
+        # Overlay state
+        self._overlay_lock: threading.Lock = threading.Lock()
+        self._overlay: Optional[str] = None
+        self._overlay_timeout: Optional[float] = None
 
-        # E-ink display persistence tracking
-        self.eink_display_persistent = hasattr(viewer, "epd")  # Check if this is e-ink
-        self.current_display_image_key: Optional[str] = None
+        # Display state
+        self._current_key: Optional[str] = None
+        self._last_rendered_target: Optional[RenderTarget] = None
 
         # Image caching for web access
         self.last_rendered_image: Optional[Image.Image] = None
         self.last_render_metadata: Dict[str, Any] = {}
 
-        logger.info("RenderCoordinator initialized with main/overlay slots")
+        logger.info("RenderCoordinator initialized")
 
-        # Check if there's a current image displayed (for e-ink persistence)
+        # Initialise e-ink persistence (reads last-displayed key from disk)
         self._initialize_current_display_state()
 
-        # Start anniversary checking if enabled
+        # Start pipeline workers
+        threading.Thread(
+            target=self._prepare_loop, daemon=True, name="prepare-loop"
+        ).start()
+        threading.Thread(
+            target=self._render_loop, daemon=True, name="render-loop"
+        ).start()
+
+        # Start anniversary monitor if enabled
         if self.anniversary_manager:
             self.anniversary_manager.start_anniversary_monitor(self)
+
+    # ------------------------------------------------------------------
+    # Public API
+    # ------------------------------------------------------------------
+
+    def set_art(
+        self,
+        content_type: str,
+        image_key: Optional[str] = None,
+        image_path: Optional[Path] = None,
+        img: Optional[Image.Image] = None,
+        track_info: Optional[str] = None,
+        force: bool = False,
+        **kwargs: Any,
+    ) -> None:
+        """Queue a render target. Returns immediately."""
+        logger.info(f"Queuing render target: {content_type}")
+        target = RenderTarget(
+            content_type=content_type,
+            image_key=image_key,
+            image_path=image_path,
+            img=img,
+            track_info=track_info,
+            force=force,
+        )
+        if content_type == "art" and self.anniversary_manager:
+            self.anniversary_manager.update_last_track_time()
+        self._incoming.set(target)
+        if self.config_manager.get_partial_refresh():
+            self._viewer.cancel()
 
     def set_main_content(
         self,
@@ -74,223 +190,219 @@ class RenderCoordinator:
         track_info: Optional[str] = None,
         **kwargs: Any,
     ) -> None:
-        """Set main content (art or anniversary) for fullscreen display."""
-        logger.info(f"Setting main content: {content_type}")
-
-        # Check if this is already displayed on e-ink (no need to re-render)
-        if (
-            self.eink_display_persistent
-            and image_key
-            and self.current_display_image_key == image_key
-        ):
-            logger.info(
-                f"Skipping render - image {image_key} already displayed on e-ink"
-            )
-            return
-
-        # Store main content data
-        self.main_content = {
-            "content_type": content_type,
-            "image_key": image_key,
-            "image_path": image_path,
-            "img": img,
-            "track_info": track_info,
-            "timestamp": time.time(),
+        """Deprecated alias for set_art()."""
+        self.set_art(
+            content_type=content_type,
+            image_key=image_key,
+            image_path=image_path,
+            img=img,
+            track_info=track_info,
             **kwargs,
-        }
-
-        # Update anniversary timing for new art (not for startup/cached art)
-        if content_type == "art" and self.anniversary_manager:
-            self.anniversary_manager.update_last_track_time()
-
-        # Trigger render
-        self._render_display()
+        )
 
     def set_overlay(self, message: str, timeout: Optional[float] = None) -> None:
-        """Set overlay content (errors, messages) for bottom-right display."""
+        """Set an overlay message for bottom-right display."""
         logger.warning(f"Setting overlay: {message}")
-
-        # Store overlay data
-        self.overlay_content = {
-            "message": message,
-            "timestamp": time.time(),
-        }
-
-        # Set timeout for auto-clearing
-        if timeout:
-            self.overlay_timeout = time.time() + timeout
-        else:
-            self.overlay_timeout = None
-
-        # Trigger render
-        self._render_display()
+        with self._overlay_lock:
+            self._overlay = message
+            self._overlay_timeout = time.time() + timeout if timeout else None
+        self._render_trigger.set()
 
     def clear_overlay(self) -> None:
-        """Clear overlay content."""
-        if self.overlay_content:
-            logger.info("Clearing overlay")
-            self.overlay_content = None
-            self.overlay_timeout = None
-            self._render_display()
-
-    def _render_display(self) -> None:
-        """Render the current state to the display."""
-        self._render_pending = True
-
-        # Signal any in-progress render to abort early so the new content shows sooner.
-        if self.config_manager.get_partial_refresh() and hasattr(
-            self.viewer, "cancel_current_render"
-        ):
-            self.viewer.cancel_current_render()
-
-        if not self.render_lock.acquire(blocking=False):
-            return  # render in progress; it will loop and pick up the flag
-
-        try:
-            while self._render_pending:
-                self._render_pending = False
-
-                # Check for overlay timeout
-                if self.overlay_timeout and time.time() > self.overlay_timeout:
-                    self.overlay_content = None
-                    self.overlay_timeout = None
-
-                # Determine what to render
-                if self.main_content:
-                    img = self.image_processor.prepare(
-                        self.main_content["img"],
-                        self.main_content["image_path"],
-                    )
-                    if img is None:
-                        logger.error("Failed to prepare image for render")
-                        continue
-                    self._cache_rendered_image(img)
-                elif self.overlay_content:
-                    # No main content — render overlay as full-screen message
-                    img = self.message_renderer.create_text_message(
-                        self.overlay_content["message"]
-                    )
-                else:
-                    logger.warning("No content to render")
-                    continue
-
-                logger.debug(f"Rendering display content: {self.main_content}")
-                self.viewer.update(
-                    self.main_content["image_key"] if self.main_content else None,
-                    img,
-                    self.main_content["track_info"] if self.main_content else None,
-                )
-        finally:
-            self.render_lock.release()
+        """Clear the overlay."""
+        with self._overlay_lock:
+            if self._overlay is not None:
+                logger.info("Clearing overlay")
+                self._overlay = None
+                self._overlay_timeout = None
+        self._render_trigger.set()
 
     def force_refresh(self) -> None:
-        """Force a re-render of the current display content with updated config values."""
-        logger.info("Force refresh triggered from web interface")
-        self._render_display()
-
-    def _initialize_current_display_state(self) -> None:
-        """Initialize coordinator with current display state (e-ink persistence)."""
-        if self.eink_display_persistent:
-            # Try to get current image key from utils
-            try:
-                from .utils import get_current_image_key
-
-                self.current_display_image_key = get_current_image_key()
-                if self.current_display_image_key:
-                    logger.info(
-                        f"E-ink display already showing image: {self.current_display_image_key}"
-                    )
-            except Exception as e:
-                logger.debug(f"Could not get current image key: {e}")
-
-    def set_current_display_image_key(self, image_key: str) -> None:
-        """Update the current display image key (called by viewers after successful renders)."""
-        self.current_display_image_key = image_key
-        logger.debug(f"Updated current display image key: {image_key}")
-
-    def _cache_rendered_image(self, image: Optional[Image.Image]) -> None:
-        """Cache the rendered image and metadata for internal server access."""
-        self.last_rendered_image = image.copy() if image else None
-        self.last_render_metadata = {
-            "timestamp": time.time(),
-            "content_type": (
-                self.main_content.get("content_type") if self.main_content else None
-            ),
-            "image_key": (
-                self.main_content.get("image_key") if self.main_content else None
-            ),
-            "track_info": (
-                self.main_content.get("track_info") if self.main_content else None
-            ),
-            "has_overlay": self.overlay_content is not None,
-        }
+        """Re-render current content with the current config (e.g. after settings change)."""
+        logger.info("Force refresh triggered")
+        if self._last_rendered_target is not None:
+            t = self._last_rendered_target
+            target = RenderTarget(
+                content_type=t.content_type,
+                image_key=t.image_key,
+                image_path=t.image_path,
+                img=t.img,
+                track_info=t.track_info,
+                force=True,
+            )
+            self._incoming.set(target)
 
     def get_current_rendered_image(
         self,
     ) -> Tuple[Optional[Image.Image], Dict[str, Any]]:
-        """Get current rendered image and metadata for internal server."""
+        """Return the last rendered image and metadata (for web UI)."""
         return self.last_rendered_image, self.last_render_metadata.copy()
 
     def render_preview(self, config_data: Dict[str, Any]) -> Optional[Image.Image]:
-        """
-        Generate a preview image showing how the current display would look with modified settings.
-
-        This function provides real-time preview functionality for the web configuration interface.
-        Users can adjust settings in the web form and see immediate visual feedback of how those
-        changes would affect the actual display output, without applying the changes permanently.
-
-        Data Flow:
-        1. Takes the current main content image (album art, anniversary image, etc.)
-        2. Applies temporary configuration overrides from the web interface
-        3. Uses the centralized create_final_display_image() function to render the result
-        4. Returns the preview image for display in the web browser
-
-        Configuration Handling:
-        - Accepts config_data in web form format (e.g., "IMAGE_RENDER.brightness")
-        - Passes overrides directly to create_final_display_image() without conversion
-        - Falls back to current config values for any settings not overridden
-        - Supports all rendering parameters: scaling, rotation, positioning, enhancements
-
-        Use Cases:
-        - Web interface live preview while adjusting sliders/inputs
-        - Validating configuration changes before saving
-        - Visual feedback for complex multi-parameter adjustments
-
-        Args:
-            config_data: Dictionary of configuration overrides from web form.
-                        Keys should be in "SECTION.field" format (e.g., "IMAGE_POSITION.scale_x")
-                        Values are typically strings from form inputs that get converted as needed
-
-        Returns:
-            PIL.Image: Preview image at full screen dimensions, or None if preview generation failed
-        """
+        """Generate a preview image with temporary config overrides."""
         try:
-            # Get diff to show only changed values
             config_diff = self.config_manager.get_config_diff(config_data)
             if config_diff:
-                changes_summary = []
-                for key, diff in config_diff.items():
-                    changes_summary.append(f"{key}: {diff['old']} → {diff['new']}")
-                logger.info(
-                    f"Generating preview with config changes: {', '.join(changes_summary)}"
-                )
+                changes = [
+                    f"{k}: {d['old']} → {d['new']}" for k, d in config_diff.items()
+                ]
+                logger.info(f"Generating preview with changes: {', '.join(changes)}")
             else:
                 logger.info("Generating preview with no config changes")
 
-            # Get main content image directly
-            if not self.main_content:
-                logger.warning("No main content image available for preview")
+            if self._last_rendered_target is None:
+                logger.warning("No content available for preview")
                 return None
 
-            preview_image = self.image_processor.prepare(
-                self.main_content["img"],
-                self.main_content["image_path"],
+            return self.image_processor.prepare(
+                self._last_rendered_target.img,
+                self._last_rendered_target.image_path,
                 overrides=config_data,
             )
-
-            logger.debug("Preview image generated successfully")
-            return preview_image
-
         except Exception as e:
             logger.error(f"Error generating preview: {e}")
             return None
+
+    # ------------------------------------------------------------------
+    # Backward-compat shims (called by BaseViewer._notify_render_complete)
+    # ------------------------------------------------------------------
+
+    def set_current_display_image_key(self, image_key: str) -> None:
+        """No-op: render loop updates _current_key directly after each render."""
+        pass
+
+    # ------------------------------------------------------------------
+    # Pipeline workers
+    # ------------------------------------------------------------------
+
+    def _prepare_loop(self) -> None:
+        """Stage-1 worker: prepare images for rendering."""
+        while True:
+            target = self._incoming.wait_and_take()
+            try:
+                image = self.image_processor.prepare(target.img, target.image_path)
+            except Exception as e:
+                logger.error(f"Error preparing image: {e}")
+                continue
+            if image is None:
+                logger.error("image_processor.prepare() returned None")
+                continue
+            if not self._incoming.is_current(target.generation):
+                logger.debug(f"Discarding stale prepared item gen={target.generation}")
+                continue
+            self._prepared.set(PreparedItem(target=target, image=image))
+            self._render_trigger.set()
+
+    def _render_loop(self) -> None:
+        """Stage-2 worker: render prepared images to the display."""
+        _last_prepared: Optional[PreparedItem] = None
+        _rendered_overlay: Optional[str] = None
+
+        while True:
+            self._render_trigger.wait()
+            self._render_trigger.clear()
+
+            # Absorb the latest prepared item if one arrived
+            new_item = self._prepared.try_take()
+            if new_item is not None:
+                if (
+                    self._incoming.is_current(new_item.target.generation)
+                    or new_item.target.force
+                ):
+                    _last_prepared = new_item
+                else:
+                    logger.debug("Discarding stale prepared item in render loop")
+
+            # Check overlay timeout
+            with self._overlay_lock:
+                if self._overlay_timeout and time.time() > self._overlay_timeout:
+                    self._overlay = None
+                    self._overlay_timeout = None
+                current_overlay = self._overlay
+
+            if _last_prepared is not None:
+                # Staleness check — always applies, even when force=True
+                if not self._incoming.is_current(_last_prepared.target.generation):
+                    logger.debug("Render loop: stale target, skipping until newer item")
+                    continue
+
+                # Dedup: skip re-render if same image is already on screen
+                # and nothing has changed. force=True bypasses this check.
+                already_shown = _last_prepared.target.image_key == self._current_key
+                overlay_changed = current_overlay is not _rendered_overlay
+                if (
+                    already_shown
+                    and not overlay_changed
+                    and not _last_prepared.target.force
+                ):
+                    continue
+
+                display_image = self._composite(current_overlay, _last_prepared.image)
+                try:
+                    self._viewer.render(
+                        display_image,
+                        _last_prepared.target.image_key,
+                        _last_prepared.target.track_info,
+                    )
+                    self._current_key = _last_prepared.target.image_key
+                    _rendered_overlay = current_overlay
+                    self._last_rendered_target = _last_prepared.target
+                    self._cache_for_web(display_image, _last_prepared.target)
+                except RenderCancelledError:
+                    logger.info(
+                        "Render cancelled — will re-render when next item ready"
+                    )
+
+            elif current_overlay:
+                # No art yet — show overlay as full-screen message
+                display_image = self.message_renderer.create_text_message(
+                    current_overlay
+                )
+                try:
+                    self._viewer.render(display_image, None, None)
+                    _rendered_overlay = current_overlay
+                except RenderCancelledError:
+                    logger.info("Render cancelled (overlay-only)")
+            else:
+                logger.warning("No content to render")
+
+    # ------------------------------------------------------------------
+    # Helpers
+    # ------------------------------------------------------------------
+
+    def _composite(self, overlay_text: Optional[str], base: Image.Image) -> Image.Image:
+        """Composite an error-overlay badge onto the bottom-right of base."""
+        if overlay_text is None:
+            return base
+        overlay_img = self.message_renderer.create_error_overlay(
+            overlay_text, base.size
+        )
+        result = base.copy()
+        x = base.width - overlay_img.width
+        y = base.height - overlay_img.height
+        result.paste(overlay_img, (x, y))
+        return result
+
+    def _cache_for_web(self, display_image: Image.Image, target: RenderTarget) -> None:
+        """Cache the rendered image and metadata for web UI access."""
+        self.last_rendered_image = display_image.copy()
+        self.last_render_metadata = {
+            "timestamp": time.time(),
+            "content_type": target.content_type,
+            "image_key": target.image_key,
+            "track_info": target.track_info,
+            "has_overlay": self._overlay is not None,
+        }
+
+    def _initialize_current_display_state(self) -> None:
+        """Read last-displayed key from disk for e-ink persistence across restarts."""
+        if not hasattr(self._viewer, "epd"):
+            return  # Not an e-ink display; no persistence needed
+        try:
+            from .utils import get_current_image_key
+
+            self._current_key = get_current_image_key()
+            if self._current_key:
+                logger.info(f"E-ink display already showing: {self._current_key}")
+        except Exception as e:
+            logger.debug(f"Could not read current image key: {e}")

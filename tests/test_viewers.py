@@ -3,13 +3,12 @@
 import logging
 import threading
 import time
-from pathlib import Path
-from unittest.mock import MagicMock, Mock, patch
+from unittest.mock import Mock, call, patch
 
 import pytest
 
 from roon_display.viewers.base import BaseViewer
-from roon_display.viewers.eink_viewer import EinkViewer
+from roon_display.viewers.eink_viewer import EinkViewer, RenderCancelledError
 from roon_display.viewers.tk_viewer import TkViewer
 
 
@@ -23,10 +22,10 @@ class TestBaseViewer:
 
     def test_base_viewer_interface(self):
         """Test that BaseViewer defines required abstract methods."""
-        assert hasattr(BaseViewer, "update")
-        assert hasattr(BaseViewer, "display_image")
-        assert BaseViewer.update.__isabstractmethod__
-        assert BaseViewer.display_image.__isabstractmethod__
+        assert hasattr(BaseViewer, "render")
+        assert hasattr(BaseViewer, "cancel")
+        assert BaseViewer.render.__isabstractmethod__
+        assert BaseViewer.cancel.__isabstractmethod__
 
     @pytest.fixture
     def concrete_viewer(self, config_manager):
@@ -35,41 +34,33 @@ class TestBaseViewer:
         class ConcreteViewer(BaseViewer):
             def __init__(self, config_manager):
                 super().__init__(config_manager)
-                self.update_calls = []
-                self.display_calls = []
-                self.anniversary_calls = []
+                self.render_calls = []
+                self.cancel_called = False
 
-            def update(self, image_key, img, title):
-                self.update_calls.append((image_key, img, title))
+            def render(self, image, image_key, title):
+                self.render_calls.append((image, image_key, title))
 
-            def display_image(self, image_key, img, title):
-                self.display_calls.append((image_key, img, title))
-
-            def update_anniversary(self, message, image_path=None):
-                self.anniversary_calls.append((message, image_path))
+            def cancel(self):
+                self.cancel_called = True
 
         return ConcreteViewer(config_manager)
 
     def test_initialization(self, concrete_viewer):
         """Test BaseViewer initialization."""
-        # Should have config_manager and image_processor
         assert concrete_viewer.config_manager is not None
         assert concrete_viewer.image_processor is not None
 
     def test_set_screen_size(self, concrete_viewer):
         """Test set_screen_size method."""
         width, height = 1920, 1080
-
         concrete_viewer.set_screen_size(width, height)
-
-        # Should update config manager dimensions
         assert concrete_viewer.config_manager.get_screen_width() == width
         assert concrete_viewer.config_manager.get_screen_height() == height
 
     def test_startup_is_noop(self, concrete_viewer):
         """Test startup is a no-op — image loading is handled by RenderCoordinator."""
         concrete_viewer.startup()
-        assert len(concrete_viewer.update_calls) == 0
+        assert len(concrete_viewer.render_calls) == 0
 
 
 class TestEinkViewer:
@@ -78,272 +69,140 @@ class TestEinkViewer:
     @pytest.fixture
     def eink_viewer(self, config_manager, mock_eink_module):
         """Create EinkViewer instance for testing."""
-        with patch("roon_display.viewers.eink_viewer.set_current_image_key"):
+        with patch("roon_display.utils.set_current_image_key"):
             viewer = EinkViewer(config_manager, mock_eink_module)
-            viewer.startup = Mock()  # Mock startup to avoid file operations
+            viewer.startup = Mock()
             return viewer
 
     def test_initialization(self, config_manager, mock_eink_module):
         """Test EinkViewer initialization."""
-        with patch("roon_display.viewers.eink_viewer.set_current_image_key"):
+        with patch("roon_display.utils.set_current_image_key"):
             viewer = EinkViewer(config_manager, mock_eink_module)
-
             assert viewer.eink == mock_eink_module
             assert viewer.epd is not None
             mock_eink_module.EPD.assert_called_once()
             viewer.epd.Init.assert_called_once()
 
-    def test_display_image_success(self, eink_viewer, sample_image):
-        """Test successful image display."""
-        image_key = "test_key_123"
-        title = "Test Song"
-
-        eink_viewer.display_image(image_key, sample_image, title)
-
-        # Verify e-ink display methods were called
+    def test_render_success(self, eink_viewer, sample_image):
+        """Test successful render."""
+        eink_viewer.render(sample_image, "test_key_123", "Test Song")
         eink_viewer.epd.getbuffer.assert_called_once_with(sample_image)
         eink_viewer.epd.display.assert_called_once()
 
     @patch("roon_display.utils.set_current_image_key")
-    def test_display_image_sets_current_key(
-        self, mock_set_key, eink_viewer, sample_image
-    ):
-        """Test that display_image sets the current image key."""
-        image_key = "test_key_456"
-        title = "Test Song"
+    def test_render_sets_current_key(self, mock_set_key, eink_viewer, sample_image):
+        """Test that render sets the current image key."""
+        eink_viewer.render(sample_image, "test_key_456", "Test Song")
+        mock_set_key.assert_called_once_with("test_key_456")
 
-        eink_viewer.display_image(image_key, sample_image, title)
-
-        mock_set_key.assert_called_once_with(image_key)
-
-    def test_display_image_error_handling(self, eink_viewer, sample_image):
-        """Test error handling in display_image."""
+    def test_render_error_handling(self, eink_viewer, sample_image):
+        """Test error handling in render."""
         eink_viewer.epd.display.side_effect = Exception("Display error")
-
         # Should not raise exception
-        eink_viewer.display_image("test_key", sample_image, "Test Song")
+        eink_viewer.render(sample_image, "test_key", "Test Song")
 
-    def test_update_with_provided_image(self, eink_viewer, sample_image):
-        """Test update method with image provided."""
-        image_key = "test_key_789"
-        title = "Test Song"
+    def test_render_is_blocking(self, eink_viewer, sample_image):
+        """Test that render blocks until epd.display completes."""
+        display_done = threading.Event()
 
-        eink_viewer.update(image_key, sample_image, title)
+        def slow_display(*args, **kwargs):
+            time.sleep(0.05)
+            display_done.set()
 
-        # Should start update thread
-        assert eink_viewer.update_thread is not None
-        assert isinstance(eink_viewer.update_thread, threading.Thread)
-        assert eink_viewer.update_thread.is_alive()
+        eink_viewer.epd.display.side_effect = slow_display
 
-        # Clean up thread
-        eink_viewer.update_thread.join(timeout=1)
+        render_done = threading.Event()
 
-    def test_update_handles_none_image(self, eink_viewer):
-        """Test update method returns early when no image provided."""
-        eink_viewer.update("test_key", None, "Test Song")
+        def run_render():
+            eink_viewer.render(sample_image, "key", "Title")
+            render_done.set()
 
-        # Should not start thread when image is None
-        assert eink_viewer.update_thread is None
+        t = threading.Thread(target=run_render)
+        t.start()
+        render_done.wait(timeout=1)
 
-    def test_update_stops_previous_thread(self, eink_viewer, sample_image):
-        """Test that update waits for previous thread when partial_refresh is False."""
-        # Start first update
-        eink_viewer.update("key1", sample_image, "Song 1")
-        first_thread = eink_viewer.update_thread
-
-        # Verify initial state and first thread exists
-
-        assert first_thread is not None, "First update should create a thread"
-
-        # Start second update - with partial_refresh=False, should NOT set stop flag
-        eink_viewer.update("key2", sample_image, "Song 2")
-
-        # Should NOT set stop flag with partial_refresh=False
-
-        # Clean up threads
-        if first_thread:
-            first_thread.join(timeout=1)
-        if eink_viewer.update_thread:
-            eink_viewer.update_thread.join(timeout=1)
-
-    def test_thread_safety(self, eink_viewer, sample_image):
-        """Test thread safety of multiple rapid updates."""
-        threads = []
-
-        # Start multiple updates rapidly
-        for i in range(5):
-            eink_viewer.update(f"key_{i}", sample_image, f"Song {i}")
-            if eink_viewer.update_thread:
-                threads.append(eink_viewer.update_thread)
-
-        # Clean up all threads
-        for thread in threads:
-            if thread.is_alive():
-                thread.join(timeout=1)
-
-    def test_no_concurrent_display_calls(self, eink_viewer, sample_image):
-        """Test that display() is never called concurrently."""
-        display_call_count = 0
-        active_calls = 0
-        max_concurrent = 0
-
-        _original_display = eink_viewer.epd.display  # noqa: F841
-
-        def tracking_display(*args, **kwargs):
-            nonlocal display_call_count, active_calls, max_concurrent
-            display_call_count += 1
-            active_calls += 1
-            max_concurrent = max(max_concurrent, active_calls)
-
-            # Simulate slow display with sleep
-            time.sleep(0.1)
-
-            active_calls -= 1
-
-        eink_viewer.epd.display.side_effect = tracking_display
-
-        # Start multiple rapid updates
-        threads = []
-        for i in range(3):
-            eink_viewer.update(f"key_{i}", sample_image, f"Song {i}")
-            if eink_viewer.update_thread:
-                threads.append(eink_viewer.update_thread)
-
-        # Wait for all to complete
-        for thread in threads:
-            thread.join(timeout=2)
-
-        # Should never have more than 1 concurrent display() call
-        assert max_concurrent <= 1, f"Had {max_concurrent} concurrent display calls"
-        assert display_call_count >= 1, "Should have made at least one display call"
+        # If render blocked until display completed, display_done is set
+        assert display_done.is_set()
+        t.join(timeout=1)
 
     def test_fast_render_detection(self, eink_viewer, sample_image, caplog):
         """Test detection of fast renders that indicate hardware problems."""
-        # The default mock display completes in ~0.01s, well below the 15s threshold
-        # (no side_effect override needed — default mock is already "fast")
-
         with caplog.at_level(logging.ERROR):
-            eink_viewer.update("fast_key", sample_image, "Fast Render Test")
+            eink_viewer.render(sample_image, "fast_key", "Fast Render Test")
 
-            # Wait for thread to complete
-            if eink_viewer.update_thread:
-                eink_viewer.update_thread.join(timeout=1)
-
-        # Should have logged the critical error
-        error_logs = [
-            record.message for record in caplog.records if record.levelname == "ERROR"
-        ]
+        error_logs = [r.message for r in caplog.records if r.levelname == "ERROR"]
         critical_logs = [
-            log for log in error_logs if "FAST DISPLAY RENDER DETECTED" in log
+            msg for msg in error_logs if "FAST DISPLAY RENDER DETECTED" in msg
         ]
-
-        assert len(critical_logs) > 0, "Should have detected and logged fast render"
-        assert any(
-            "expected ~25s" in log for log in error_logs
-        ), "Should mention expected timing"
+        assert len(critical_logs) > 0
+        assert any("expected ~25s" in msg for msg in error_logs)
 
     def test_normal_render_timing_no_warning(self, eink_viewer, sample_image, caplog):
         """Test that normal render timing doesn't trigger warnings."""
-        # Set threshold very low so the mock display (0.01s) counts as "normal"
         eink_viewer.config_manager.set_eink_success_threshold("0.001")
         with caplog.at_level(logging.ERROR):
-            eink_viewer.update("normal_key", sample_image, "Normal Render Test")
+            eink_viewer.render(sample_image, "normal_key", "Normal Render Test")
 
-            # Wait for thread to complete
-            if eink_viewer.update_thread:
-                eink_viewer.update_thread.join(timeout=1)
-
-        # Should not have any critical render warnings
-        error_logs = [
-            record.message for record in caplog.records if record.levelname == "ERROR"
-        ]
+        error_logs = [r.message for r in caplog.records if r.levelname == "ERROR"]
         critical_logs = [
-            log for log in error_logs if "FAST DISPLAY RENDER DETECTED" in log
+            msg for msg in error_logs if "FAST DISPLAY RENDER DETECTED" in msg
         ]
-
-        assert (
-            len(critical_logs) == 0
-        ), f"Should not warn about normal timing, but got: {critical_logs}"
+        assert len(critical_logs) == 0
 
     # --- Cancellation tests ---
 
-    def test_cancel_render_sets_event(self, eink_viewer):
-        """cancel_current_render() sets the _cancel_render event."""
+    def test_cancel_sets_event(self, eink_viewer):
+        """cancel() sets the _cancel_render event."""
         assert not eink_viewer._cancel_render.is_set()
-        eink_viewer.cancel_current_render()
+        eink_viewer.cancel()
         assert eink_viewer._cancel_render.is_set()
 
-    def test_display_image_clears_cancel_event_at_start(
-        self, eink_viewer, sample_image
-    ):
-        """display_image() clears the cancel event before touching hardware."""
+    def test_render_clears_cancel_event_at_start(self, eink_viewer, sample_image):
+        """render() clears the cancel event before touching hardware."""
         eink_viewer._cancel_render.set()
-        eink_viewer.display_image("key", sample_image, "Test")
+        eink_viewer.render(sample_image, "key", "Test")
         # Init must have been called — event was cleared before hardware access
         eink_viewer.epd.Init.assert_called()
 
-    def test_display_image_calls_reset_on_cancel(self, eink_viewer, sample_image):
+    def test_render_calls_reset_on_cancel(self, eink_viewer, sample_image):
         """When display() raises RenderCancelledError, Reset() is called."""
-        from roon_display.viewers.eink_viewer import RenderCancelledError
-
         eink_viewer.epd.display.side_effect = RenderCancelledError("test cancel")
-        eink_viewer.display_image("key", sample_image, "Test")
+        with pytest.raises(RenderCancelledError):
+            eink_viewer.render(sample_image, "key", "Test")
         eink_viewer.epd.Reset.assert_called_once()
 
-    def test_display_image_does_not_finalize_on_cancel(self, eink_viewer, sample_image):
+    def test_render_does_not_finalize_on_cancel(self, eink_viewer, sample_image):
         """Cancelled render does not update the current image key."""
-        from roon_display.viewers.eink_viewer import RenderCancelledError
-
         eink_viewer.epd.display.side_effect = RenderCancelledError("test cancel")
         with patch("roon_display.utils.set_current_image_key") as mock_set_key:
-            eink_viewer.display_image("key", sample_image, "Test")
+            with pytest.raises(RenderCancelledError):
+                eink_viewer.render(sample_image, "key", "Test")
             mock_set_key.assert_not_called()
 
-    def test_display_image_disarms_cancel_event_on_success(
-        self, eink_viewer, sample_image
-    ):
+    def test_render_disarms_cancel_event_on_success(self, eink_viewer, sample_image):
         """After a normal render, set_cancel_event(None) is called to disarm."""
-        from unittest.mock import call
-
-        eink_viewer.display_image("key", sample_image, "Test")
+        eink_viewer.render(sample_image, "key", "Test")
         calls = eink_viewer.epd.set_cancel_event.call_args_list
         assert calls[-1] == call(None)
 
-    def test_update_signals_cancel_when_partial_refresh_enabled(
+    def test_render_clears_cancel_event_before_hardware(
         self, eink_viewer, sample_image
     ):
-        """update() sets _cancel_render when partial_refresh=True and render is running."""
-        eink_viewer.config_manager.set_partial_refresh("true")
+        """render() clears the cancel event before touching hardware."""
+        eink_viewer._cancel_render.set()
+        eink_viewer.render(sample_image, "key", "Test")
+        eink_viewer.epd.Init.assert_called()
 
-        # Start a slow render
-        eink_viewer.epd.display.side_effect = lambda *a, **kw: time.sleep(0.5)
-        eink_viewer.update("key1", sample_image, "Song 1")
-        assert eink_viewer.update_thread is not None
-
-        # Second update should signal cancel immediately
-        eink_viewer.update("key2", sample_image, "Song 2")
-        assert eink_viewer._cancel_render.is_set()
-
-        # Clean up
-        if eink_viewer.update_thread:
-            eink_viewer.update_thread.join(timeout=2)
-
-    def test_update_does_not_cancel_when_partial_refresh_disabled(
-        self, eink_viewer, sample_image
+    def test_initialization_with_partial_refresh(
+        self, config_manager, mock_eink_module
     ):
-        """update() does NOT set _cancel_render when partial_refresh=False."""
-        eink_viewer.config_manager.set_partial_refresh("false")
-
-        # Start a slow render
-        eink_viewer.epd.display.side_effect = lambda *a, **kw: time.sleep(0.1)
-        eink_viewer.update("key1", sample_image, "Song 1")
-
-        # Cancel event should not have been set by update()
-        assert not eink_viewer._cancel_render.is_set()
-
-        # Clean up
-        if eink_viewer.update_thread:
-            eink_viewer.update_thread.join(timeout=2)
+        """Test EinkViewer initialization reads partial_refresh from config."""
+        config_manager.set_partial_refresh("true")
+        with patch("roon_display.utils.set_current_image_key"):
+            viewer = EinkViewer(config_manager, mock_eink_module)
+            viewer.startup = Mock()
+            assert viewer.eink == mock_eink_module
+            assert config_manager.get_partial_refresh() is True
 
 
 class TestTkViewer:
@@ -360,8 +219,14 @@ class TestTkViewer:
         mock_root.attributes = Mock()
         mock_root.bind = Mock()
         mock_root.protocol = Mock()
-        mock_root.after = Mock()
         mock_root.destroy = Mock()
+
+        # after(0, callback) executes immediately in tests
+        def execute_after(ms, callback, *args):
+            if ms == 0:
+                callback(*args)
+
+        mock_root.after = Mock(side_effect=execute_after)
         return mock_root
 
     @pytest.fixture
@@ -376,29 +241,26 @@ class TestTkViewer:
     def tk_viewer(self, config_manager, mock_tk_root, mock_tk_label):
         """Create TkViewer instance for testing."""
         with patch("tkinter.Label", return_value=mock_tk_label), patch(
-            "roon_display.viewers.tk_viewer.set_current_image_key"
+            "roon_display.viewers.tk_viewer.set_current_image_key",
+            create=True,
         ):
             viewer = TkViewer(config_manager, mock_tk_root)
-            viewer.startup = Mock()  # Mock startup to avoid file operations
+            viewer.startup = Mock()
             return viewer
 
     def test_initialization(self, config_manager, mock_tk_root, mock_tk_label):
         """Test TkViewer initialization."""
         config_manager.set_tkinter_fullscreen("true")
-
         with patch("tkinter.Label", return_value=mock_tk_label), patch(
-            "roon_display.viewers.tk_viewer.set_current_image_key"
+            "roon_display.viewers.tk_viewer.set_current_image_key",
+            create=True,
         ):
             viewer = TkViewer(config_manager, mock_tk_root)
-
             assert viewer.root == mock_tk_root
-            assert viewer.pending_image_data is None
-
-            # Verify window setup
             mock_tk_root.title.assert_called_with("Album Art Viewer")
             mock_tk_root.tk_setPalette.assert_called_once()
             mock_tk_root.attributes.assert_called_with("-fullscreen", True)
-            mock_tk_root.geometry.assert_not_called()  # Not called in fullscreen mode
+            mock_tk_root.geometry.assert_not_called()
             mock_tk_root.bind.assert_called()
             mock_tk_root.protocol.assert_called()
 
@@ -407,155 +269,68 @@ class TestTkViewer:
     ):
         """Test TkViewer with fullscreen enabled."""
         config_manager.set_tkinter_fullscreen("true")
-
         with patch("tkinter.Label", return_value=mock_tk_label), patch(
-            "roon_display.viewers.tk_viewer.set_current_image_key"
+            "roon_display.viewers.tk_viewer.set_current_image_key",
+            create=True,
         ):
-            _viewer = TkViewer(config_manager, mock_tk_root)  # noqa: F841
-
-            # Verify fullscreen is enabled and no geometry call
+            TkViewer(config_manager, mock_tk_root)
             mock_tk_root.attributes.assert_called_with("-fullscreen", True)
             mock_tk_root.geometry.assert_not_called()
 
-    def test_check_pending_updates_no_pending(self, tk_viewer):
-        """Test check_pending_updates with no pending updates."""
-        tk_viewer.check_pending_updates()
-
-        # Should schedule next check
-        tk_viewer.root.after.assert_called_with(100, tk_viewer.check_pending_updates)
-
-        # No image update should occur
-        assert tk_viewer.pending_image_data is None
-
-    def test_check_pending_updates_with_pending(self, tk_viewer, sample_image):
-        """Test check_pending_updates with pending image data."""
-        tk_viewer.pending_image_data = ("test_key", sample_image, "Test Song")
-
-        with patch.object(tk_viewer, "display_image") as mock_display:
-            tk_viewer.check_pending_updates()
-
-            mock_display.assert_called_once_with("test_key", sample_image, "Test Song")
-            assert tk_viewer.pending_image_data is None
-
-    def test_display_image_success(self, tk_viewer, sample_image):
-        """Test successful image display."""
+    def test_render_success(self, tk_viewer, sample_image):
+        """Test successful render."""
         with patch("PIL.ImageTk.PhotoImage") as mock_photo, patch(
             "roon_display.utils.set_current_image_key"
         ) as mock_set_key:
             mock_photo_instance = Mock()
             mock_photo.return_value = mock_photo_instance
 
-            tk_viewer.display_image("test_key", sample_image, "Test Song")
+            tk_viewer.render(sample_image, "test_key", "Test Song")
 
-            # Verify PhotoImage creation and label update
             mock_photo.assert_called_once()
             tk_viewer.label.configure.assert_called_with(image=mock_photo_instance)
             mock_set_key.assert_called_once_with("test_key")
 
-    def test_display_image_none_image(self, tk_viewer):
-        """Test display_image with no image returns early."""
-        tk_viewer.display_image("test_key", None, "Test Song")
+    def test_render_schedules_on_main_thread(self, tk_viewer, sample_image):
+        """render() calls root.after(0, …) to schedule work on the main thread."""
+        with patch("PIL.ImageTk.PhotoImage"):
+            tk_viewer.render(sample_image, "key", "Title")
+        # root.after should have been called with delay=0
+        after_calls = [c for c in tk_viewer.root.after.call_args_list if c[0][0] == 0]
+        assert len(after_calls) >= 1
 
-        # Should not attempt to create PhotoImage
-        tk_viewer.label.configure.assert_not_called()
+    def test_render_error_propagates(self, tk_viewer, sample_image):
+        """Exceptions raised inside the Tk callback are re-raised from render()."""
+        with patch("PIL.ImageTk.PhotoImage", side_effect=RuntimeError("ImageTk error")):
+            with pytest.raises(RuntimeError, match="ImageTk error"):
+                tk_viewer.render(sample_image, "key", "Title")
 
-    def test_display_image_error_handling(self, tk_viewer, sample_image):
-        """Test error handling in display_image."""
-        with patch("PIL.ImageTk.PhotoImage", side_effect=Exception("ImageTk error")):
-            # Should not raise exception
-            tk_viewer.display_image("test_key", sample_image, "Test Song")
+    def test_cancel_is_noop(self, tk_viewer):
+        """cancel() returns without error."""
+        tk_viewer.cancel()  # Should not raise
 
-    def test_update_sets_pending_data(self, tk_viewer, sample_image):
-        """Test that update sets pending image data."""
-        image_key = "test_key_update"
-        title = "Test Song Update"
-
-        tk_viewer.update(image_key, sample_image, title)
-
-        assert tk_viewer.pending_image_data == (image_key, sample_image, title)
-
-    def test_update_overwrites_pending_data(self, tk_viewer, sample_image):
-        """Test that new update overwrites pending data."""
-        # Set initial pending data
-        tk_viewer.update("key1", sample_image, "Song 1")
-        assert tk_viewer.pending_image_data == ("key1", sample_image, "Song 1")
-
-        # Update with new data
-        tk_viewer.update("key2", sample_image, "Song 2")
-        assert tk_viewer.pending_image_data == ("key2", sample_image, "Song 2")
-
-    def test_window_event_handlers(self, config_manager, mock_tk_root, mock_tk_label):
-        """Test that window event handlers are set up correctly."""
-        with patch("tkinter.Label", return_value=mock_tk_label), patch(
-            "roon_display.viewers.tk_viewer.set_current_image_key"
-        ):
-            TkViewer(config_manager, mock_tk_root)
-
-            # Verify escape key binding
-            escape_calls = [
-                call
-                for call in mock_tk_root.bind.call_args_list
-                if "<Escape>" in str(call)
-            ]
-            assert len(escape_calls) > 0
-
-            # Verify close protocol
-            protocol_calls = [
-                call
-                for call in mock_tk_root.protocol.call_args_list
-                if "WM_DELETE_WINDOW" in str(call)
-            ]
-            assert len(protocol_calls) > 0
-
-    def test_image_reference_handling(self, tk_viewer, sample_image):
-        """Test that image references are properly maintained for GC."""
+    def test_image_reference_maintained(self, tk_viewer, sample_image):
+        """Image reference is stored on label to prevent GC."""
         with patch("PIL.ImageTk.PhotoImage") as mock_photo:
             mock_photo_instance = Mock()
             mock_photo.return_value = mock_photo_instance
-
-            tk_viewer.display_image("test_key", sample_image, "Test Song")
-
-            # Verify that image reference is stored to prevent GC
-            assert hasattr(tk_viewer.label, "image")
+            tk_viewer.render(sample_image, "test_key", "Test Song")
             assert tk_viewer.label.image == mock_photo_instance
 
-    @patch("roon_display.viewers.tk_viewer.logger")
-    def test_logging_on_successful_update(self, mock_logger, tk_viewer, sample_image):
-        """Test that successful updates are logged."""
-        tk_viewer.pending_image_data = ("test_key", sample_image, "Test Song")
-
-        with patch.object(tk_viewer, "display_image"):
-            tk_viewer.check_pending_updates()
-
-            mock_logger.info.assert_called_with("Updated display with Test Song")
-
-    def test_initialization_with_partial_refresh(
-        self, config_manager, mock_eink_module
-    ):
-        """Test EinkViewer initialization reads partial_refresh from config."""
-        config_manager.set_partial_refresh("true")
-        with patch("roon_display.viewers.eink_viewer.set_current_image_key"):
-            viewer = EinkViewer(config_manager, mock_eink_module)
-            viewer.startup = Mock()
-
-            assert viewer.eink == mock_eink_module
-            # partial_refresh is config-driven, not a constructor arg
-            assert config_manager.get_partial_refresh() is True
-
-    def test_update_with_partial_refresh_disabled(
-        self, config_manager, mock_eink_module, sample_image
-    ):
-        """Test that update runs in a thread."""
-        config_manager.set_partial_refresh("false")
-        with patch("roon_display.viewers.eink_viewer.set_current_image_key"):
-            viewer = EinkViewer(config_manager, mock_eink_module)
-            viewer.startup = Mock()
-
-            viewer.update("key1", sample_image, "Song 1")
-
-            # Should start an update thread
-            assert viewer.update_thread is not None
-
-            # Clean up threads
-            if viewer.update_thread and viewer.update_thread.is_alive():
-                viewer.update_thread.join(timeout=1)
+    def test_window_event_handlers(self, config_manager, mock_tk_root, mock_tk_label):
+        """Window event handlers are set up correctly."""
+        with patch("tkinter.Label", return_value=mock_tk_label), patch(
+            "roon_display.viewers.tk_viewer.set_current_image_key",
+            create=True,
+        ):
+            TkViewer(config_manager, mock_tk_root)
+            escape_calls = [
+                c for c in mock_tk_root.bind.call_args_list if "<Escape>" in str(c)
+            ]
+            assert len(escape_calls) > 0
+            protocol_calls = [
+                c
+                for c in mock_tk_root.protocol.call_args_list
+                if "WM_DELETE_WINDOW" in str(c)
+            ]
+            assert len(protocol_calls) > 0

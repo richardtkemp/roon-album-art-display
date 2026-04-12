@@ -128,7 +128,7 @@ def main() -> None:
             image_path = get_saved_image_dir() / f"album_art_{current_key}.jpg"
             if image_path.exists():
                 logger.info(f"Loading last displayed image on startup: {current_key}")
-                render_coordinator.set_main_content(
+                render_coordinator.set_art(
                     content_type="last_art",
                     image_key=current_key,
                     image_path=image_path,
@@ -157,7 +157,6 @@ def main() -> None:
             roon_thread.start()
 
             # Start Tkinter main loop immediately (blocks here)
-            viewer.check_pending_updates()  # type: ignore[attr-defined]
             tk_root.mainloop()
 
         else:

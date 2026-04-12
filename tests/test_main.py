@@ -117,7 +117,6 @@ class TestMainApplication:
         assert len(call_args) == 4
         mock_client.connect.assert_called_once()
         mock_client.run.assert_called_once()
-        mock_viewer.check_pending_updates.assert_called_once()
         mock_tk_root.mainloop.assert_called_once()
 
     @patch("sys.argv", ["roon-display"])
@@ -154,8 +153,7 @@ class TestMainApplication:
 
         # Verify e-ink specific flow
         mock_event_thread.join.assert_called_once()
-        # Should not call tk-specific methods
-        mock_viewer.check_pending_updates.assert_not_called()
+        # E-ink path: Roon event thread join was called (verified above)
 
     @patch("sys.argv", ["roon-display"])
     @patch("roon_display.main.ensure_image_dir_exists")

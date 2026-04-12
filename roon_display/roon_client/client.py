@@ -426,7 +426,7 @@ class RoonClient:
                     return
 
             # Push art to render coordinator
-            self.render_coordinator.set_main_content(
+            self.render_coordinator.set_art(
                 content_type="art",
                 image_key=image_key,
                 image_path=image_path,
