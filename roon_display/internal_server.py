@@ -180,6 +180,17 @@ class InternalServer:
 
     def start(self) -> None:
         """Start the internal server in a background thread."""
+        host = self.config_manager.get_internal_server_host()
+        port = self.config_manager.get_internal_server_port()
+        web_port = self.config_manager.get_web_config_port()
+
+        if port == web_port:
+            logger.error(
+                f"internal_server_port ({port}) conflicts with "
+                f"web_config_port ({web_port}) — web UI will not "
+                f"be able to fetch display images. Change one of "
+                f"them in the config file."
+            )
 
         def run_server() -> None:
             try:
@@ -188,19 +199,14 @@ class InternalServer:
                 werkzeug_logger = logging.getLogger("werkzeug")
                 werkzeug_logger.setLevel(logging.WARNING)
 
-                host = self.config_manager.get_internal_server_host()
-                port = self.config_manager.get_internal_server_port()
                 self.app.run(
                     host=host, port=port, debug=False, use_reloader=False, threaded=True
                 )
             except Exception as e:
-                port = self.config_manager.get_internal_server_port()
                 logger.error(f"Internal server failed to start on port {port}: {e}")
 
         server_thread = threading.Thread(target=run_server, daemon=True)
         server_thread.start()
-        host = self.config_manager.get_internal_server_host()
-        port = self.config_manager.get_internal_server_port()
         logger.info(f"Internal server started on http://{host}:{port}")
 
         time.sleep(0.5)

@@ -37,7 +37,7 @@ CONFIG_SCHEMA: Dict[str, Any] = {
             "comment": "Host for web configuration interface",
         },
         "internal_server_port": {
-            "default": "9090",
+            "default": "5880",
             "type": "number",
             "input_type": "number",
             "min": 1024,

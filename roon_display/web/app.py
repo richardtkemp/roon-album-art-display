@@ -256,6 +256,7 @@ def create_app(config_path: Optional[str] = None, port: Optional[int] = None) ->
                 "IMAGE_POSITION": sections.get("IMAGE_POSITION", {}),
                 "LAYOUT": sections.get("LAYOUT", {}),
                 "IMAGE_QUALITY": sections.get("IMAGE_QUALITY", {}),
+                "TEXT_RENDERING": sections.get("TEXT_RENDERING", {}),
             },
             "Features": {
                 "ZONES": sections.get("ZONES", {}),
