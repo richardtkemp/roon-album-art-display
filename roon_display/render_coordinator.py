@@ -366,6 +366,16 @@ class RenderCoordinator:
                 display_image = self.message_renderer.create_text_message(
                     current_overlay
                 )
+                self._cache_for_web(
+                    display_image,
+                    RenderTarget(
+                        content_type="overlay",
+                        image_key=None,
+                        image_path=None,
+                        img=None,
+                        track_info=None,
+                    ),
+                )
                 try:
                     self._viewer.render(display_image, None, None)
                     _rendered_overlay = current_overlay
