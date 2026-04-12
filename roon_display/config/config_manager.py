@@ -199,6 +199,24 @@ CONFIG_SCHEMA: Dict[str, Any] = {
         },
     },
     "LAYOUT": {
+        "overlay_size_x_percent": {
+            "default": "33",
+            "type": "number",
+            "input_type": "range",
+            "min": 10,
+            "max": 100,
+            "step": 1,
+            "comment": "Overlay width as percentage of image width",
+        },
+        "overlay_size_y_percent": {
+            "default": "25",
+            "type": "number",
+            "input_type": "range",
+            "min": 5,
+            "max": 50,
+            "step": 1,
+            "comment": "Overlay height as percentage of image height",
+        },
         "anniversary_border_percent": {
             "default": "5",
             "type": "number",
@@ -1053,6 +1071,11 @@ class ConfigManager:
                     float(default_value) if "." in default_value else int(default_value)
                 )
         else:
+            # Fall back to schema default for empty strings (e.g. section
+            # missing from config file).
+            if not raw_value:
+                schema_field = CONFIG_SCHEMA.get(section_name, {}).get(field_name, {})
+                return schema_field.get("default", raw_value)
             return raw_value
 
 

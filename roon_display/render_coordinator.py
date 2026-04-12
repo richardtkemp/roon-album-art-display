@@ -375,10 +375,16 @@ class RenderCoordinator:
                         )
 
                 elif current_overlay:
-                    # No art yet — show overlay as full-screen message
-                    display_image = self.message_renderer.create_text_message(
-                        current_overlay
-                    )
+                    # No prepared art yet — try to load the last cached
+                    # image from disk so the overlay composites on top of
+                    # real content rather than a blank white screen.
+                    base_image = self._load_cached_base_image()
+                    if base_image is not None:
+                        display_image = self._composite(current_overlay, base_image)
+                    else:
+                        display_image = self.message_renderer.create_text_message(
+                            current_overlay
+                        )
                     self._cache_for_web(
                         display_image,
                         RenderTarget(
@@ -392,6 +398,10 @@ class RenderCoordinator:
                     try:
                         self._viewer.render(display_image, None, None)
                         _rendered_overlay = current_overlay
+                        # The overlay-only render replaced whatever was on
+                        # the physical display, so clear _current_key to
+                        # ensure the next prepared art isn't skipped by dedup.
+                        self._current_key = None
                     except RenderCancelledError:
                         logger.info("Render cancelled (overlay-only)")
                 else:
@@ -408,13 +418,39 @@ class RenderCoordinator:
         if overlay_text is None:
             return base
         overlay_img = self.message_renderer.create_error_overlay(
-            overlay_text, base.size
+            overlay_text,
+            base.size,
+            size_x_percent=self.config_manager.get_overlay_size_x_percent(),
+            size_y_percent=self.config_manager.get_overlay_size_y_percent(),
         )
         result = base.copy()
         x = base.width - overlay_img.width
         y = base.height - overlay_img.height
         result.paste(overlay_img, (x, y))
         return result
+
+    def _load_cached_base_image(self) -> Optional[Image.Image]:
+        """Try to load the last-displayed image from disk for overlay compositing.
+
+        Returns a fully processed image ready for display, or None if no
+        cached image is available.
+        """
+        try:
+            from .utils import get_current_image_key, get_saved_image_dir
+
+            key = get_current_image_key()
+            if not key:
+                return None
+            image_path = get_saved_image_dir() / f"album_art_{key}.jpg"
+            if not image_path.exists():
+                return None
+            img = self.image_processor.prepare(None, image_path)
+            if img is not None:
+                logger.info(f"Loaded cached base image for overlay: {key}")
+            return img
+        except Exception as e:
+            logger.debug(f"Could not load cached base image: {e}")
+            return None
 
     def _cache_for_web(self, display_image: Image.Image, target: RenderTarget) -> None:
         """Cache the rendered image and metadata for web UI access."""
