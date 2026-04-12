@@ -110,7 +110,7 @@ class MessageRenderer:
         canvas = Image.new("RGB", (screen_width, screen_height), "white")
 
         # Define layout areas
-        border_size = self.config_manager.get_overlay_border_size()
+        border_size = self.config_manager.get_overlay_margin()
         text_area_height = screen_height // 6
 
         image_area_width = screen_width - 2 * border_size
@@ -228,7 +228,7 @@ class MessageRenderer:
         wrapped_text = self._wrap_text_for_overlay(
             error_message,
             font,
-            overlay_width - self.config_manager.get_overlay_border_size(),
+            overlay_width - self.config_manager.get_overlay_margin(),
         )
 
         # Calculate text position (centered)
@@ -276,7 +276,7 @@ class MessageRenderer:
     def _wrap_text_for_screen(self, message: str, font: Any) -> str:
         """Wrap text to fit screen width, respecting existing line breaks."""
         screen_width = self.config_manager.get_screen_width()
-        margin = self.config_manager.get_overlay_border_size()
+        margin = self.config_manager.get_overlay_margin()
         available_width = screen_width - 2 * margin
         return self._wrap_text(message, font, available_width)
 

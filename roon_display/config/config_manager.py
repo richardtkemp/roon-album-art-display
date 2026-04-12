@@ -196,7 +196,6 @@ CONFIG_SCHEMA: Dict[str, Any] = {
             "input_type": "number",
             "min": 0,
             "max": 100,
-            "getter_name": "overlay_border_size",
             "comment": "Inner margin for overlay text (pixels)",
         },
     },
