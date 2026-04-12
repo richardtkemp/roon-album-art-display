@@ -13,9 +13,15 @@
             <select id="{{ section_name }}_{{ key }}" name="{{ section_name }}.{{ key }}"
                     data-default="{{ config_item.default_value }}">
                 {% for option in config_item.options %}
-                    <option value="{{ option }}" {{ 'selected' if option == config_item.value else '' }}>
+                    {% if option is mapping %}
+                    <option value="{{ option.value }}" {{ 'selected' if option.value == config_item.value|string else '' }}>
+                        {{ option.label }}
+                    </option>
+                    {% else %}
+                    <option value="{{ option }}" {{ 'selected' if option == config_item.value|string else '' }}>
                         {{ option }}
                     </option>
+                    {% endif %}
                 {% endfor %}
             </select>
         {% elif config_item.type == 'textarea' %}

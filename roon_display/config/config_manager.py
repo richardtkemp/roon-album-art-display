@@ -160,10 +160,10 @@ CONFIG_SCHEMA: Dict[str, Any] = {
     },
     "TEXT_RENDERING": {
         "font": {
-            "default": "/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf",
-            "type": "string",
-            "input_type": "text",
-            "comment": "Path to TrueType font file for text rendering",
+            "default": "",
+            "type": "select",
+            "options": [],  # Populated dynamically by web config handler
+            "comment": "Font for text rendering",
         },
         "font_size": {
             "default": "24",

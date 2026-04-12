@@ -17,6 +17,34 @@ from .utils import validate_image_format
 
 logger = logging.getLogger(__name__)
 
+# Common font directories across platforms
+_FONT_DIRS = [
+    "/usr/share/fonts",
+    "/usr/local/share/fonts",
+    str(Path.home() / ".fonts"),
+    str(Path.home() / ".local/share/fonts"),
+    # macOS
+    "/System/Library/Fonts",
+    "/Library/Fonts",
+    str(Path.home() / "Library/Fonts"),
+]
+
+
+def _discover_fonts() -> List[Dict[str, str]]:
+    """Find all .ttf and .otf fonts on the system, sorted by name."""
+    seen: set = set()
+    fonts: List[Dict[str, str]] = []
+    for font_dir in _FONT_DIRS:
+        d = Path(font_dir)
+        if not d.is_dir():
+            continue
+        for f in d.rglob("*"):
+            if f.suffix.lower() in (".ttf", ".otf") and str(f) not in seen:
+                seen.add(str(f))
+                fonts.append({"value": str(f), "label": f.stem})
+    fonts.sort(key=lambda p: p["label"].lower())
+    return fonts
+
 
 class WebConfigHandler:
     """Handles configuration loading, saving, and validation for the web interface."""
@@ -84,6 +112,16 @@ class WebConfigHandler:
                             "yes",
                             "on",
                         )
+
+                # Populate font options dynamically
+                if section_name == "TEXT_RENDERING" and field_name == "font":
+                    fonts = _discover_fonts()
+                    metadata["options"] = fonts
+                    font_paths = [f["value"] for f in fonts]
+                    # If current value is empty or not installed, pick first available
+                    if metadata["value"] not in font_paths and fonts:
+                        metadata["value"] = fonts[0]["value"]
+                        metadata["default_value"] = fonts[0]["value"]
 
                 sections[section_name][field_name] = metadata
 
