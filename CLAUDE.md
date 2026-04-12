@@ -10,6 +10,8 @@ This is a Python application that displays full-screen album art from a Roon mus
 **ALWAYS read these documents first when working on this project:**
 - `README.md` - Project overview, installation, configuration, usage
 - `TESTING.md` - Comprehensive testing guide, test structure, quality tools
+- `docs/CONFIG.md` - Configuration reference (all config keys, grouped by web UI tab)
+- `docs/ARCHITECTURE.md` - System architecture and component interactions
 
 **Important:** Update these documents whenever you make changes to:
 - Project structure or architecture

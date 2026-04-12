@@ -1,299 +1,123 @@
 # Roon Full Art Display
 
-A Python application that displays full-screen album art from your Roon music server on e-ink displays or regular monitors.
+Displays full-screen album art from a Roon music server on a Waveshare e-ink display (or a regular monitor for development).
 
-## Features
+## What It Does
 
-- **Multiple Display Types**: Supports both e-ink displays (Waveshare) and standard system displays
-- **Real-time Updates**: Automatically updates when tracks change in Roon
-- **Image Processing**: Configurable image enhancements (brightness, contrast, etc.)
-- **Zone Filtering**: Support for allowed/forbidden zone lists
-- **Robust Connection**: Automatic server discovery with fallback to saved connections
+- Connects to your Roon server and shows the currently playing album art
+- Configurable image processing (brightness, contrast, colour, sharpness, scaling, rotation)
+- Web UI for configuration with live preview
+- Overlay messages when connection is lost or the server is down
+- Anniversary notifications with custom images and messages
+- WiFi network management from the web UI (DietPi)
+- Health monitoring with external script integration
+- Simulation server for testing without Roon
+
+## Hardware
+
+- Raspberry Pi (tested on Pi Zero 2 W with DietPi)
+- Waveshare 13.3" Spectra 6 e-ink display (epd13in3E)
+- Any monitor/TV via Tkinter for development
+
+## Setup
+
+### DietPi (Production)
+
+```bash
+# Clone
+cd /mnt/dietpi_userdata
+GIT_SSH=dbclient git clone git@github.com:richardtkemp/roon-album-art-display.git
+cd roon-album-art-display
+
+# Install dependencies and configure services
+bash dietpi-setup.sh
+```
+
+This installs system packages, sets up systemd services, and starts the application. After starting, approve the "Album Art Display" extension in Roon Settings > Extensions.
+
+The web UI is available at `http://<pi-ip>:8080`.
+
+### Development (Mac/Linux)
+
+```bash
+git clone git@github.com:richardtkemp/roon-album-art-display.git
+cd roon-full-art-display
+make setup
+make check-env
+make test-quick
+```
+
+Run with `make run` or `python -m roon_display.main`. Uses a Tkinter window instead of e-ink.
+
+### Standalone Image Display
+
+Display a single image without Roon:
+
+```bash
+python -m roon_display.main --image /path/to/image.jpg
+python -m roon_display.main --image /path/to/images/  # random from directory
+```
+
+## Configuration
+
+All settings are in `roon.cfg` (auto-created on first run) and editable via the web UI at `http://<pi-ip>:8080`.
+
+See [docs/CONFIG.md](docs/CONFIG.md) for the full configuration reference.
+
+## Architecture
+
+Two processes run on the Pi:
+
+- **Display app** — connects to Roon, processes images, drives the e-ink display
+- **Web config** — serves the configuration UI, proxies to the display app
+
+See [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) for details on the render pipeline, overlay system, connection handling, and preview mechanism.
 
 ## Project Structure
 
 ```
 roon_display/
-├── config/             # Configuration management
-├── viewers/            # Display implementations (e-ink, Tkinter)
-├── roon_client/        # Roon API communication
-├── image_processing/   # Image manipulation utilities
-├── utils.py           # Common utility functions
-└── main.py            # Application entry point
+├── config/              # Configuration schema and management
+├── viewers/             # Display drivers (e-ink, Tkinter)
+├── roon_client/         # Roon API connection and events
+├── image_processing/    # Image load, scale, rotate, enhance
+├── web/                 # Web UI (Flask app, config handler, WiFi, templates)
+├── main.py              # Application entry point
+├── render_coordinator.py # Two-stage prepare/render pipeline
+├── message_renderer.py  # Overlay and text rendering
+├── anniversary.py       # Anniversary tracking and display
+├── health.py            # Health script integration
+├── internal_server.py   # HTTP server for web UI communication
+└── simulation.py        # Test server for simulating tracks
 
-tests/                 # Comprehensive test suite
-libs/                  # E-ink display drivers (Waveshare)
+tests/                   # Test suite (pytest)
+libs/                    # E-ink display drivers (Waveshare)
+docs/                    # Configuration and architecture docs
 ```
 
-## Installation
-
-### Quick Setup (Recommended)
+## Development
 
 ```bash
-# Automatic environment detection and setup
-make setup
-
-# Check environment is working
-make check-env
-
-# Run quick tests to verify everything works
-make test-quick
+make format        # Format code (Black + isort)
+make lint          # Lint (flake8)
+make typecheck     # Type check (mypy)
+make security      # Security scan (bandit)
+make test-quick    # Run tests + lint + typecheck + security
+make all           # Everything
 ```
 
-### Manual Setup
+Pre-commit hooks enforce formatting, linting, type checking, and security scanning on every commit.
 
-#### Development (Mac with pyenv/venv)
+## Services
 
-1. **Clone the repository:**
-   ```bash
-   git clone <repository-url>
-   cd roon-full-art-display
-   ```
-
-2. **The project automatically detects your environment:**
-   - ✅ **Virtual Environment**: If `pyvenv.cfg` exists, uses `./bin/python` and `./bin/pip`
-   - ✅ **System Python**: Falls back to `python3`/`pip3` or `python`/`pip`
-   - ✅ **Cross-platform**: Works on Mac, Linux, and Windows
-
-3. **Install dependencies:**
-   ```bash
-   # Automatic setup (detects environment)
-   make install
-
-   # Or with development tools
-   make install-dev
-   ```
-
-4. **Verify setup:**
-   ```bash
-   make check-env
-   ```
-
-#### Production (Raspberry Pi)
+| Service | Description |
+|---|---|
+| `roon-album-art-display` | Main display application |
+| `roon-web-config` | Web configuration UI |
+| `space-cleaner` | Periodic disk cleanup (timer) |
 
 ```bash
-# System Python setup
-sudo apt update
-sudo apt install python3-pip python3-venv
-git clone <repository-url>
-cd roon-full-art-display
-make setup
+systemctl restart roon-album-art-display
+systemctl restart roon-web-config
+journalctl -u roon-album-art-display -f  # follow logs
 ```
-
-### Environment Detection
-
-The Makefile automatically detects your Python environment:
-
-```bash
-# Check what Python/pip will be used
-make help
-# Shows: Python: ./bin/python, Pip: ./bin/pip
-
-# Detailed environment check
-make check-env
-```
-
-### Pre-commit Hooks (Development)
-
-```bash
-make pre-commit-install
-```
-
-## Configuration
-
-The application uses a `roon.cfg` file for configuration. On first run, a default config will be created.
-
-Example configuration:
-```ini
-[DISPLAY]
-type = epd13in3E  # or 'system_display'
-
-[IMAGE_RENDER]
-color_enhance = 1.0
-contrast = 1.2
-brightness = 1.0
-sharpness = 1.0
-
-[IMAGE_POSITION]
-scale_x = 1.0
-scale_y = 1.0
-rotation = 270
-image_offset_x = 0
-image_offset_y = 0
-
-[ZONES]
-allowed_zone_names = Living Room,Kitchen
-forbidden_zone_names = Bedroom
-```
-
-## Usage
-
-### Running the Application
-
-```bash
-# Run with default configuration (connects to Roon)
-make run
-
-# Or run directly
-python -m roon_display.main
-```
-
-### Standalone Image Display (no Roon required)
-
-Send a single image to the configured display and exit immediately after rendering:
-
-```bash
-# Display a specific image
-python -m roon_display.main --image /path/to/image.jpg
-
-# Pick a random image from a directory
-python -m roon_display.main --image /path/to/images/
-```
-
-This mode bypasses the Roon client entirely — useful for testing hardware, previewing display output, or displaying images independently of Roon. All configured image processing (rotation, scaling, enhancements) still applies. Supported formats: JPEG, PNG, BMP, GIF, WebP, TIFF.
-
-### Development Commands
-
-```bash
-# Run all quality checks and tests
-make all
-
-# Individual commands
-make test              # Run tests
-make lint              # Check code style
-make typecheck         # Run type checking
-make security          # Security scan
-make format            # Format code
-make pre-commit        # Run all pre-commit checks
-```
-
-## Code Quality
-
-This project uses modern Python development practices:
-
-- **Type Checking**: Full mypy type coverage
-- **Code Formatting**: Black for consistent formatting
-- **Import Sorting**: isort for organized imports
-- **Linting**: flake8 for style and error checking
-- **Security**: bandit for vulnerability scanning
-- **Testing**: pytest with coverage reporting
-- **Pre-commit Hooks**: Automatic quality checks on commit
-
-### Running Quality Checks
-
-```bash
-# Check code formatting
-make format-check
-
-# Run linting
-make lint
-
-# Type checking
-make typecheck
-
-# Security scan
-make security
-
-# All quality checks
-make quality
-```
-
-## Testing
-
-Comprehensive test suite with fixtures and mocking:
-
-```bash
-# Run all tests
-make test
-
-# Run tests with coverage
-make test-coverage
-
-# Run specific test file
-pytest tests/test_utils.py -v
-```
-
-## Hardware Support
-
-### E-ink Displays
-- Waveshare 13.3" Spectra 6 (epd13in3E)
-- Other Waveshare displays (extend `libs/` directory)
-
-### System Displays
-- Any monitor/TV connected to your computer
-- Fullscreen Tkinter interface
-
-## Roon Integration
-
-The application connects to your Roon server via:
-1. **Automatic Discovery**: Scans network for Roon servers
-2. **Saved Configuration**: Remembers server details between runs
-3. **Zone Filtering**: Only responds to specified zones
-4. **Real-time Events**: Updates on track changes
-
-## Troubleshooting
-
-### Common Issues
-
-1. **Connection Failed**: Ensure Roon server is running and accessible
-2. **Authorization Required**: Approve the extension in Roon settings
-3. **No Image Display**: Check zone configuration and track has album art
-4. **E-ink Issues**: Verify hardware connections and driver installation
-
-### Logging
-
-The application provides detailed logging. Check console output for:
-- Connection status
-- Image processing steps
-- Error messages
-- Performance metrics
-
-### Development
-
-To contribute or modify:
-
-1. **Install development dependencies:**
-   ```bash
-   make install-dev
-   ```
-
-2. **Set up pre-commit hooks:**
-   ```bash
-   make pre-commit-install
-   ```
-
-3. **Run quality checks before committing:**
-   ```bash
-   make all
-   ```
-
-4. **Add tests for new features:**
-   ```bash
-   # Create test file in tests/
-   pytest tests/test_new_feature.py -v
-   ```
-
-## File Structure
-
-- `roon_display/` - Main application package
-- `tests/` - Test suite with fixtures and mocks
-- `libs/` - Hardware drivers (excluded from linting/formatting)
-- `logs/` - Application logs
-- `album_art/` - Cached album art images
-- Configuration files: `roon.cfg`, `pyproject.toml`, `.flake8`, etc.
-
-## License
-
-[Add your license information here]
-
-## Contributing
-
-1. Fork the repository
-2. Create a feature branch
-3. Make your changes
-4. Run `make all` to ensure quality
-5. Submit a pull request
-
----
-
-This project follows Python best practices and is suitable for both hobbyist and professional development.
