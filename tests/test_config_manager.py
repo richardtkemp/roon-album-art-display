@@ -244,13 +244,13 @@ class TestConfigManager:
         display_config = config_manager.get_display_config()
 
         assert display_config["type"] == "system_display"
-        assert display_config["partial_refresh"] is False
+        assert display_config["interrupt_on_skip"] is False
 
-    def test_get_display_config_partial_refresh_true(self, temp_dir, sample_config):
-        """Test getting display config with partial_refresh enabled."""
-        sample_config["DISPLAY"]["partial_refresh"] = "true"
+    def test_get_display_config_interrupt_on_skip_true(self, temp_dir, sample_config):
+        """Test getting display config with interrupt_on_skip enabled."""
+        sample_config["DISPLAY"]["interrupt_on_skip"] = "true"
 
-        config_path = temp_dir / "partial_refresh.cfg"
+        config_path = temp_dir / "interrupt_on_skip.cfg"
         with open(config_path, "w") as f:
             sample_config.write(f)
 
@@ -258,15 +258,15 @@ class TestConfigManager:
         display_config = config_manager.get_display_config()
 
         assert display_config["type"] == "system_display"
-        assert display_config["partial_refresh"] is True
+        assert display_config["interrupt_on_skip"] is True
 
     def test_get_display_config_fallback(self, temp_dir, sample_config):
-        """Test getting display config with missing partial_refresh (fallback to False)."""
-        # Remove partial_refresh setting to test fallback
-        if "partial_refresh" in sample_config["DISPLAY"]:
-            del sample_config["DISPLAY"]["partial_refresh"]
+        """Test getting display config with missing interrupt_on_skip (fallback to False)."""
+        # Remove interrupt_on_skip setting to test fallback
+        if "interrupt_on_skip" in sample_config["DISPLAY"]:
+            del sample_config["DISPLAY"]["interrupt_on_skip"]
 
-        config_path = temp_dir / "no_partial_refresh.cfg"
+        config_path = temp_dir / "no_interrupt_on_skip.cfg"
         with open(config_path, "w") as f:
             sample_config.write(f)
 
@@ -274,7 +274,7 @@ class TestConfigManager:
         display_config = config_manager.get_display_config()
 
         assert display_config["type"] == "system_display"
-        assert display_config["partial_refresh"] is False
+        assert display_config["interrupt_on_skip"] is False
 
     def test_get_health_script_configured(self, config_manager):
         """Test getting health script when configured."""

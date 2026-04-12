@@ -32,7 +32,7 @@ NB if you change the first five of these, you will have to reauthorise on roon
 |---------|---------|-------------|
 | `type` | `epd13in3E` | Display type: `epd13in3E` or `system_display` |
 | `tkinter_fullscreen` | `false` | Fullscreen mode (system_display only) |
-| `partial_refresh` | `false` | Enable e-ink partial refresh for faster updates |
+| `interrupt_on_skip` | `false` | Cancel current render and start new one when track changes |
 
 ### [IMAGE_RENDER] - Image Enhancement
 

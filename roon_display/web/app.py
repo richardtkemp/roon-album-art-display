@@ -472,7 +472,7 @@ def create_app(config_path: Optional[str] = None, port: Optional[int] = None) ->
             checkbox_fields = [
                 "ANNIVERSARIES.enabled",
                 "DISPLAY.tkinter_fullscreen",
-                "DISPLAY.partial_refresh",
+                "DISPLAY.interrupt_on_skip",
             ]
 
             for checkbox_field in checkbox_fields:

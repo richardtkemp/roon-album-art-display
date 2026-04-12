@@ -193,16 +193,16 @@ class TestEinkViewer:
         eink_viewer.render(sample_image, "key", "Test")
         eink_viewer.epd.Init.assert_called()
 
-    def test_initialization_with_partial_refresh(
+    def test_initialization_with_interrupt_on_skip(
         self, config_manager, mock_eink_module
     ):
-        """Test EinkViewer initialization reads partial_refresh from config."""
-        config_manager.set_partial_refresh("true")
+        """Test EinkViewer initialization reads interrupt_on_skip from config."""
+        config_manager.set_interrupt_on_skip("true")
         with patch("roon_display.utils.set_current_image_key"):
             viewer = EinkViewer(config_manager, mock_eink_module)
             viewer.startup = Mock()
             assert viewer.eink == mock_eink_module
-            assert config_manager.get_partial_refresh() is True
+            assert config_manager.get_interrupt_on_skip() is True
 
 
 class TestTkViewer:

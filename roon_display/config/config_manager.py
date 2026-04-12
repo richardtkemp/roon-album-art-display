@@ -241,10 +241,10 @@ CONFIG_SCHEMA: Dict[str, Any] = {
             "type": "boolean",
             "comment": "Enable fullscreen mode for tkinter display",
         },
-        "partial_refresh": {
+        "interrupt_on_skip": {
             "default": "false",
             "type": "boolean",
-            "comment": "Enable partial refresh mode for e-ink displays",
+            "comment": "Cancel current render and start new one when track changes",
         },
     },
     "IMAGE_RENDER": {
@@ -611,11 +611,11 @@ class ConfigManager:
             return None, None
 
     def get_display_config(self) -> Dict[str, Any]:
-        """Get display configuration as a dict with type and partial_refresh."""
+        """Get display configuration as a dict with type and interrupt_on_skip."""
         return {
             "type": self.get_display_type(),
-            "partial_refresh": self._config.getboolean(
-                "DISPLAY", "partial_refresh", fallback=False
+            "interrupt_on_skip": self._config.getboolean(
+                "DISPLAY", "interrupt_on_skip", fallback=False
             ),
         }
 

@@ -233,9 +233,9 @@ class TestRenderCoordinatorPipeline:
         if "a" in rendered_keys:
             assert rendered_keys.index("a") < rendered_keys.index("c")
 
-    def test_partial_refresh_cancels_viewer(self, config_manager, sample_image):
-        """set_art() with partial_refresh=True calls viewer.cancel()."""
-        config_manager.set_partial_refresh("true")
+    def test_interrupt_on_skip_cancels_viewer(self, config_manager, sample_image):
+        """set_art() with interrupt_on_skip=True calls viewer.cancel()."""
+        config_manager.set_interrupt_on_skip("true")
         coord, viewer, _ = _make_coordinator(config_manager)
 
         coord.set_art("art", image_key="k1", img=sample_image)
