@@ -148,9 +148,13 @@ class RoonClient:
 
         Handles both initial connection and reconnection with the same
         logic. Sets overlays so the user always sees connection status.
+        Uses exponential backoff between attempts, starting at the
+        configured reconnection_interval and doubling up to 10 minutes.
         Blocks until connected or self.running is cleared.
         """
-        reconnect_interval = self.config_manager.get_reconnection_interval()
+        base_interval = self.config_manager.get_reconnection_interval()
+        max_interval = 600  # 10 minutes
+        current_interval = base_interval
 
         while self.running:
             if self.render_coordinator:
@@ -158,19 +162,22 @@ class RoonClient:
                     "Searching for Roon server...\n\n"
                     "Waiting for server to come online.\n"
                     "Will retry automatically.",
-                    timeout=reconnect_interval + 10,
+                    timeout=current_interval + 10,
                 )
 
-            if self.connect(discovery_timeout=reconnect_interval):
+            if self.connect(discovery_timeout=current_interval):
                 if self.render_coordinator:
                     self.render_coordinator.clear_overlay()
                 return
 
-            logger.info(f"Connection attempt failed, retrying in {reconnect_interval}s")
+            logger.info(f"Connection attempt failed, retrying in {current_interval}s")
             # Sleep in small increments so self.running can stop us
-            deadline = time.time() + reconnect_interval
+            deadline = time.time() + current_interval
             while self.running and time.time() < deadline:
                 time.sleep(1)
+
+            # Exponential backoff: double the interval, capped at max
+            current_interval = min(current_interval * 2, max_interval)
 
     def _get_server_details(self) -> Any:
         """Get saved server details if available."""
