@@ -6,6 +6,7 @@ body {
     max-width: 800px;
     margin: 0 auto;
     padding: 20px;
+    padding-bottom: 80px; /* Space for floating button footer */
 }
 
 /* Section styles */
@@ -54,54 +55,59 @@ input[type="checkbox"] { margin-right: 8px; }
 
 .textarea-large { height: 120px; }
 
-/* Button styles */
+/* Floating button footer */
+.button-group-floating {
+    position: fixed;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    background: #fff;
+    border-top: 1px solid #ddd;
+    box-shadow: 0 -2px 8px rgba(0,0,0,0.1);
+    padding: 10px 20px;
+    z-index: 100;
+}
+
 .button-group {
     display: flex;
     justify-content: center;
     align-items: center;
-    gap: 15px;
-    margin-top: 30px;
+    gap: 12px;
     flex-wrap: wrap;
 }
+
+/* Unified action button style */
+.action-btn {
+    color: white;
+    padding: 10px 20px;
+    border: none;
+    border-radius: 4px;
+    cursor: pointer;
+    font-size: 0.95em;
+    font-weight: 500;
+}
+
+.apply-btn { background-color: #4CAF50; }
+.apply-btn:hover { background-color: #45a049; }
+
+.restore-btn { background: #2196F3; }
+.restore-btn:hover { background: #1976D2; }
+
+.reset-btn { background: #FF9800; }
+.reset-btn:hover { background: #F57C00; }
 
 /* Responsive adjustments for button group */
 @media (max-width: 600px) {
     .button-group {
         flex-direction: column;
-        gap: 10px;
+        gap: 8px;
     }
 
-    .button-group button {
+    .button-group .action-btn {
         width: 100%;
         max-width: 300px;
     }
 }
-
-button {
-    background-color: #4CAF50;
-    color: white;
-    padding: 12px 24px;
-    border: none;
-    border-radius: 4px;
-    cursor: pointer;
-    margin: 0 10px;
-}
-
-button:hover { background-color: #45a049; }
-
-.apply-btn { background-color: #4CAF50; }
-.apply-btn:hover { background-color: #45a049; }
-
-.control-btn {
-    background: #f0f0f0;
-    border: 1px solid #ccc;
-    padding: 6px 12px;
-    border-radius: 4px;
-    cursor: pointer;
-    font-size: 0.9em;
-}
-
-.control-btn:hover { background: #e0e0e0; }
 
 /* Message styles */
 .flash-messages { margin-bottom: 20px; }
@@ -368,23 +374,6 @@ button:hover { background-color: #45a049; }
 .tab-content.active { display: block; }
 
 
-.restore-btn {
-    background: #2196F3;
-    color: white;
-}
-
-.restore-btn:hover {
-    background: #1976D2;
-}
-
-.reset-btn {
-    background: #FF9800;
-    color: white;
-}
-
-.reset-btn:hover {
-    background: #F57C00;
-}
 
 /* Anniversary styles */
 .anniversary-entry {

@@ -65,16 +65,20 @@
             {% endfor %}
         </div>
 
-        <div class="button-group">
-            <button type="button" class="control-btn restore-btn" onclick="restoreAllValues()">
-                ↺ Restore All Saved Values
-            </button>
-            <button type="button" class="control-btn reset-btn" onclick="resetAllToDefaults()">
-                ⚠ Reset All to Defaults
-            </button>
-            <button type="submit" name="action" value="apply" class="apply-btn" id="apply-btn">Apply Changes</button>
-            <div id="message-area" style="margin-top: 15px; display: none;">
+        <div class="button-group-floating">
+            <div id="message-area" style="display: none;">
                 <div id="message-content" class="flash-success"></div>
+            </div>
+            <div class="button-group">
+                <button type="button" class="action-btn restore-btn" onclick="restoreAllValues()">
+                    ↺ Restore Saved
+                </button>
+                <button type="button" class="action-btn reset-btn" onclick="resetAllToDefaults()">
+                    ⚠ Reset Defaults
+                </button>
+                <button type="submit" name="action" value="apply" class="action-btn apply-btn" id="apply-btn">
+                    ✓ Apply Changes
+                </button>
             </div>
         </div>
     </form>
