@@ -704,6 +704,15 @@ class RoonClient:
         # Push host down error to coordinator
         self.render_coordinator.set_overlay(msg2, timeout=120)
 
+        # Clean up dead connection so _monitor_connection falls through
+        # to connect_loop() which has exponential backoff.
+        if hasattr(self, "roon") and self.roon:
+            try:
+                self.roon.stop()
+            except Exception:
+                pass
+            self.roon = None
+
     def stop(self) -> None:
         """Stop the client."""
         self.running = False

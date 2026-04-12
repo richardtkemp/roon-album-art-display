@@ -213,8 +213,13 @@ class RenderCoordinator:
 
     def set_overlay(self, message: str, timeout: Optional[float] = None) -> None:
         """Set an overlay message for bottom-right display."""
-        logger.warning(f"Setting overlay: {message}")
         with self._overlay_lock:
+            if self._overlay == message:
+                # Same message — refresh timeout but don't trigger a re-render
+                if timeout:
+                    self._overlay_timeout = time.time() + timeout
+                return
+            logger.warning(f"Setting overlay: {message}")
             self._overlay = message
             self._overlay_timeout = time.time() + timeout if timeout else None
         self._render_trigger.set()
