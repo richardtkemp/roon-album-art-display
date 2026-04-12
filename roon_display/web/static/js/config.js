@@ -308,13 +308,11 @@ function restoreAllValues() {
         }
     });
 
-    // Trigger preview if any preview-relevant values were changed
+    // Restoring to saved values means form matches config — exit preview
     if (previewRelevantChanges) {
-        console.log('Preview-relevant values were restored, triggering preview...');
-        if (typeof generatePreview === 'function') {
-            generatePreview();
-        } else {
-            console.warn('generatePreview function not available');
+        console.log('Visual values restored to saved config, reverting to live display');
+        if (typeof revertToLiveDisplay === 'function') {
+            revertToLiveDisplay();
         }
     }
 

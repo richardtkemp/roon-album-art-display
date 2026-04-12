@@ -216,7 +216,7 @@ class TestConfigManager:
             assert config.has_section(section)
 
         # Verify some key values from the current CONFIG_SCHEMA defaults
-        assert config.get("DISPLAY", "type") == "system_display"
+        assert config.get("DISPLAY", "type") == "epd13in3E"
         assert config.get("DISPLAY", "tkinter_fullscreen") == "false"
         assert config.get("IMAGE_RENDER", "contrast") == "1.0"
 

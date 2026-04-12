@@ -140,14 +140,6 @@ CONFIG_SCHEMA: Dict[str, Any] = {
             "step": 0.1,
             "comment": "E-ink display success threshold (seconds)",
         },
-        "preview_auto_revert_seconds": {
-            "default": "30",
-            "type": "number",
-            "input_type": "number",
-            "min": 5,
-            "max": 300,
-            "comment": "Auto-revert time for preview images (seconds)",
-        },
         "preview_debounce_ms": {
             "default": "500",
             "type": "number",
@@ -274,7 +266,7 @@ CONFIG_SCHEMA: Dict[str, Any] = {
             "comment": "Name shown in Roon settings (useful if you have multiple displays)",
         },
         "type": {
-            "default": "system_display",
+            "default": "epd13in3E",
             "type": "select",
             "options": ["system_display", "epd13in3E"],
             "comment": "Display type to use",
@@ -285,7 +277,7 @@ CONFIG_SCHEMA: Dict[str, Any] = {
             "comment": "Enable fullscreen mode for tkinter display",
         },
         "interrupt_on_skip": {
-            "default": "false",
+            "default": "true",
             "type": "boolean",
             "comment": "Cancel current render and start new one when track changes",
         },
@@ -425,7 +417,7 @@ CONFIG_SCHEMA: Dict[str, Any] = {
             "comment": "Path to health check script",
         },
         "health_recheck_interval": {
-            "default": "300",
+            "default": "1800",
             "type": "number",
             "input_type": "number",
             "min": 60,

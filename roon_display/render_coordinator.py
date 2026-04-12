@@ -255,11 +255,18 @@ class RenderCoordinator:
                 logger.warning("No content available for preview")
                 return None
 
-            return self.image_processor.prepare(
+            image = self.image_processor.prepare(
                 self._last_rendered_target.img,
                 self._last_rendered_target.image_path,
                 overrides=config_data,
             )
+            if image is None:
+                return None
+
+            # Composite current overlay onto preview so it reflects reality
+            with self._overlay_lock:
+                current_overlay = self._overlay
+            return self._composite(current_overlay, image)
         except Exception as e:
             logger.error(f"Error generating preview: {e}")
             return None
