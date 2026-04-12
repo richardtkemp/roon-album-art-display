@@ -227,11 +227,18 @@ document.addEventListener('DOMContentLoaded', function() {
 });
 
 // Range/text input synchronization functions
+function roundToStep(value, step) {
+    if (!step || step >= 1) return value;
+    const decimals = (step.toString().split('.')[1] || '').length;
+    return parseFloat(parseFloat(value).toFixed(decimals));
+}
+
 function syncRangeToText(rangeInput) {
     const textInputId = rangeInput.id + '_text';
     const textInput = document.getElementById(textInputId);
     if (textInput) {
-        textInput.value = rangeInput.value;
+        const step = parseFloat(rangeInput.step) || 1;
+        textInput.value = roundToStep(rangeInput.value, step);
     }
 }
 
@@ -250,7 +257,7 @@ function syncTextToRange(textInput, rangeInputId) {
 
         // Round to nearest step if step is defined
         if (!isNaN(step) && step > 0) {
-            value = Math.round(value / step) * step;
+            value = roundToStep(Math.round(value / step) * step, step);
         }
 
         // Update both inputs with the validated value
