@@ -2,6 +2,7 @@
 
 import configparser
 import logging
+import os
 import platform
 import socket
 import subprocess
@@ -198,10 +199,13 @@ class WebConfigHandler:
 
         def get_wifi_ssid() -> str:
             """Get the current WiFi SSID."""
+            # Ensure sbin dirs are in PATH for iwgetid etc.
+            env = os.environ.copy()
+            env["PATH"] = env.get("PATH", "") + ":/usr/sbin:/sbin"
             try:
                 if platform.system() == "Darwin":  # macOS
                     result = subprocess.run(
-                        ["iwgetid", "-r"], capture_output=True, text=True
+                        ["iwgetid", "-r"], capture_output=True, text=True, env=env
                     )
                     if result.returncode == 0:
                         return result.stdout.strip()
@@ -212,6 +216,7 @@ class WebConfigHandler:
                             ["nmcli", "-t", "-f", "active,ssid", "dev", "wifi"],
                             capture_output=True,
                             text=True,
+                            env=env,
                         )
                     except FileNotFoundError:
                         result = None
@@ -222,7 +227,7 @@ class WebConfigHandler:
 
                     # Fallback to iwgetid
                     result = subprocess.run(
-                        ["iwgetid", "-r"], capture_output=True, text=True
+                        ["iwgetid", "-r"], capture_output=True, text=True, env=env
                     )
                     if result.returncode == 0:
                         return result.stdout.strip()
