@@ -403,6 +403,25 @@ class WebConfigHandler:
 
                             config[section_name][key] = "false"
 
+            # Strip keys not in CONFIG_SCHEMA before saving.
+            # Freeform sections (ANNIVERSARIES, LOG_LEVELS, ROON_SERVER)
+            # allow arbitrary keys.
+            freeform_sections = {"ANNIVERSARIES", "LOG_LEVELS", "ROON_SERVER"}
+            for section in list(config.sections()):
+                if section in freeform_sections:
+                    continue
+                if section not in CONFIG_SCHEMA:
+                    logger.info(f"Removing unrecognised config section [{section}]")
+                    config.remove_section(section)
+                    continue
+                known_keys = set(CONFIG_SCHEMA[section].keys())
+                for key in list(config.options(section)):
+                    if key not in known_keys:
+                        logger.info(
+                            f"Removing unrecognised config key '{key}' from [{section}]"
+                        )
+                        config.remove_option(section, key)
+
             # Save config file
             with open(self.config_path, "w") as f:
                 config.write(f)
