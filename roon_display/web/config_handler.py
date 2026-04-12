@@ -207,12 +207,15 @@ class WebConfigHandler:
                         return result.stdout.strip()
                 elif platform.system() == "Linux":
                     # Try nmcli first
-                    result = subprocess.run(
-                        ["nmcli", "-t", "-f", "active,ssid", "dev", "wifi"],
-                        capture_output=True,
-                        text=True,
-                    )
-                    if result.returncode == 0:
+                    try:
+                        result = subprocess.run(
+                            ["nmcli", "-t", "-f", "active,ssid", "dev", "wifi"],
+                            capture_output=True,
+                            text=True,
+                        )
+                    except FileNotFoundError:
+                        result = None
+                    if result and result.returncode == 0:
                         for line in result.stdout.strip().split("\n"):
                             if line.startswith("yes:"):
                                 return line.split(":", 1)[1]
