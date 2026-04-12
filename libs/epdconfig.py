@@ -97,7 +97,17 @@ def delay_ms(delaytime):
     time.sleep(delaytime / 1000.0)
 
 def module_init():
-    spi.DEV_ModuleInit()
+    # Suppress verbose C library output (e.g. "bcm2835 init success !!!").
+    # The message is block-buffered and appears in batches at wrong times.
+    devnull_fd = os.open(os.devnull, os.O_WRONLY)
+    old_stdout_fd = os.dup(1)
+    os.dup2(devnull_fd, 1)
+    os.close(devnull_fd)
+    try:
+        spi.DEV_ModuleInit()
+    finally:
+        os.dup2(old_stdout_fd, 1)
+        os.close(old_stdout_fd)
 
 def module_exit():
     spi.DEV_ModuleExit()
