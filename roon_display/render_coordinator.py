@@ -378,23 +378,24 @@ class RenderCoordinator:
                     # No prepared art yet — try to load the last cached
                     # image from disk so the overlay composites on top of
                     # real content rather than a blank white screen.
-                    base_image = self._load_cached_base_image()
-                    if base_image is not None:
+                    cached = self._load_cached_base_image()
+                    if cached is not None:
+                        base_image, cached_target = cached
                         display_image = self._composite(current_overlay, base_image)
+                        cache_target = cached_target
+                        self._last_rendered_target = cached_target
                     else:
                         display_image = self.message_renderer.create_text_message(
                             current_overlay
                         )
-                    self._cache_for_web(
-                        display_image,
-                        RenderTarget(
+                        cache_target = RenderTarget(
                             content_type="overlay",
                             image_key=None,
                             image_path=None,
                             img=None,
                             track_info=None,
-                        ),
-                    )
+                        )
+                    self._cache_for_web(display_image, cache_target)
                     try:
                         self._viewer.render(display_image, None, None)
                         _rendered_overlay = current_overlay
@@ -429,11 +430,13 @@ class RenderCoordinator:
         result.paste(overlay_img, (x, y))
         return result
 
-    def _load_cached_base_image(self) -> Optional[Image.Image]:
+    def _load_cached_base_image(
+        self,
+    ) -> Optional[Tuple[Image.Image, RenderTarget]]:
         """Try to load the last-displayed image from disk for overlay compositing.
 
-        Returns a fully processed image ready for display, or None if no
-        cached image is available.
+        Returns (processed_image, render_target) or None if no cached image
+        is available.
         """
         try:
             from .utils import get_current_image_key, get_saved_image_dir
@@ -445,9 +448,17 @@ class RenderCoordinator:
             if not image_path.exists():
                 return None
             img = self.image_processor.prepare(None, image_path)
-            if img is not None:
-                logger.info(f"Loaded cached base image for overlay: {key}")
-            return img
+            if img is None:
+                return None
+            logger.info(f"Loaded cached base image for overlay: {key}")
+            target = RenderTarget(
+                content_type="cached_art",
+                image_key=key,
+                image_path=image_path,
+                img=None,
+                track_info="Last displayed artwork",
+            )
+            return img, target
         except Exception as e:
             logger.debug(f"Could not load cached base image: {e}")
             return None

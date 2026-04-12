@@ -174,12 +174,21 @@ CONFIG_SCHEMA: Dict[str, Any] = {
             "comment": "Path to TrueType font file for text rendering",
         },
         "font_size": {
-            "default": "14",
+            "default": "24",
             "type": "number",
             "input_type": "number",
             "min": 6,
             "max": 72,
             "comment": "Base font size for text rendering (pixels)",
+        },
+        "overlay_font_scale": {
+            "default": "0.5",
+            "type": "number",
+            "input_type": "number",
+            "min": 0.1,
+            "max": 1.0,
+            "step": 0.1,
+            "comment": "Overlay font size as fraction of base font_size (e.g. 0.5 = half)",
         },
         "line_spacing_ratio": {
             "default": "10",

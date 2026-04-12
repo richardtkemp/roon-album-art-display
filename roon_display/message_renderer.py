@@ -228,7 +228,11 @@ class MessageRenderer:
         # Get smaller font for overlay
         try:
             font: Any = ImageFont.truetype(
-                self.config_manager.get_font(), self.config_manager.get_font_size() // 3
+                self.config_manager.get_font(),
+                int(
+                    self.config_manager.get_font_size()
+                    * self.config_manager.get_overlay_font_scale()
+                ),
             )
         except Exception as e:
             logger.debug(

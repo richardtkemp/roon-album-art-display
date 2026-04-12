@@ -5,6 +5,7 @@
 // Global preview state
 let previewMode = false;
 let previewTimeout = null;
+let previewRevertTimeout = null;
 let previewConfig = {
     debounceMs: 500,
     autoRevertMs: 30000,
@@ -69,6 +70,10 @@ function updateDisplayMetadata() {
 
 function revertToLiveDisplay() {
     previewMode = false;
+    if (previewRevertTimeout) {
+        clearTimeout(previewRevertTimeout);
+        previewRevertTimeout = null;
+    }
     const overlay = document.getElementById('display-overlay');
     const container = document.querySelector('.display-container');
 
@@ -116,8 +121,12 @@ function generatePreview() {
 
             console.log('Preview generated successfully');
 
-            // Auto-revert after configured time
-            setTimeout(() => {
+            // Auto-revert after configured time (clear any previous timer
+            // so rapid adjustments don't cause premature reverts)
+            if (previewRevertTimeout) {
+                clearTimeout(previewRevertTimeout);
+            }
+            previewRevertTimeout = setTimeout(() => {
                 revertToLiveDisplay();
             }, previewConfig.autoRevertMs);
         })
