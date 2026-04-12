@@ -376,16 +376,18 @@ CONFIG_SCHEMA: Dict[str, Any] = {
         },
     },
     "ROON_SERVER": {
-        "roon_server_ip": {
+        "ip": {
             "default": "",
             "type": "string",
             "input_type": "text",
+            "getter_name": "roon_server_ip",
             "comment": "Saved Roon server IP address (auto-discovered)",
         },
-        "roon_server_port": {
+        "port": {
             "default": "",
             "type": "string",
             "input_type": "text",
+            "getter_name": "roon_server_port",
             "comment": "Saved Roon server port (auto-discovered)",
         },
     },
@@ -517,7 +519,7 @@ class ConfigManager:
         Sections that accept arbitrary user-defined keys (ANNIVERSARIES,
         LOG_LEVELS, ROON_SERVER) are skipped.
         """
-        freeform_sections = {"ANNIVERSARIES", "LOG_LEVELS", "ROON_SERVER"}
+        freeform_sections = {"ANNIVERSARIES", "LOG_LEVELS"}
 
         for section in config.sections():
             if section in freeform_sections:

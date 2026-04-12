@@ -406,7 +406,7 @@ class WebConfigHandler:
             # Strip keys not in CONFIG_SCHEMA before saving.
             # Freeform sections (ANNIVERSARIES, LOG_LEVELS, ROON_SERVER)
             # allow arbitrary keys.
-            freeform_sections = {"ANNIVERSARIES", "LOG_LEVELS", "ROON_SERVER"}
+            freeform_sections = {"ANNIVERSARIES", "LOG_LEVELS"}
             for section in list(config.sections()):
                 if section in freeform_sections:
                     continue
