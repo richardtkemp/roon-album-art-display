@@ -232,7 +232,10 @@ class MessageRenderer:
         )
 
         # Calculate text position (centered)
-        text_bbox = draw.multiline_textbbox((0, 0), wrapped_text, font=font)
+        line_spacing = self.config_manager.get_line_spacing_ratio()
+        text_bbox = draw.multiline_textbbox(
+            (0, 0), wrapped_text, font=font, spacing=line_spacing
+        )
         text_width = text_bbox[2] - text_bbox[0]
         text_height = text_bbox[3] - text_bbox[1]
 
@@ -246,6 +249,7 @@ class MessageRenderer:
             fill=(0, 0, 0, 255),
             font=font,
             align="center",
+            spacing=line_spacing,
         )
 
         # Convert to RGB for compatibility
