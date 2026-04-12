@@ -677,9 +677,7 @@ class ConfigManager:
         """Get display configuration as a dict with type and interrupt_on_skip."""
         return {
             "type": self.get_display_type(),
-            "interrupt_on_skip": self._config.getboolean(
-                "DISPLAY", "interrupt_on_skip", fallback=False
-            ),
+            "interrupt_on_skip": self.get_interrupt_on_skip(),
         }
 
     def get_zone_config(self) -> Tuple[List[str], List[str]]:
