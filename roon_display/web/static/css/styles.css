@@ -306,6 +306,23 @@ button:hover { background-color: #45a049; }
     word-break: break-word;
 }
 
+.wifi-entry {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 8px 0;
+    border-bottom: 1px solid #eee;
+}
+
+.wifi-ssid { font-weight: bold; }
+
+.wifi-connected {
+    font-weight: normal;
+    font-size: 0.85em;
+    color: #4caf50;
+    margin-left: 8px;
+}
+
 .display-container.fixed {
     position: fixed;
     top: 0;

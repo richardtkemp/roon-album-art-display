@@ -1,0 +1,99 @@
+<!-- WiFi network management -->
+<div class="wifi-networks">
+    {% for network in wifi_networks %}
+    <div class="wifi-entry">
+        <span class="wifi-ssid">
+            {{ network.ssid }}
+            {% if network.ssid == wifi_current_ssid %}
+                <span class="wifi-connected">connected</span>
+            {% endif %}
+        </span>
+        {% if network.ssid != wifi_current_ssid %}
+        <button type="button" class="action-btn reset-btn" style="padding: 4px 10px; font-size: 0.85em;"
+                onclick="deleteWifi({{ network.slot }}, '{{ network.ssid }}')">Delete</button>
+        {% endif %}
+    </div>
+    {% endfor %}
+    {% if not wifi_networks %}
+    <p>No saved WiFi networks found.</p>
+    {% endif %}
+</div>
+
+{% if wifi_slots_available %}
+<div class="wifi-add" style="margin-top: 15px; padding-top: 15px; border-top: 1px solid #ddd;">
+    <div class="form-group" style="margin-bottom: 8px;">
+        <label for="wifi_ssid">SSID:</label>
+        <input type="text" id="wifi_ssid" placeholder="Network name" style="width: 250px;">
+    </div>
+    <div class="form-group" style="margin-bottom: 8px;">
+        <label for="wifi_password">Password:</label>
+        <input type="password" id="wifi_password" placeholder="WiFi password" style="width: 250px;">
+    </div>
+    <button type="button" class="action-btn apply-btn" style="padding: 6px 16px;"
+            onclick="addWifi()">Add Network</button>
+</div>
+{% else %}
+<p style="margin-top: 10px; color: #999;">All {{ wifi_max_slots }} WiFi slots are full.</p>
+{% endif %}
+
+<div id="wifi-message" style="display: none; margin-top: 10px; padding: 8px; border-radius: 4px;"></div>
+
+<script>
+function addWifi() {
+    const ssid = document.getElementById('wifi_ssid').value.trim();
+    const password = document.getElementById('wifi_password').value;
+    const msg = document.getElementById('wifi-message');
+
+    if (!ssid) { showWifiMsg('Enter an SSID', true); return; }
+    if (!password) { showWifiMsg('Enter a password', true); return; }
+
+    showWifiMsg('Adding network...', false);
+
+    fetch('/wifi/add', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({ssid: ssid, password: password})
+    })
+    .then(r => r.json())
+    .then(data => {
+        if (data.success) {
+            showWifiMsg('Network added', false);
+            setTimeout(() => location.reload(), 1000);
+        } else {
+            showWifiMsg(data.error, true);
+        }
+    })
+    .catch(e => showWifiMsg('Request failed: ' + e, true));
+}
+
+function deleteWifi(slot, ssid) {
+    if (!confirm('Delete WiFi network "' + ssid + '"?')) return;
+    const msg = document.getElementById('wifi-message');
+
+    showWifiMsg('Deleting...', false);
+
+    fetch('/wifi/delete', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({slot: slot})
+    })
+    .then(r => r.json())
+    .then(data => {
+        if (data.success) {
+            showWifiMsg('Network deleted', false);
+            setTimeout(() => location.reload(), 1000);
+        } else {
+            showWifiMsg(data.error, true);
+        }
+    })
+    .catch(e => showWifiMsg('Request failed: ' + e, true));
+}
+
+function showWifiMsg(text, isError) {
+    const msg = document.getElementById('wifi-message');
+    msg.textContent = text;
+    msg.style.display = 'block';
+    msg.style.background = isError ? '#ffebee' : '#e8f5e9';
+    msg.style.color = isError ? '#c62828' : '#2e7d32';
+}
+</script>

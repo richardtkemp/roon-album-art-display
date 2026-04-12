@@ -270,6 +270,7 @@ def create_app(config_path: Optional[str] = None, port: Optional[int] = None) ->
             "System": {
                 "ROON_SERVER": system_info.get("ROON_SERVER", {}),
                 "HOST_SYSTEM": system_info.get("HOST_SYSTEM", {}),
+                "WIFI_NETWORKS": True,  # rendered by wifi_section.html
             },
             "Advanced": {
                 "DISPLAY": sections.get("DISPLAY", {}),
@@ -303,6 +304,13 @@ def create_app(config_path: Optional[str] = None, port: Optional[int] = None) ->
         )
 
         display_name = config_handler.config_manager.get_app_info()["display_name"]
+
+        # WiFi data for System tab
+        from .wifi import MAX_SLOTS, get_current_ssid, get_saved_networks
+
+        wifi_networks = get_saved_networks()
+        wifi_current = get_current_ssid()
+
         return render_template(
             "config_form.html",
             tab_sections=tab_sections,
@@ -313,6 +321,10 @@ def create_app(config_path: Optional[str] = None, port: Optional[int] = None) ->
             * 1000,  # Convert to milliseconds
             preview_debounce_ms=debounce_ms,
             display_name=display_name,
+            wifi_networks=wifi_networks,
+            wifi_current_ssid=wifi_current,
+            wifi_slots_available=len(wifi_networks) < MAX_SLOTS,
+            wifi_max_slots=MAX_SLOTS,
         )
 
     @app.route("/thumbnail/<anniversary_name>/<filename>")
@@ -459,6 +471,37 @@ def create_app(config_path: Optional[str] = None, port: Optional[int] = None) ->
         except Exception as e:
             logger.error(f"Error generating preview: {e}")
             return jsonify({"error": str(e)}), 500
+
+    @app.route("/wifi/add", methods=["POST"])
+    def wifi_add() -> Any:
+        """Add a WiFi network."""
+        from .wifi import add_network
+
+        data = request.get_json()
+        ssid = data.get("ssid", "").strip()
+        password = data.get("password", "")
+        if not ssid:
+            return jsonify({"success": False, "error": "SSID is required"})
+        if not password:
+            return jsonify({"success": False, "error": "Password is required"})
+        error = add_network(ssid, password)
+        if error:
+            return jsonify({"success": False, "error": error})
+        return jsonify({"success": True})
+
+    @app.route("/wifi/delete", methods=["POST"])
+    def wifi_delete() -> Any:
+        """Delete a WiFi network."""
+        from .wifi import delete_network
+
+        data = request.get_json()
+        slot = data.get("slot")
+        if slot is None:
+            return jsonify({"success": False, "error": "Slot is required"})
+        error = delete_network(int(slot))
+        if error:
+            return jsonify({"success": False, "error": error})
+        return jsonify({"success": True})
 
     def _parse_form_to_config_for_preview(form_data: Any, files: Any) -> Dict[str, Any]:
         """Parse form data for preview generation, excluding non-serializable file objects."""
