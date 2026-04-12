@@ -166,42 +166,54 @@ CONFIG_SCHEMA: Dict[str, Any] = {
             "comment": "Main loop interval (seconds)",
         },
     },
-    "LAYOUT": {
-        "overlay_size_x_percent": {
-            "default": "50",
-            "type": "number",
-            "input_type": "range",
-            "min": 10,
-            "max": 100,
-            "step": 1,
-            "comment": "Overlay width as percentage of image width",
+    "TEXT_RENDERING": {
+        "font": {
+            "default": "/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf",
+            "type": "string",
+            "input_type": "text",
+            "comment": "Path to TrueType font file for text rendering",
         },
-        "overlay_size_y_percent": {
+        "font_size": {
+            "default": "14",
+            "type": "number",
+            "input_type": "number",
+            "min": 6,
+            "max": 72,
+            "comment": "Base font size for text rendering (pixels)",
+        },
+        "line_spacing_ratio": {
+            "default": "10",
+            "type": "number",
+            "input_type": "number",
+            "min": 0,
+            "max": 50,
+            "comment": "Spacing between lines of text (pixels)",
+        },
+        "overlay_border_size": {
             "default": "20",
             "type": "number",
-            "input_type": "range",
+            "input_type": "number",
+            "min": 0,
+            "max": 100,
+            "comment": "Border/margin size for overlays and text layout (pixels)",
+        },
+    },
+    "LAYOUT": {
+        "anniversary_border_percent": {
+            "default": "5",
+            "type": "number",
+            "input_type": "number",
+            "min": 0,
+            "max": 25,
+            "comment": "Border size for anniversary image display as percentage of screen dimension",
+        },
+        "anniversary_text_percent": {
+            "default": "15",
+            "type": "number",
+            "input_type": "number",
             "min": 5,
             "max": 50,
-            "step": 1,
-            "comment": "Overlay height as percentage of image height",
-        },
-        "overlay_bottom_percent": {
-            "default": "5",
-            "type": "number",
-            "input_type": "range",
-            "min": 0,
-            "max": 50,
-            "step": 1,
-            "comment": "Overlay distance from bottom as percentage",
-        },
-        "overlay_left_percent": {
-            "default": "5",
-            "type": "number",
-            "input_type": "range",
-            "min": 0,
-            "max": 50,
-            "step": 1,
-            "comment": "Overlay distance from left as percentage",
+            "comment": "Text area height for anniversary display as percentage of screen height",
         },
         "artist_display_time": {
             "default": "3",
@@ -474,8 +486,37 @@ class ConfigManager:
         config = configparser.ConfigParser()
         config.read(self.config_path)
 
+        self._warn_unrecognised_keys(config)
+
         logger.info("Configuration loaded")
         return config
+
+    @staticmethod
+    def _warn_unrecognised_keys(config: configparser.ConfigParser) -> None:
+        """Log warnings for config keys not defined in CONFIG_SCHEMA.
+
+        Sections that accept arbitrary user-defined keys (ANNIVERSARIES,
+        LOG_LEVELS, ROON_SERVER) are skipped.
+        """
+        freeform_sections = {"ANNIVERSARIES", "LOG_LEVELS", "ROON_SERVER"}
+
+        for section in config.sections():
+            if section in freeform_sections:
+                continue
+
+            if section not in CONFIG_SCHEMA:
+                logger.warning(
+                    f"Unrecognised config section [{section}] — " f"will be ignored"
+                )
+                continue
+
+            known_keys = set(CONFIG_SCHEMA[section].keys())
+            for key in config.options(section):
+                if key not in known_keys:
+                    logger.warning(
+                        f"Unrecognised config key '{key}' in [{section}] — "
+                        f"will be ignored"
+                    )
 
     def _create_default_config(self) -> None:
         """Create a default configuration file using CONFIG_SCHEMA."""
@@ -823,15 +864,6 @@ class ConfigManager:
     # Display Timing Configuration Methods
 
     # Layout Configuration Methods
-    def get_overlay_size_x_percent(self) -> int:
-        """Get overlay width percentage."""
-        size = self._config.getint("LAYOUT", "overlay_size_x_percent", fallback=33)
-        return max(5, min(50, size))  # Clamp to reasonable range
-
-    def get_overlay_size_y_percent(self) -> int:
-        """Get overlay height percentage."""
-        size = self._config.getint("LAYOUT", "overlay_size_y_percent", fallback=25)
-        return max(5, min(50, size))  # Clamp to reasonable range
 
     # Image Render Configuration Methods
 
