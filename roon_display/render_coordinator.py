@@ -282,18 +282,15 @@ class RenderCoordinator:
                 logger.warning("No content available for preview")
                 return None
 
-            image = self.image_processor.prepare(
-                t.img,
-                t.image_path,
-                overrides=config_data,
-            )
-            if image is None:
-                return None
+            with self.config_manager.preview_overrides(config_data):
+                image = self.image_processor.prepare(t.img, t.image_path)
+                if image is None:
+                    return None
 
-            # Composite current overlay onto preview so it reflects reality
-            with self._overlay_lock:
-                current_overlay = self._overlay
-            return self._composite(current_overlay, image, overrides=config_data)
+                # Composite current overlay onto preview so it reflects reality
+                with self._overlay_lock:
+                    current_overlay = self._overlay
+                return self._composite(current_overlay, image)
         except Exception as e:
             logger.error(f"Error generating preview: {e}")
             return None
@@ -447,13 +444,12 @@ class RenderCoordinator:
         self,
         overlay_text: Optional[str],
         base: Image.Image,
-        overrides: Optional[Dict[str, Any]] = None,
     ) -> Image.Image:
         """Composite an error-overlay badge onto the bottom-right of base."""
         if overlay_text is None:
             return base
-        size_x = self.config_manager.get_config(overrides, "overlay_size_x_percent")
-        size_y = self.config_manager.get_config(overrides, "overlay_size_y_percent")
+        size_x = self.config_manager.get_overlay_size_x_percent()
+        size_y = self.config_manager.get_overlay_size_y_percent()
         overlay_img = self.message_renderer.create_error_overlay(
             overlay_text,
             base.size,

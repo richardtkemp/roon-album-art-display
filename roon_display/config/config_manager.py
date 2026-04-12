@@ -3,9 +3,11 @@
 from __future__ import annotations
 
 import configparser
+import contextlib
 import logging
+import threading
 from pathlib import Path
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any, Dict, Generator, List, Optional, Tuple
 
 from ..time_utils import parse_time_to_minutes, parse_time_to_seconds
 
@@ -466,6 +468,18 @@ class ConfigManager:
             config_path = Path("roon.cfg")
         self.config_path = Path(config_path)
         self._config = self._load_config()
+        self._override_local = threading.local()
+
+    @contextlib.contextmanager
+    def preview_overrides(
+        self, overrides: Optional[Dict[str, Any]]
+    ) -> Generator[None, None, None]:
+        """Context manager: all get_X() calls respect overrides on this thread."""
+        self._override_local.overrides = overrides
+        try:
+            yield
+        finally:
+            self._override_local.overrides = None
 
     def get_app_info(self) -> Dict[str, str]:
         """Get app information for Roon API."""
@@ -1027,6 +1041,15 @@ class ConfigManager:
         self, section_name: str, field_name: str, field_type: str
     ) -> Any:
         """Get a configuration value with appropriate type conversion."""
+        # Check thread-local preview overrides first
+        overrides = getattr(self._override_local, "overrides", None)
+        if overrides:
+            override_key = f"{section_name}.{field_name}"
+            if override_key in overrides:
+                return self._cast_override(
+                    overrides[override_key], field_type, section_name, field_name
+                )
+
         raw_value = self._config.get(section_name, field_name, fallback="")
 
         if field_type == "boolean":
@@ -1052,6 +1075,30 @@ class ConfigManager:
                 schema_field = CONFIG_SCHEMA.get(section_name, {}).get(field_name, {})
                 return schema_field.get("default", raw_value)
             return raw_value
+
+    @staticmethod
+    def _cast_override(
+        value: Any, field_type: str, section_name: str, field_name: str
+    ) -> Any:
+        """Cast an override value to the correct type for a schema field."""
+        if field_type == "boolean":
+            return str(value).lower() in ("true", "1", "yes", "on")
+        elif field_type == "number":
+            try:
+                if "." in str(value):
+                    return float(value)
+                else:
+                    return int(value)
+            except (ValueError, TypeError):
+                schema_field = CONFIG_SCHEMA.get(section_name, {}).get(field_name, {})
+                default_value = schema_field.get("default", "0")
+                return (
+                    float(default_value) if "." in default_value else int(default_value)
+                )
+        elif field_type == "select":
+            return str(value)
+        else:
+            return str(value)
 
 
 # Auto-generate getter methods from CONFIG_SCHEMA

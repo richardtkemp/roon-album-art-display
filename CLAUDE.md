@@ -89,7 +89,7 @@ roon_display/                 # Main package
 ## Key Architectural Patterns
 
 ### Image processing pipeline
-`ImageProcessor.prepare(img, image_path, overrides=None)` is the single entry point for all image processing — load, scale, rotate, enhance, composite onto canvas. Viewers receive a fully-processed `PIL.Image` and are pure display devices; they do not load or process images themselves.
+`ImageProcessor.prepare(img, image_path)` is the single entry point for all image processing — load, scale, rotate, enhance, composite onto canvas. Viewers receive a fully-processed `PIL.Image` and are pure display devices; they do not load or process images themselves. During preview rendering, config overrides are applied automatically via `config_manager.preview_overrides()` (thread-local context manager) — callers don't need to pass overrides explicitly.
 
 ### Render coordination
 `RenderCoordinator._render_display()` uses `render_lock.acquire(blocking=False)` + a `_render_pending` dirty flag. Concurrent calls set the flag and return; the running render loops until the flag is clear, so no track change is silently dropped.

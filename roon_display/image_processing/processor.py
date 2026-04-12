@@ -5,7 +5,7 @@ from __future__ import annotations
 import logging
 import os
 from pathlib import Path
-from typing import TYPE_CHECKING, Any, Dict, Optional
+from typing import TYPE_CHECKING, Any, Optional
 
 from PIL import Image, ImageEnhance
 
@@ -81,7 +81,6 @@ class ImageProcessor:
         self,
         img: Optional[Image.Image],
         image_path: Optional[Any],
-        overrides: Optional[Dict[str, Any]] = None,
     ) -> Optional[Image.Image]:
         """Load (if needed) and produce a display-ready canvas.
 
@@ -89,10 +88,12 @@ class ImageProcessor:
         screen-sized image.  Pass either a PIL Image or a file path; loading,
         scaling, rotation, enhancements, and canvas composition all happen here.
 
+        During preview rendering, config values are automatically overridden
+        via config_manager.preview_overrides() — no explicit parameter needed.
+
         Args:
             img: Pre-loaded PIL Image, or None to load from image_path.
             image_path: Path to load from when img is None.
-            overrides: Optional config overrides (e.g. from the web preview).
 
         Returns:
             A display-ready PIL Image at screen dimensions, or None on failure.
@@ -105,17 +106,17 @@ class ImageProcessor:
             if img is None:
                 return None
 
-        screen_width = self.config_manager.get_config(overrides, "screen_width")
-        screen_height = self.config_manager.get_config(overrides, "screen_height")
-        scale_x = self.config_manager.get_config(overrides, "scale_x")
-        scale_y = self.config_manager.get_config(overrides, "scale_y")
-        rotation = str(self.config_manager.get_config(overrides, "rotation"))
-        offset_x = self.config_manager.get_config(overrides, "image_offset_x")
-        offset_y = self.config_manager.get_config(overrides, "image_offset_y")
-        color_enhance = self.config_manager.get_config(overrides, "color_enhance")
-        contrast = self.config_manager.get_config(overrides, "contrast")
-        brightness = self.config_manager.get_config(overrides, "brightness")
-        sharpness = self.config_manager.get_config(overrides, "sharpness")
+        screen_width = self.config_manager.get_screen_width()
+        screen_height = self.config_manager.get_screen_height()
+        scale_x = self.config_manager.get_scale_x()
+        scale_y = self.config_manager.get_scale_y()
+        rotation = str(self.config_manager.get_rotation())
+        offset_x = self.config_manager.get_image_offset_x()
+        offset_y = self.config_manager.get_image_offset_y()
+        color_enhance = self.config_manager.get_color_enhance()
+        contrast = self.config_manager.get_contrast()
+        brightness = self.config_manager.get_brightness()
+        sharpness = self.config_manager.get_sharpness()
 
         canvas = Image.new("RGB", (screen_width, screen_height), "white")
 
