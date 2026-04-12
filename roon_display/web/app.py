@@ -265,6 +265,7 @@ def create_app(config_path: Optional[str] = None, port: Optional[int] = None) ->
             "Features": {
                 "ZONES": sections.get("ZONES", {}),
                 "ANNIVERSARIES": sections.get("ANNIVERSARIES", {}),
+                "ANNIVERSARY_DISPLAY": sections.get("ANNIVERSARY_DISPLAY", {}),
                 "THUMBNAILS": sections.get("THUMBNAILS", {}),
             },
             "System": {

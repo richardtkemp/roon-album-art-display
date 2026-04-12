@@ -342,13 +342,7 @@ CONFIG_SCHEMA: Dict[str, Any] = {
             "comment": "Saved Roon server port (auto-discovered)",
         },
     },
-    "ANNIVERSARIES": {
-        "enabled": {
-            "default": "false",
-            "type": "boolean",
-            "getter_name": "anniversaries_enabled",
-            "comment": "Enable anniversary notifications",
-        },
+    "ANNIVERSARY_DISPLAY": {
         "font": {
             "default": "",
             "type": "select",
@@ -402,6 +396,14 @@ CONFIG_SCHEMA: Dict[str, Any] = {
             "min": 1,
             "max": 30,
             "comment": "Time to display track information (seconds)",
+        },
+    },
+    "ANNIVERSARIES": {
+        "enabled": {
+            "default": "false",
+            "type": "boolean",
+            "getter_name": "anniversaries_enabled",
+            "comment": "Enable anniversary notifications",
         },
     },
     "MONITORING": {
@@ -820,7 +822,7 @@ class ConfigManager:
 
         anniversaries = []
         for key, value in self._config["ANNIVERSARIES"].items():
-            if key.startswith("#") or key in ["enabled"]:
+            if key.startswith("#") or key in ("enabled",):
                 continue
 
             try:

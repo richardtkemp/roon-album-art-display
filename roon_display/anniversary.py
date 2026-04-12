@@ -251,9 +251,11 @@ class AnniversaryManager:
 
         canvas = Image.new("RGB", (full_screen_width, full_screen_height), "white")
 
-        border_fraction = config_manager.get_anniversaries_border_percent() / 100.0
+        border_fraction = (
+            config_manager.get_anniversary_display_border_percent() / 100.0
+        )
         text_area_fraction = (
-            self.config_manager.get_anniversaries_text_percent() / 100.0
+            self.config_manager.get_anniversary_display_text_percent() / 100.0
         )
 
         border_size = int(min(effective_width, effective_height) * border_fraction)
@@ -289,8 +291,8 @@ class AnniversaryManager:
             image_y = offset_y + border_size + (image_area_height - scaled_height) // 2
 
             font = ImageFont.truetype(
-                config_manager.get_anniversaries_font(),
-                config_manager.get_anniversaries_font_size(),
+                config_manager.get_anniversary_display_font(),
+                config_manager.get_anniversary_display_font_size(),
             )
             draw = ImageDraw.Draw(canvas)
             text_width, text_height = get_text_size(draw, message, font)

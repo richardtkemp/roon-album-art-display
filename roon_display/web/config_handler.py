@@ -117,7 +117,7 @@ class WebConfigHandler:
 
                 # Populate font options dynamically
                 if (
-                    section_name in ("OVERLAY", "ANNIVERSARIES")
+                    section_name in ("OVERLAY", "ANNIVERSARY_DISPLAY")
                     and field_name == "font"
                 ):
                     fonts = _discover_fonts()
