@@ -445,20 +445,27 @@ class RenderCoordinator:
         overlay_text: Optional[str],
         base: Image.Image,
     ) -> Image.Image:
-        """Composite an error-overlay badge onto the bottom-right of base."""
+        """Composite an error-overlay badge onto the bottom-right of the art."""
         if overlay_text is None:
             return base
+
+        # Use art bounds if available, otherwise fall back to full canvas
+        art_bounds = getattr(base, "art_bounds", (0, 0, base.width, base.height))
+        art_x1, art_y1, art_x2, art_y2 = art_bounds
+        art_w = art_x2 - art_x1
+        art_h = art_y2 - art_y1
+
         size_x = self.config_manager.get_overlay_size_x_percent()
         size_y = self.config_manager.get_overlay_size_y_percent()
         overlay_img = self.message_renderer.create_error_overlay(
             overlay_text,
-            base.size,
+            (art_w, art_h),
             size_x_percent=size_x,
             size_y_percent=size_y,
         )
         result = base.copy()
-        x = base.width - overlay_img.width
-        y = base.height - overlay_img.height
+        x = art_x2 - overlay_img.width
+        y = art_y2 - overlay_img.height
         result.paste(overlay_img, (x, y))
         return result
 

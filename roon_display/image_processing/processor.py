@@ -153,6 +153,9 @@ class ImageProcessor:
         final_y = (screen_height - ih) // 2 + offset_y
         canvas.paste(processed, (final_x, final_y))
 
+        # Store art bounds on the image for overlay positioning
+        canvas.art_bounds = (final_x, final_y, final_x + iw, final_y + ih)  # type: ignore[attr-defined]
+
         logger.debug(
             f"Canvas: {screen_width}x{screen_height}, image at ({final_x},{final_y}), "
             f"scale=({scale_x},{scale_y}), rotation={rotation}°, offset=({offset_x},{offset_y})"
