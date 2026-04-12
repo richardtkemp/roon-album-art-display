@@ -62,14 +62,6 @@ CONFIG_SCHEMA: Dict[str, Any] = {
         },
     },
     "TIMEOUTS": {
-        "roon_authorization_timeout": {
-            "default": "300",
-            "type": "number",
-            "input_type": "number",
-            "min": 30,
-            "max": 3600,
-            "comment": "Timeout for Roon authorization (seconds)",
-        },
         "health_script_timeout": {
             "default": "30",
             "type": "number",
@@ -121,15 +113,6 @@ CONFIG_SCHEMA: Dict[str, Any] = {
             "min": 10,
             "max": 3600,
             "comment": "How often to check for anniversaries (seconds)",
-        },
-        "performance_threshold_seconds": {
-            "default": "0.5",
-            "type": "number",
-            "input_type": "number",
-            "min": 0.1,
-            "max": 10.0,
-            "step": 0.1,
-            "comment": "Performance threshold for logging (seconds)",
         },
         "eink_success_threshold": {
             "default": "15.0",
