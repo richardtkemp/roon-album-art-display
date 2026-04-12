@@ -24,14 +24,6 @@ APP_INFO = {
 # Complete configuration schema - single source of truth
 CONFIG_SCHEMA: Dict[str, Any] = {
     "NETWORK": {
-        "internal_server_port": {
-            "default": "9090",
-            "type": "number",
-            "input_type": "number",
-            "min": 1024,
-            "max": 65535,
-            "comment": "Port for internal server communication",
-        },
         "web_config_port": {
             "default": "8080",
             "type": "number",
@@ -40,13 +32,19 @@ CONFIG_SCHEMA: Dict[str, Any] = {
             "max": 65535,
             "comment": "Port for web configuration interface",
         },
-        "simulation_server_port": {
-            "default": "9999",
+        "web_config_host": {
+            "default": "0.0.0.0",
+            "type": "string",
+            "input_type": "text",
+            "comment": "Host for web configuration interface",
+        },
+        "internal_server_port": {
+            "default": "9090",
             "type": "number",
             "input_type": "number",
             "min": 1024,
             "max": 65535,
-            "comment": "Port for simulation server",
+            "comment": "Port for internal server communication",
         },
         "internal_server_host": {
             "default": "127.0.0.1",
@@ -54,11 +52,13 @@ CONFIG_SCHEMA: Dict[str, Any] = {
             "input_type": "text",
             "comment": "Host for internal server",
         },
-        "web_config_host": {
-            "default": "0.0.0.0",
-            "type": "string",
-            "input_type": "text",
-            "comment": "Host for web configuration interface",
+        "simulation_server_port": {
+            "default": "9999",
+            "type": "number",
+            "input_type": "number",
+            "min": 1024,
+            "max": 65535,
+            "comment": "Port for simulation server",
         },
     },
     "TIMEOUTS": {
