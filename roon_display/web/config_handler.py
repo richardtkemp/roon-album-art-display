@@ -57,8 +57,8 @@ class WebConfigHandler:
                     )
                     metadata["value"] = field_config["default"]
 
-                # Add default value for restore/reset functionality
-                metadata["default_value"] = field_config["default"]
+                # Saved value for restore/change-detection (not schema default)
+                metadata["default_value"] = metadata["value"]
 
                 # Set default input type if not specified
                 if "input_type" not in metadata:
