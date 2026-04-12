@@ -86,7 +86,7 @@ class MessageRenderer:
             max_line_width = max(max_line_width, line_width)
 
         # Calculate total text block height (including line spacing)
-        line_spacing = self.config_manager.get_line_spacing_ratio()
+        line_spacing = self.config_manager.get_line_spacing()
         total_height = sum(line_heights) + (len(lines) - 1) * line_spacing
 
         # Center the text block
@@ -232,7 +232,7 @@ class MessageRenderer:
         )
 
         # Calculate text position (centered)
-        line_spacing = self.config_manager.get_line_spacing_ratio()
+        line_spacing = self.config_manager.get_line_spacing()
         text_bbox = draw.multiline_textbbox(
             (0, 0), wrapped_text, font=font, spacing=line_spacing
         )
@@ -283,7 +283,7 @@ class MessageRenderer:
     def _wrap_text(self, text: str, font: Any, max_width: int) -> str:
         """Wrap text to fit within max_width, preserving existing line breaks."""
         if not font:
-            chars_per_line = max_width // self.config_manager.get_line_spacing_ratio()
+            chars_per_line = max_width // self.config_manager.get_line_spacing()
             return self._simple_wrap_text(text, chars_per_line)
 
         paragraphs = text.split("\n")

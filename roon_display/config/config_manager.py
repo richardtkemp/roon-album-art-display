@@ -182,7 +182,7 @@ CONFIG_SCHEMA: Dict[str, Any] = {
             "step": 0.1,
             "comment": "Overlay font size as fraction of base font_size (e.g. 0.5 = half)",
         },
-        "line_spacing_ratio": {
+        "line_spacing": {
             "default": "10",
             "type": "number",
             "input_type": "number",
