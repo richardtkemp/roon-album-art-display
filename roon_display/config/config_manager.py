@@ -659,8 +659,8 @@ class ConfigManager:
         return getattr(self, f"get_{key}")()
 
     def get_display_type(self) -> str:
-        """Get display type."""
-        return self._config.get("DISPLAY", "type", fallback="system_display")
+        """Get display type (manual: schema field is 'type', too generic for auto-gen)."""
+        return str(self._get_typed_value("DISPLAY", "type", "select"))
 
     def set_display_type(self, value: str) -> None:
         """Set display type."""
@@ -800,10 +800,6 @@ class ConfigManager:
             perf_logging, perf_logging
         )  # Return as-is if not in mapping
 
-    def get_loop_time(self) -> float:
-        """Get main loop interval in seconds."""
-        return self._config.getfloat("DISPLAY_TIMING", "loop_time", fallback=2.5)
-
     def get_anniversaries_config(self) -> Dict[str, Any]:
         """Get anniversary configuration."""
         if "ANNIVERSARIES" not in self._config:
@@ -884,8 +880,8 @@ class ConfigManager:
 
     # Anniversary Configuration Methods
     def get_anniversaries_enabled(self) -> bool:
-        """Get anniversaries enabled setting."""
-        return self._config.getboolean("ANNIVERSARIES", "enabled", fallback=False)
+        """Get anniversaries enabled (manual: schema field is 'enabled', too generic)."""
+        return bool(self._get_typed_value("ANNIVERSARIES", "enabled", "boolean"))
 
     def get_anniversaries_list(self) -> List[Dict[str, Any]]:
         """Get list of configured anniversaries."""
