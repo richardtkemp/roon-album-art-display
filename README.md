@@ -37,6 +37,41 @@ This installs system packages, sets up systemd services, and starts the applicat
 
 The web UI is available at `http://<pi-ip>:8080`.
 
+### Baking a fresh SD image (macOS)
+
+To provision a new frame end-to-end with no manual steps, `image_tools/bake.sh`
+turns a fresh DietPi image into a self-installing one. On first boot it joins
+WiFi, installs everything, deploys the app, enables the services, and joins
+Tailscale — then DietPi reboots into the running display.
+
+```bash
+# Put a (reusable) Tailscale auth key in ./tailscale.key (gitignored), then:
+image_tools/bake.sh --img DietPi_RPi234-ARMv8-Trixie.img.xz --hostname frame-newone
+```
+
+By default it lists the inserted SD cards and asks which to flash (it never
+auto-selects, and only external removable disks are offered). Useful flags:
+
+- `--flash /dev/diskN` — flash a specific device instead of being asked.
+- `--out frame.img.xz` — write a kept image file instead of flashing.
+- `--ssid NAME --key KEY` — add WiFi beyond the defaults read from `wpa_supplicant.conf`.
+- `--password PASS` — set the root/SSH password (default `dietpi`; change it).
+
+How it works: `dietpi.txt`/`dietpi-wifi.txt` are edited for unattended first-run,
+and `image_tools/Automation_Custom_Script.sh` runs as DietPi's first-boot custom
+script. The Tailscale key is baked onto the boot partition, used once, then
+shredded from the device. Still manual afterwards: approve the extension in Roon,
+and pick the zone in the web UI.
+
+Notes / gotchas:
+- The Pi Zero 2 W is **2.4 GHz only** — the WiFi network must be 2.4 GHz/WPA2.
+- DietPi's `python3` ships **without pip**, so the custom script installs
+  `python3-pip` and uses `python3 -m pip` (there is no bare `pip`/`pip3`).
+- Only committed files are baked (`git archive HEAD`) — commit before baking.
+- First boot takes ~10–20 min on a Zero 2 W; the green ACT LED flickers while it
+  works. Watch progress with
+  `ssh root@<ip> 'tail -f /var/lib/dietpi/logs/dietpi-firstrun-setup.log'`.
+
 ### Development (Mac/Linux)
 
 ```bash

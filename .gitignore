@@ -187,3 +187,9 @@ simulation_track_index.txt
 myhealth.sh
 wpa_supplicant.conf
 dietpi-wifi.db
+
+# Image baking (image_tools/bake.sh)
+tailscale.key
+*.img
+*.img.xz
+builds/
