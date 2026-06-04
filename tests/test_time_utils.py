@@ -1,8 +1,25 @@
 """Tests for time parsing utilities."""
 
+import re
+
 import pytest
 
-from roon_display.time_utils import parse_time_to_minutes, parse_time_to_seconds
+from roon_display.time_utils import (
+    current_time_message,
+    parse_time_to_minutes,
+    parse_time_to_seconds,
+)
+
+
+class TestCurrentTimeMessage:
+    """Test cases for current_time_message()."""
+
+    def test_format(self):
+        """Returns an 'HH:MM\\nWeekday DD Mon YYYY' string."""
+        msg = current_time_message()
+        time_part, _, date_part = msg.partition("\n")
+        assert re.fullmatch(r"\d{2}:\d{2}", time_part)
+        assert re.fullmatch(r"[A-Za-z]{3} \d{2} [A-Za-z]{3} \d{4}", date_part)
 
 
 class TestParseTimeToSeconds:

@@ -1,8 +1,10 @@
-"""Standalone image display mode — sends one image to the configured display and exits.
+"""Standalone display mode — sends one image (or the current time) to the
+configured display and exits.
 
 Usage:
     python -m roon_display.main --image /path/to/image.jpg
     python -m roon_display.main --image /path/to/images/
+    python -m roon_display.main --time
 """
 
 from __future__ import annotations
@@ -10,8 +12,9 @@ from __future__ import annotations
 import logging
 import random
 import sys
+import threading
 from pathlib import Path
-from typing import Any
+from typing import Any, Optional
 
 from .utils import SUPPORTED_IMAGE_EXTENSIONS
 
@@ -55,43 +58,75 @@ def run(image_path: Path) -> None:
     config_manager = ConfigManager()
     viewer, tk_root = create_viewer(config_manager)
 
-    if tk_root is not None:
-        _run_tkinter(viewer, tk_root, image_path)
-    else:
-        _run_eink(viewer, image_path)
+    prepared = viewer.image_processor.prepare(None, image_path)
+    _display_and_exit(viewer, tk_root, prepared, image_path.name)
 
 
-def _run_tkinter(viewer: Any, tk_root: Any, image_path: Path) -> None:
-    """Display image via TkViewer and exit when rendering is complete."""
-    img = viewer.image_processor.prepare(None, image_path)
-    if img is None:
-        logger.error(f"Failed to load image: {image_path}")
+def run_time() -> None:
+    """Render the current date/time on the configured display and exit.
+
+    A Roon-free way to confirm the display works end to end. Note: on a frame
+    where the service already owns the e-ink, use ``simulate_track_change.py
+    --time`` instead so the running app renders it (avoids a hardware clash).
+    """
+    from .config.config_manager import ConfigManager
+    from .message_renderer import MessageRenderer
+    from .time_utils import current_time_message
+    from .viewers.factory import create_viewer
+
+    config_manager = ConfigManager()
+    viewer, tk_root = create_viewer(config_manager)
+
+    message = current_time_message()
+    logger.info(f"Standalone time display: {message!r}")
+    time_image = MessageRenderer(config_manager).create_text_message(message)
+
+    prepared = viewer.image_processor.prepare(time_image, None)
+    _display_and_exit(viewer, tk_root, prepared, "time")
+
+
+def _display_and_exit(
+    viewer: Any, tk_root: Any, prepared: Optional[Any], name: str
+) -> None:
+    """Render a prepared image on the viewer, then exit the process."""
+    if prepared is None:
+        logger.error(f"Failed to prepare image for: {name}")
         sys.exit(1)
 
-    # Register completion callback: quit the mainloop once the image is shown.
+    if tk_root is not None:
+        _run_tkinter(viewer, tk_root, prepared, name)
+    else:
+        _run_eink(viewer, prepared, name)
+
+
+def _run_tkinter(viewer: Any, tk_root: Any, prepared: Any, name: str) -> None:
+    """Render via TkViewer and exit once the image is shown.
+
+    ``TkViewer.render()`` blocks until the Tk main thread runs the update
+    (via ``root.after``), so it must be called off the main thread while
+    ``mainloop()`` pumps events here. ``on_display_complete`` quits the loop.
+    """
     viewer.on_display_complete = tk_root.quit
 
-    # Kick off the pending-update polling loop, then queue our image.
-    viewer.check_pending_updates()
-    viewer.update("standalone", img, image_path.name)
+    def _worker() -> None:
+        try:
+            viewer.render(prepared, None, name)
+        except Exception as e:
+            logger.error(f"Failed to display {name}: {e}")
+            tk_root.quit()
 
+    threading.Thread(target=_worker, daemon=True, name="standalone-render").start()
     tk_root.mainloop()
     sys.exit(0)
 
 
-def _run_eink(viewer: Any, image_path: Path) -> None:
-    """Display image via EinkViewer and exit when rendering is complete."""
-    img = viewer.image_processor.prepare(None, image_path)
-    if img is None:
-        logger.error(f"Failed to load image: {image_path}")
-        sys.exit(1)
-
+def _run_eink(viewer: Any, prepared: Any, name: str) -> None:
+    """Render via EinkViewer (blocking) and exit."""
     try:
-        viewer.update("standalone", img, image_path.name)
-
-        # EinkViewer.update() spawns a thread for the hardware operation; wait for it.
-        if viewer.update_thread is not None:
-            viewer.update_thread.join()
+        viewer.render(prepared, None, name)
+    except Exception as e:
+        logger.error(f"Failed to display {name}: {e}")
+        sys.exit(1)
     finally:
         if hasattr(viewer, "cleanup"):
             viewer.cleanup()

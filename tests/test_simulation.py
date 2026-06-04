@@ -8,6 +8,7 @@ from roon_display.simulation import (
     SAMPLE_TRACKS,
     SimulationServer,
     get_next_track_index,
+    send_time_trigger,
 )
 
 
@@ -60,6 +61,42 @@ class TestSimulationServer:
         sim_server.running = True
         sim_server.stop()
         assert sim_server.running is False
+
+    def test_render_time(self, sim_server):
+        """Rendering time pushes a text image via the coordinator (no Roon needed)."""
+        sim_server._render_time()
+        coordinator = sim_server.roon_client.render_coordinator
+        coordinator.message_renderer.create_text_message.assert_called_once()
+        coordinator.set_art.assert_called_once()
+        kwargs = coordinator.set_art.call_args.kwargs
+        assert kwargs["content_type"] == "time"
+        assert (
+            kwargs["img"]
+            is coordinator.message_renderer.create_text_message.return_value
+        )
+
+    def test_render_time_without_coordinator(self, config_manager):
+        """No coordinator: logs and returns without raising."""
+        client = MagicMock()
+        client.render_coordinator = None
+        server = SimulationServer(client, config_manager)
+        server._render_time()  # must not raise
+
+
+class TestSendTimeTrigger:
+    """Tests for the send_time_trigger() client helper."""
+
+    @patch("roon_display.config.config_manager.ConfigManager")
+    @patch("roon_display.simulation.socket.socket")
+    def test_sends_time_command(self, mock_socket_cls, mock_cm):
+        """send_time_trigger connects and sends the literal 'time' command."""
+        mock_cm.return_value.get_network_simulation_server_port.return_value = 9999
+        sock = mock_socket_cls.return_value
+        sock.recv.return_value = b"OK"
+
+        assert send_time_trigger() is True
+        sock.connect.assert_called_once_with(("localhost", 9999))
+        sock.send.assert_called_once_with(b"time")
 
 
 class TestGetNextTrackIndex:

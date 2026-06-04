@@ -89,7 +89,11 @@ class SimulationServer:
                     data = client.recv(1024).decode().strip()
                     logger.debug(f"Received data: '{data}'")
 
-                    if data.isdigit():
+                    if data == "time":
+                        logger.debug("About to call _render_time...")
+                        self._render_time()
+                        logger.debug("_render_time completed")
+                    elif data.isdigit():
                         track_index = int(data)
                         logger.debug(f"Parsed track_index: {track_index}")
                         logger.debug("About to call _simulate_track_change...")
@@ -207,6 +211,26 @@ class SimulationServer:
 
             logger.error(f"Traceback: {traceback.format_exc()}")
 
+    def _render_time(self) -> None:
+        """Render the current date/time to the display, bypassing Roon.
+
+        Builds a text image with the message renderer and pushes it through the
+        render coordinator's normal pipeline — no album-art fetch needed, so it
+        works with no Roon server connected.
+        """
+        from .time_utils import current_time_message
+
+        coordinator = getattr(self.roon_client, "render_coordinator", None)
+        if coordinator is None:
+            logger.error("Cannot render time: no render coordinator available")
+            return
+
+        message = current_time_message()
+        logger.info(f"Simulating time render: {message!r}")
+        image = coordinator.message_renderer.create_text_message(message)
+        # content_type != "art" so this does not disturb anniversary tracking.
+        coordinator.set_art(content_type="time", img=image, track_info=message)
+
     def stop(self) -> None:
         """Stop the simulation server."""
         self.running = False
@@ -270,5 +294,33 @@ def send_simulation_trigger() -> bool:
 
     except Exception as e:
         print(f"Error sending simulation trigger: {e}")
+        print("Make sure the display application is running.")
+        return False
+
+
+def send_time_trigger() -> bool:
+    """Tell the running display to render the current date/time."""
+    try:
+        from .config.config_manager import ConfigManager
+
+        config_manager = ConfigManager()
+        port = config_manager.get_network_simulation_server_port()
+
+        sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        sock.settimeout(5.0)
+        sock.connect(("localhost", port))
+        sock.send(b"time")
+
+        try:
+            _response = sock.recv(1024).decode()  # noqa: F841
+        except socket.timeout:
+            logger.warning("Timeout waiting for server response, but trigger was sent")
+
+        sock.close()
+        print("Sent time render trigger to the running display")
+        return True
+
+    except Exception as e:
+        print(f"Error sending time trigger: {e}")
         print("Make sure the display application is running.")
         return False

@@ -106,3 +106,14 @@ def parse_time_to_minutes(time_str: Union[str, int]) -> int:
     """
     seconds = parse_time_to_seconds(time_str)
     return int(seconds / 60)
+
+
+def current_time_message() -> str:
+    """Return the current local date and time formatted for full-screen display.
+
+    Used by the ``--time`` test mode to render a clock face without Roon.
+    """
+    from datetime import datetime
+
+    now = datetime.now()
+    return now.strftime("%H:%M\n%a %d %b %Y")

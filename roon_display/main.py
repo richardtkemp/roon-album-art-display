@@ -47,6 +47,11 @@ def main() -> None:
         metavar="PATH",
         help="Image file or directory to display without Roon (exits after display)",
     )
+    parser.add_argument(
+        "--time",
+        action="store_true",
+        help="Render the current date/time without Roon, then exit (display test)",
+    )
     args = parser.parse_args()
 
     if args.image is not None:
@@ -54,6 +59,12 @@ def main() -> None:
 
         run_standalone(args.image)
         return  # run_standalone calls sys.exit(), but be explicit
+
+    if args.time:
+        from .standalone import run_time
+
+        run_time()
+        return  # run_time calls sys.exit(), but be explicit
 
     try:
         logger.info("Starting Roon Album Art Display")
