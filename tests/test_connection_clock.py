@@ -24,7 +24,10 @@ class TestConnectionClock:
         assert clock._tick() is True
         renderer.create_text_message.assert_called_once()
         coordinator.set_art.assert_called_once()
-        assert coordinator.set_art.call_args.kwargs["content_type"] == "time"
+        kwargs = coordinator.set_art.call_args.kwargs
+        assert kwargs["content_type"] == "time"
+        # force=True is essential: keyless time images are otherwise dedup-skipped.
+        assert kwargs["force"] is True
 
     def test_silent_when_connected(self):
         """Connected -> no clock render."""

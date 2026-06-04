@@ -229,7 +229,10 @@ class SimulationServer:
         logger.info(f"Simulating time render: {message!r}")
         image = coordinator.message_renderer.create_text_message(message)
         # content_type != "art" so this does not disturb anniversary tracking.
-        coordinator.set_art(content_type="time", img=image, track_info=message)
+        # force=True so the keyless time image isn't dedup-skipped (None == None).
+        coordinator.set_art(
+            content_type="time", img=image, track_info=message, force=True
+        )
 
     def stop(self) -> None:
         """Stop the simulation server."""

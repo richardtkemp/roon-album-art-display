@@ -60,10 +60,14 @@ class ConnectionClock:
         if not self._should_show_clock():
             return False
         message = current_time_message()
+        logger.info(f"Rendering connection clock: {message!r}")
         image = self.message_renderer.create_text_message(message)
         # content_type != "art" so this doesn't disturb anniversary tracking.
+        # force=True is required: the time image has no image_key, so the render
+        # loop's dedup (target.image_key == displayed_key, i.e. None == None)
+        # would otherwise skip it as "already on screen" and never draw.
         self.render_coordinator.set_art(
-            content_type="time", img=image, track_info=message
+            content_type="time", img=image, track_info=message, force=True
         )
         return True
 

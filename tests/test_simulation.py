@@ -70,6 +70,7 @@ class TestSimulationServer:
         coordinator.set_art.assert_called_once()
         kwargs = coordinator.set_art.call_args.kwargs
         assert kwargs["content_type"] == "time"
+        assert kwargs["force"] is True
         assert (
             kwargs["img"]
             is coordinator.message_renderer.create_text_message.return_value
