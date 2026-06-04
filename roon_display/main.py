@@ -155,6 +155,15 @@ def main() -> None:
         )
         roon_thread.start()
 
+        # Show a clock on the display whenever Roon is not connected (e.g. while
+        # the server is unreachable or the extension awaits approval in Roon).
+        from .connection_clock import ConnectionClock
+
+        connection_clock = ConnectionClock(
+            roon_client, render_coordinator, message_renderer
+        )
+        connection_clock.start()
+
         if tk_root:
             tk_root.mainloop()
         else:
@@ -170,6 +179,8 @@ def main() -> None:
         raise
     finally:
         # Cleanup
+        if "connection_clock" in locals():
+            connection_clock.stop()
         if "roon_client" in locals():
             roon_client.stop()
         if "simulation_server" in locals():
