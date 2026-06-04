@@ -32,6 +32,10 @@
 #                      pick one — it never auto-selects a device.
 #   --yes              Skip the typed ERASE confirmation. Requires an explicit
 #                      --flash DEVICE (with --yes bake will not prompt or pick).
+#   --git-branch NAME  Remote branch the frame tracks for `git pull` (default: main).
+#   --git-remote URL   Remote URL to attach (default: HTTPS form of local origin,
+#                      so a public repo needs no credentials on the frame).
+#   --no-git           Don't wire the deployed tree to git (bootstrap tarball only).
 #   -h, --help         This help.
 #
 # Default WiFi networks are read from the repo's (gitignored) wpa_supplicant.conf,
@@ -45,6 +49,7 @@ REPO="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 
 IMG="" HOSTNAME_ARG="" TSKEY_FILE="$REPO/tailscale.key" PASSWORD="dietpi"
 REF="HEAD" OUT="" OUT_EXPLICIT=0 COMPRESS=1 FLASH="" ASSUME_YES=0
+GIT_REMOTE="" GIT_BRANCH="main" GIT_CONNECT=1
 SUDO="${SUDO:-sudo}"
 EXTRA_SSIDS=() EXTRA_KEYS=()
 
@@ -61,6 +66,9 @@ while [[ $# -gt 0 ]]; do
         --no-compress) COMPRESS=0; shift ;;
         --flash)       FLASH="$2"; shift 2 ;;
         --yes)         ASSUME_YES=1; shift ;;
+        --git-remote)  GIT_REMOTE="$2"; shift 2 ;;
+        --git-branch)  GIT_BRANCH="$2"; shift 2 ;;
+        --no-git)      GIT_CONNECT=0; shift ;;
         -h|--help)     awk 'NR>1 && /^set -/{exit} NR>1{sub(/^# ?/,""); print}' "${BASH_SOURCE[0]}"; exit 0 ;;
         *)             die "unknown option: $1 (try --help)" ;;
     esac
@@ -166,6 +174,24 @@ for i in "${!EXTRA_SSIDS[@]}"; do
 done
 [[ ${#WIFI_SSIDS[@]} -gt 0 ]] || die "no WiFi networks (Pi Zero 2 W needs WiFi at first boot)"
 
+# --- Resolve git connection so the deployed tree can `git pull` later ---
+# Frames track a real remote branch; the tarball is just the offline bootstrap.
+GIT_COMMIT=""
+if [[ $GIT_CONNECT -eq 1 ]]; then
+    if [[ -z "$GIT_REMOTE" ]]; then
+        # Derive an HTTPS (credential-free) URL from the local origin.
+        GIT_REMOTE="$(git -C "$REPO" remote get-url origin 2>/dev/null \
+            | sed -E 's#^git@([^:]+):#https://\1/#; s#^ssh://git@([^/]+)/#https://\1/#')"
+    fi
+    [[ -n "$GIT_REMOTE" ]] || die "no git remote (set --git-remote, or pass --no-git)"
+    GIT_COMMIT="$(git -C "$REPO" rev-parse "$REF")"
+    if ! git -C "$REPO" merge-base --is-ancestor \
+        "$GIT_COMMIT" "origin/$GIT_BRANCH" 2>/dev/null; then
+        echo "bake: WARNING — baked commit ${GIT_COMMIT:0:9} is not on origin/$GIT_BRANCH;"
+        echo "bake:           push it (and fetch) or the frame cannot 'git pull' to this code."
+    fi
+fi
+
 # --- Output path (only when keeping an image) ---
 if [[ $WRITE_OUT -eq 1 && -z "$OUT" ]]; then
     OUT="$(dirname "$IMG")/${HOSTNAME_ARG}.img$([[ $COMPRESS -eq 1 ]] && echo .xz)"
@@ -176,9 +202,9 @@ echo "bake: hostname   $HOSTNAME_ARG"
 echo "bake: wifi       ${WIFI_SSIDS[*]}"
 echo "bake: tailscale  $([[ -f "$TSKEY_FILE" ]] && echo "$TSKEY_FILE" || echo "(none — skipping)")"
 echo "bake: git ref    $REF"
+echo "bake: git remote $([[ $GIT_CONNECT -eq 1 ]] && echo "$GIT_REMOTE @ $GIT_BRANCH" || echo "(disabled)")"
 echo "bake: output     $([[ $WRITE_OUT -eq 1 ]] && echo "$OUT" || echo "(none)")"
 echo "bake: flash      ${FLASH_DEV:-(none)}"
-echo "bake: flash      ${FLASH:-(none)}"
 
 # --- Decompress / copy to a scratch working image (source stays clean) ---
 WORK="$(mktemp -d)/work.img"
@@ -251,6 +277,11 @@ if [[ -f "$TSKEY_FILE" ]]; then
     cp "$TSKEY_FILE" "$MNT/tailscale.key"
 else
     echo "bake: WARNING — no Tailscale key ($TSKEY_FILE); image will not join the tailnet"
+fi
+# git-remote.env tells the first-boot script how to wire the deployed tree to git.
+if [[ $GIT_CONNECT -eq 1 ]]; then
+    printf 'GIT_REMOTE=%s\nGIT_BRANCH=%s\nGIT_COMMIT=%s\n' \
+        "$GIT_REMOTE" "$GIT_BRANCH" "$GIT_COMMIT" > "$MNT/git-remote.env"
 fi
 
 # --- Seal: unmount, detach, emit flashable image ---

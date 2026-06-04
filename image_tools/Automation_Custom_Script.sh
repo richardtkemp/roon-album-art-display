@@ -33,6 +33,31 @@ python3 -c 'import roonapi, flask, PIL, numpy, psutil' \
 mkdir -p "$FRAME/logs"
 tar -xzf "$BOOT/roon-album-art-display.tar.gz" -C "$FRAME"
 
+# --- Connect the deployed tree to git so `git pull` fetches future updates ---
+# The working tree already equals the baked commit, so we attach the remote and
+# point the branch at that commit WITHOUT touching files (index-only reset).
+# Best-effort: needs network and the commit pushed; failure leaves a clean tree.
+if [[ -f "$BOOT/git-remote.env" ]] && command -v git >/dev/null; then
+    # shellcheck disable=SC1090
+    . "$BOOT/git-remote.env"
+    (
+        cd "$FRAME" || exit 0
+        git init -q
+        git remote add origin "$GIT_REMOTE" 2>/dev/null || git remote set-url origin "$GIT_REMOTE"
+        if git fetch -q origin "$GIT_BRANCH" && git cat-file -e "${GIT_COMMIT}^{commit}" 2>/dev/null; then
+            git symbolic-ref HEAD "refs/heads/$GIT_BRANCH"
+            git update-ref "refs/heads/$GIT_BRANCH" "$GIT_COMMIT"
+            git reset -q --mixed HEAD   # index -> baked commit; working tree untouched
+            git config "branch.$GIT_BRANCH.remote" origin
+            git config "branch.$GIT_BRANCH.merge" "refs/heads/$GIT_BRANCH"
+            echo "git: $FRAME tracks $GIT_REMOTE ($GIT_BRANCH); 'git pull' will update it"
+        else
+            rm -rf "$FRAME/.git"   # roll back so the tree stays a clean tarball deploy
+            echo "git: deferred — push ${GIT_COMMIT:0:9} to origin/$GIT_BRANCH (or no network yet)"
+        fi
+    )
+fi
+
 # --- systemd services (enabled now; started clean on DietPi's post-install reboot) ---
 cp "$FRAME"/space-cleaner.{service,timer}  /etc/systemd/system/
 cp "$FRAME"/roon-album-art-display.service /etc/systemd/system/
